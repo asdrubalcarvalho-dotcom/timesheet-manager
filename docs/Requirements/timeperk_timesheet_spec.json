@@ -1,0 +1,102 @@
+{
+  "module": "TimePerk Timesheet",
+  "description": "Specification for timesheet data structure, validation rules, and role permissions within TimePerk. Includes integration with master data (projects, tasks, locations, assets, OEMs).",
+  "entities": {
+    "projects": {
+      "description": "Projects managed by Project Directors",
+      "fields": ["id", "name", "client", "billing_type", "start_date", "end_date"]
+    },
+    "tasks": {
+      "description": "Task types linked to each project (Retrofit, Inspection, Commissioning, etc.)",
+      "fields": ["id", "project_id", "name", "description", "task_type"]
+    },
+    "locations": {
+      "description": "Sites or locations where tasks are performed",
+      "fields": ["id", "name", "country", "city", "asset_id", "oem_id"],
+      "rules": {
+        "asset_id": "can be null or 'N/A'",
+        "oem_id": "can be null or 'N/A'"
+      }
+    },
+    "technician_project_rate": {
+      "description": "Hourly cost per technician per project",
+      "fields": ["technician_id", "project_id", "hour_type", "hourly_rate"]
+    }
+  },
+  "timesheet": {
+    "description": "Main object where technicians record time worked, linked to master entities.",
+    "fields": {
+      "technician_id": "INT",
+      "project_id": "INT",
+      "task_id": "INT",
+      "location_id": "INT",
+      "asset_id": "INT or 'N/A'",
+      "oem_id": "INT or 'N/A'",
+      "date": "YYYY-MM-DD",
+      "start_time": "HH:MM",
+      "end_time": "HH:MM",
+      "lunch_break": "MINUTES",
+      "hour_type": "working|travel|standby|rest|on_scope|off_scope",
+      "description": "TEXT",
+      "check_out_time": "HH:MM",
+      "machine_status": "online|offline",
+      "job_status": "completed|ongoing",
+      "submitted_by": "technician_id",
+      "created_at": "timestamp",
+      "status": "draft|submitted|approved|rejected"
+    },
+    "features": {
+      "draft_mode": true,
+      "allow_multiple_machines": true,
+      "allow_multiple_entries_per_day": true,
+      "allow_duplication": true
+    }
+  },
+  "validation_rules": {
+    "project_link": "Timesheet must reference a valid project",
+    "task_link": "Task must belong to the referenced project",
+    "availability_check": "Technician cannot be assigned twice for the same time range",
+    "max_daily_hours": "12h limit per day",
+    "optional_fields": ["asset_id", "oem_id"],
+    "rejection_reason_required": true
+  },
+  "permissions": {
+    "technician": {
+      "create": ["own_drafts"],
+      "edit": ["own_drafts"],
+      "delete": ["own_drafts"],
+      "submit": ["own_records"],
+      "view": ["own_records"]
+    },
+    "supervisor": {
+      "view": ["all_projects_where_supervisor"],
+      "edit": ["records_in_supervised_projects"],
+      "approve_reject": true,
+      "comment_required_on_rejection": true,
+      "cannot_override_project_manager": true
+    },
+    "project_manager": {
+      "view": ["all_project_records"],
+      "approve_reject": true,
+      "adjust_before_client_submission": true,
+      "lock_after_approval": true
+    }
+  },
+  "integration": {
+    "gantt_draft_generation": {
+      "enabled": true,
+      "description": "If planning data exists, draft timesheets are generated automatically and await technician validation."
+    }
+  },
+  "ui_requirements": {
+    "duplication": "User can clone a record and change only task/date/time",
+    "filtering": ["project", "technician", "status", "date"],
+    "sorting": ["date", "project", "task"],
+    "supervisor_dashboard": "Supervisors can see all project timesheets they manage and validate pending ones."
+  },
+  "notes": {
+    "optional_n_a_values": "Assets and OEMs may be N/A if not applicable",
+    "data_integrity": "All foreign keys must exist or be validated at creation time.",
+    "implementation_hint": "Validation should occur both client-side and via API middleware."
+  }
+}

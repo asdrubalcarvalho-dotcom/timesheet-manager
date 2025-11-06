@@ -1,0 +1,299 @@
+version: 1
+name: "Timesheet Laravel + React with Docker Compose Generator"
+description: "Scaffold Laravel 11 API (Sanctum) + React 18 (Vite TS) with Docker Compose, timesheets calendar and expenses grid."
+
+goals:
+  - "Generate Docker Compose setup with PHP 8.3, MySQL 8.0, Node 20, Redis"
+  - "Generate backend in /backend with Laravel 11 + Sanctum + MySQL"
+  - "Generate frontend in /frontend with React TS, MUI, React Query, FullCalendar"
+  - "Implement timesheets calendar CRUD + expenses grid CRUD + bulk approve/reject"
+  - "Enforce read-only on Approved entries"
+  - "Seed demo data and provide docker run instructions"
+
+rules:
+  - "Do not ask for input. Assume defaults."
+  - "Auto-continue if a step is incomplete."
+  - "Code must run via Docker Compose (backend via nginx:80, frontend:3000)."
+
+steps:
+  - name: "Docker Infrastructure"
+    description: "Create docker-compose.yml with PHP-FPM, MySQL, Redis, Nginx, Node services"
+    files:
+      - path: "docker-compose.yml"
+        content: |
+          version: '3.8'
+          services:
+            app:
+              build:
+                context: ./backend
+                dockerfile: Dockerfile
+              container_name: timesheet_app
+              restart: unless-stopped
+              working_dir: /var/www/html
+              volumes:
+                - ./backend:/var/www/html
+              networks:
+                - timesheet-network
+            
+            webserver:
+              image: nginx:alpine
+              container_name: timesheet_nginx
+              restart: unless-stopped
+              ports:
+                - "80:80"
+              volumes:
+                - ./backend:/var/www/html
+                - ./docker/nginx:/etc/nginx/conf.d
+              networks:
+                - timesheet-network
+            
+            database:
+              image: mysql:8.0
+              container_name: timesheet_mysql
+              restart: unless-stopped
+              ports:
+                - "3306:3306"
+              environment:
+                MYSQL_DATABASE: timesheet
+                MYSQL_ROOT_PASSWORD: root
+                MYSQL_PASSWORD: secret
+                MYSQL_USER: timesheet
+              volumes:
+                - mysql_data:/var/lib/mysql
+              networks:
+                - timesheet-network
+            
+            redis:
+              image: redis:alpine
+              container_name: timesheet_redis
+              restart: unless-stopped
+              ports:
+                - "6379:6379"
+              networks:
+                - timesheet-network
+            
+            frontend:
+              build:
+                context: ./frontend
+                dockerfile: Dockerfile
+              container_name: timesheet_frontend
+              restart: unless-stopped
+              ports:
+                - "3000:3000"
+              volumes:
+                - ./frontend:/app
+                - /app/node_modules
+              networks:
+                - timesheet-network
+          
+          networks:
+            timesheet-network:
+              driver: bridge
+          
+          volumes:
+            mysql_data:
+
+  - name: "Backend scaffold"
+    run:
+      - "composer create-project laravel/laravel:^11.0 backend"
+      - "cd backend && composer require laravel/sanctum"
+
+  - name: "Docker Backend Setup"
+    description: "Create backend Dockerfile and configure Laravel for Docker"
+    files:
+      - path: "backend/Dockerfile"
+        content: |
+          FROM php:8.3-fpm
+          
+          # Set working directory
+          WORKDIR /var/www/html
+          
+          # Install system dependencies
+          RUN apt-get update && apt-get install -y \
+              git \
+              curl \
+              libpng-dev \
+              libonig-dev \
+              libxml2-dev \
+              zip \
+              unzip
+          
+          # Clear cache
+          RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+          
+          # Install PHP extensions
+          RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+          
+          # Get latest Composer
+          COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+          
+          # Copy existing application directory contents
+          COPY . /var/www/html
+          
+          # Copy existing application directory permissions
+          COPY --chown=www-data:www-data . /var/www/html
+          
+          # Change current user to www
+          USER www-data
+          
+          # Expose port 9000 and start php-fpm server
+          EXPOSE 9000
+          CMD ["php-fpm"]
+
+      - path: "docker/nginx/default.conf"
+        content: |
+          server {
+              listen 80;
+              index index.php index.html;
+              server_name localhost;
+              root /var/www/html/public;
+          
+              location / {
+                  try_files $uri $uri/ /index.php?$query_string;
+              }
+          
+              location ~ \.php$ {
+                  try_files $uri =404;
+                  fastcgi_split_path_info ^(.+\.php)(/.+)$;
+                  fastcgi_pass app:9000;
+                  fastcgi_index index.php;
+                  include fastcgi_params;
+                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                  fastcgi_param PATH_INFO $fastcgi_path_info;
+              }
+          }
+
+  - name: "Backend domain"
+    description: "Migrations, models, seeders, policies, controllers, routes for entities."
+    run:
+      - "cd backend && php artisan vendor:publish --provider=\"Laravel\\Sanctum\\SanctumServiceProvider\""
+      - "cd backend && php artisan make:migration create_technicians_table"
+      - "cd backend && php artisan make:migration create_projects_table"
+      - "cd backend && php artisan make:migration create_timesheets_table"
+      - "cd backend && php artisan make:migration create_expenses_table"
+      - "cd backend && php artisan make:model Technician"
+      - "cd backend && php artisan make:model Project"
+      - "cd backend && php artisan make:model Timesheet"
+      - "cd backend && php artisan make:model Expense"
+      - "cd backend && php artisan make:controller Api/TimesheetController --api"
+      - "cd backend && php artisan make:controller Api/ExpenseController --api"
+      - "cd backend && php artisan make:controller Api/ProjectController --api"
+      - "cd backend && php artisan make:controller Api/TechnicianController --api"
+
+  - name: "Frontend scaffold"
+    run:
+      - "npm create vite@latest frontend -- --template react-ts"
+      - "cd frontend && npm i axios @tanstack/react-query react-router-dom @mui/material @mui/icons-material @emotion/react @emotion/styled @fullcalendar/react @fullcalendar/daygrid @fullcalendar/timegrid @fullcalendar/interaction"
+
+  - name: "Frontend Docker Setup"
+    description: "Create frontend Dockerfile and configure React for Docker"
+    files:
+      - path: "frontend/Dockerfile"
+        content: |
+          FROM node:20-alpine
+          
+          WORKDIR /app
+          
+          # Copy package files
+          COPY package*.json ./
+          
+          # Install dependencies
+          RUN npm install
+          
+          # Copy app source
+          COPY . .
+          
+          # Expose port
+          EXPOSE 3000
+          
+          # Start the application
+          CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+
+  - name: "Frontend pages"
+    description: "Implement calendar/grid pages and modals."
+    files:
+      - path: "frontend/src/pages/Timesheets.tsx"
+        content: "// FullCalendar wired to API with select/eventClick -> modal CRUD; approved entries disabled"
+      - path: "frontend/src/pages/Expenses.tsx"
+        content: "// MUI DataGrid with double-click -> modal; bulk approve/reject toolbar; disable approved rows"
+
+  - name: "Docker Environment Setup"
+    description: "Configure Laravel environment for Docker"
+    files:
+      - path: "backend/.env.docker"
+        content: |
+          APP_NAME=TimesheetManager
+          APP_ENV=local
+          APP_KEY=
+          APP_DEBUG=true
+          APP_URL=http://localhost
+          
+          LOG_CHANNEL=stack
+          
+          DB_CONNECTION=mysql
+          DB_HOST=database
+          DB_PORT=3306
+          DB_DATABASE=timesheet
+          DB_USERNAME=timesheet
+          DB_PASSWORD=secret
+          
+          CACHE_DRIVER=redis
+          SESSION_DRIVER=redis
+          REDIS_HOST=redis
+          REDIS_PASSWORD=null
+          REDIS_PORT=6379
+          
+          SANCTUM_STATEFUL_DOMAINS=localhost:3000
+
+  - name: "Verify"
+    run:
+      - "docker-compose up --build -d"
+      - "docker-compose exec app php artisan key:generate"
+      - "docker-compose exec app php artisan migrate --seed"
+      - "echo 'Backend available at http://localhost:80'"
+      - "echo 'Frontend available at http://localhost:3000'"
+
+  - name: "Done"
+    message: |
+      ✅ PROJECT GENERATION COMPLETE — READY TO RUN WITH DOCKER
+      
+      To start the application:
+        docker-compose up -d
+      
+      To stop:
+        docker-compose down
+      
+      URLs:
+        - Backend API: http://localhost:80/api
+        - Frontend: http://localhost:3000
+        - Database: localhost:3306 (user: timesheet, pass: secret)
+
+# Guidance carried over for agents (optional, unchanged)
+guidance:
+  domain_specifics: |
+    Minimal business workflow:
+    - Technicians submit timesheets and expenses per project.
+    - Project Managers approve or reject them.
+    Approved entries are immutable. No multi-step escalation or ERP checks.
+  ui_responsiveness: |
+    Responsive UI rules:
+    - Mobile-first design using Tailwind or MUI breakpoints.
+    - Tables collapse into vertical card components under 768px.
+    - Dashboard layouts use CSS Grid or flex with gap utilities.
+    - Export panel buttons stack vertically on small viewports.
+    - Ensure all text elements scale using relative font sizes.
+    - Charts and calendars must resize within flex containers.
+  extension_patterns: |
+    Extend by modifying code (backend/controllers, frontend/pages/components).
+    Do not modify this config unless the solution architecture changes.
+  environment_setup: |
+    Requirements:
+      - Docker and Docker Compose
+      - Laravel 11 with PHP 8.3 (containerized)
+      - Node 20+ and npm (containerized)
+      - MySQL 8.0 (containerized)
+      - Redis (containerized)
+      - Sanctum SPA origin: http://localhost:3000
+  testing_strategy: |
+    Backend: PHPUnit controller/policy tests
+    Frontend: optional (React Testing Library / Vitest)

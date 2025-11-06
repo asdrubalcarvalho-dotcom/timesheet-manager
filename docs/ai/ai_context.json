@@ -1,0 +1,157 @@
+{
+  "context_name": "TimesheetManager_AI_Context",
+  "version": "2.0",
+  "description": "Production-ready operational and architectural context for AI agents extending the TimesheetManager project (Laravel + React with Docker Compose) - Professional Authorization System Implemented.",
+  "domain": {
+    "scope": "Timesheet and Expense Management",
+    "workflow": [
+      "Technician submits timesheet and expenses",
+      "Project Manager approves or rejects entries"
+    ],
+    "constraints": [
+      "Approved entries are immutable",
+      "No multi-level approval chains",
+      "No ERP integration in MVP"
+    ]
+  },
+  "architecture": {
+    "framework": "Laravel 11 (PHP 8.3) + React 18 (Vite + TypeScript) with Docker Compose",
+    "backend": "Laravel 11 API with Sanctum + Spatie Permission, Eloquent, Policies, FormRequests, Rate Limiting (containerized with PHP-FPM + Nginx + MySQL 8.0)",
+    "frontend": "React 18 SPA (Vite + TS), MUI, React Query, FullCalendar (containerized with Node 20)",
+    "ui_responsiveness": {
+      "principles": [
+        "All React components must follow mobile-first design.",
+        "Use responsive grid or flex layouts with Tailwind or MUI breakpoints.",
+        "Collapse tables into stacked cards under 768px width.",
+        "Charts and calendars should resize fluidly within containers."
+      ],
+      "time_selection_patterns": [
+        "Duration fields are readonly and auto-calculated from start/end times",
+        "Auto-increment: When start time is selected, end time automatically increments by 1 hour",
+        "Use visual feedback with icons, colors, and helper text for calculated values",
+        "Default work hours: 09:00-17:30 (8.5h including lunch break)",
+        "3-column responsive grid: Start/End/Duration collapsing to single column on mobile",
+        "Real-time validation with Portuguese error messages"
+      ],
+      "business_rules_critical": [
+        "✅ No Time Overlaps: Users cannot create timesheet entries with overlapping time periods on the same date",
+        "✅ Application-Level Validation: StoreTimesheetRequest::hasTimeOverlap() method provides robust validation (PRIMARY PROTECTION)",
+        "✅ Backend API: Provides user-friendly error handling (409 Conflict) (SECONDARY PROTECTION)",
+        "✅ MySQL Database: Reliable data storage with proper constraint handling for data integrity",
+        "✅ Race Condition Prevention: Application-level validation ensures consistency under concurrent access",
+        "✅ Time Increment Logic: Start time selection automatically sets end time (+1 hour) - TimesheetCalendar.tsx line 847",
+        "✅ Multiple Timesheets: Users can create multiple timesheets per date for different projects",
+        "✅ Cross-Project Validation: Time overlap validation prevents conflicts regardless of project assignment"
+      ],
+      "professional_authorization": [
+        "✅ Spatie Laravel Permission: Industry-standard role and permission management system",
+        "✅ 3 Roles: Technician, Manager, Admin with 17 granular permissions",
+        "✅ Laravel Policies: TimesheetPolicy, ExpensePolicy for ownership and status-based authorization rules",
+        "✅ Middleware Protection: CheckPermission middleware protecting all API routes with permission verification",
+        "✅ PROJECT-MANAGER RELATIONSHIP: Projects.manager_id field linking managers to specific projects",
+        "✅ ROLE VALIDATION RULES: Managers can only approve/reject timesheets from their managed projects",
+        "✅ TECHNICIAN RESTRICTIONS: Technicians can only view their own timesheets, cannot validate any records",
+        "✅ Rate Limiting: Intelligent throttling (5/min login, 30/min create, 10/min approve) preventing abuse",
+        "✅ Form Requests: StoreTimesheetRequest, UpdateTimesheetRequest with preserved business rules and validation",
+        "✅ API Responses: Include permission data for frontend authorization UI components",
+        "✅ Ownership Rules: Technicians can only access their own records, Managers/Admins can access all",
+        "✅ Status-Based Rules: Cannot edit/delete approved records (except Admins with override permissions)"
+      ]
+    },
+    "projects": {
+      "backend": "API, Auth, Controllers, Migrations, Seeders (Docker container with PHP-FPM)",
+      "frontend": "SPA pages/components (Calendar & Grid) (Docker container with Node)",
+      "docker": "docker-compose.yml with services: app, webserver, database, redis, frontend",
+      "docs": "Context and developer guides"
+    },
+    "database": {
+      "type": "MySQL 8.0 (containerized)",
+      "connection_string_hint": "DB_HOST=database; DB_PORT=3306; DB_DATABASE=timesheet; DB_USERNAME=timesheet; DB_PASSWORD=secret",
+      "project_manager_relation": {
+        "table": "projects",
+        "field": "manager_id", 
+        "type": "FOREIGN KEY REFERENCES users(id)",
+        "description": "Links projects to specific managers for authorization control"
+      }
+    },
+    "authentication": {
+      "method": "Laravel Sanctum (SPA)",
+      "roles": ["Technician", "Manager", "Admin"],
+      "validation_hierarchy": {
+        "Technician": "Can only view own timesheets, cannot validate any records",
+        "Manager": "Can view and validate timesheets from managed projects + own records", 
+        "Admin": "Can view and validate all timesheets in the system"
+      }
+    },
+    "infrastructure": {
+      "orchestration": "Docker Compose",
+      "services": ["app (PHP-FPM)", "webserver (Nginx)", "database (MySQL 8.0)", "redis", "frontend (Node 20)"],
+      "ports": {"backend": 80, "frontend": 3000, "database": 3306, "redis": 6379}
+    }
+  },
+  "environment": {
+    "requirements": [
+      "Docker and Docker Compose",
+      "Laravel 11 with PHP 8.3 (containerized)",
+      "Node 20+ and npm (containerized)",
+      "MySQL 8.0 (containerized)",
+      "Redis (containerized)",
+      "Sanctum SPA origin: http://localhost:3000"
+    ],
+    "restrictions": [
+      "Docker-first development",
+      "All services containerized for consistency"
+    ]
+  },
+  "extension_rules": {
+    "do_not_edit": [".copilot/config.yml"],
+    "allowed_actions": [
+      "Modify Laravel controllers, models, migrations, policies",
+      "Modify React pages/components and API clients",
+      "Add new modules via code (entity + controller + page + modal)"
+    ],
+    "code_standards": [
+      "PSR-12 (PHP), ESLint+Prettier (TS)",
+      "Async/await on frontend requests",
+      "Avoid unnecessary dependencies"
+    ],
+    "feature_pattern_example": {
+      "module": "LeaveManagement",
+      "steps": [
+        "Add entity & migration (backend)",
+        "Add controller + routes + policy",
+        "Add React page + modal + API client",
+      "Add seed/demo data",
+      "Rebuild Docker containers and run tests"
+      ]
+    }
+  },
+  "testing": {
+    "strategy": [
+      "PHPUnit for controllers/policies",
+      "Optional: React tests with Vitest/RTL"
+    ],
+    "ci_integration": "GitHub Actions build.yml runs Docker builds, PHP tests and React build"
+  },
+  "agent_behavior": {
+    "rules": [
+      "Do not ask clarification questions",
+      "Continue automatically if output is partial",
+      "Preserve architecture and naming consistency",
+      "Validate backend and frontend build after changes"
+    ],
+    "output_validation": [
+      "docker-compose up succeeds",
+      "Backend API accessible on port 80",
+      "Frontend accessible on port 3000",
+      "Database migrations run successfully",
+      "Approved items are immutable by API and UI"
+    ]
+  },
+  "meta": {
+    "author": "DRPrompt",
+    "techniques": ["Constraint-based", "Chain-of-Thought", "Self-checking"],
+    "license": "MIT",
+    "last_updated": "2025-11-03"
+  }
+}

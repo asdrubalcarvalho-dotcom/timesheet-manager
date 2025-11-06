@@ -1,0 +1,208 @@
+Perfeito.
+Abaixo está o ficheiro /scripts/session_history_dashboard.html, um painel visual leve que lê o .copilot/hooks/session-log-summary.md e mostra as sessões do Copilot Workspace num formato gráfico e interativo, 100% local (sem backend nem dependências externas).
+
+Funciona em qualquer navegador moderno — basta abrir o ficheiro HTML.
+
+⸻
+
+🧭 /scripts/session_history_dashboard.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Copilot Workspace — Session History Dashboard</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #1e1e1e;
+      color: #f0f0f0;
+      margin: 0;
+      padding: 2rem;
+    }
+    h1 {
+      color: #00bfa6;
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+    #sessions {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .session {
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1rem;
+      background-color: #2a2a2a;
+      transition: transform 0.2s;
+    }
+    .session:hover {
+      transform: scale(1.01);
+      background-color: #333;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #444;
+      padding-bottom: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .timestamp {
+      font-weight: bold;
+      color: #9cdcfe;
+    }
+    .build-success {
+      color: #4caf50;
+    }
+    .build-failed {
+      color: #ff5555;
+    }
+    .ci-triggered {
+      color: #ffc107;
+    }
+    .ci-skipped {
+      color: #888;
+    }
+    .notes {
+      font-size: 0.9rem;
+      color: #ccc;
+      margin-top: 0.5rem;
+    }
+    footer {
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: #888;
+      text-align: center;
+    }
+    .reload-btn {
+      background-color: #00bfa6;
+      border: none;
+      color: #fff;
+      padding: 0.6rem 1.2rem;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 1rem;
+    }
+    .reload-btn:hover {
+      background-color: #00a58f;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🧭 Copilot Workspace — Session History Dashboard</h1>
+  <button class="reload-btn" onclick="loadSessions()">Reload History</button>
+  <div id="sessions">Loading...</div>
+
+  <footer>
+    Copilot Workspace Session Log — TimesheetManager Project<br>
+    Auto-generated via post-run hook. Last updated <span id="last-updated"></span>.
+  </footer>
+
+  <script>
+    async function loadSessions() {
+      const container = document.getElementById('sessions');
+      container.innerHTML = "Loading session history...";
+      document.getElementById('last-updated').textContent = new Date().toLocaleString();
+
+      try {
+        const response = await fetch('../.copilot/hooks/session-log-summary.md');
+        if (!response.ok) throw new Error('Unable to load session-log-summary.md');
+        const text = await response.text();
+
+        const sessions = text.split('### 🕒 Session').slice(1);
+        if (sessions.length === 0) {
+          container.innerHTML = "<p>No recorded sessions found.</p>";
+          return;
+        }
+
+        container.innerHTML = "";
+        sessions.reverse().forEach((block, index) => {
+          const lines = block.split('\n');
+          const date = lines[0].replace('—', '').trim();
+          const contextLine = lines.find(l => l.includes('**Context:**')) || '';
+          const buildLine = lines.find(l => l.includes('**Build:**')) || '';
+          const ciLine = lines.find(l => l.includes('**CI:**')) || '';
+          const notesLine = lines.find(l => l.includes('**Notes:**')) || '';
+
+          const context = contextLine.replace('**Context:**', '').trim();
+          const build = buildLine.replace('**Build:**', '').trim();
+          const ci = ciLine.replace('**CI:**', '').trim();
+          const notes = notesLine ? notesLine.replace('**Notes:**', '').trim() : '';
+
+          const buildClass = build.toLowerCase().includes('success') ? 'build-success' : 'build-failed';
+          const ciClass = ci.toLowerCase().includes('trigger') ? 'ci-triggered' : 'ci-skipped';
+
+          const div = document.createElement('div');
+          div.className = 'session';
+          div.innerHTML = `
+            <div class="header">
+              <div class="timestamp">🕒 ${date}</div>
+              <div>
+                <span class="${buildClass}">⚙️ ${build}</span> |
+                <span class="${ciClass}">🚀 ${ci}</span>
+              </div>
+            </div>
+            <div><strong>🧠 Context:</strong> ${context}</div>
+            <div class="notes"><strong>📝 Notes:</strong> ${notes || 'No details provided.'}</div>
+          `;
+          container.appendChild(div);
+        });
+      } catch (error) {
+        container.innerHTML = `<p style="color: red;">Error loading history: ${error.message}</p>`;
+      }
+    }
+
+    // Auto-load on startup
+    loadSessions();
+  </script>
+</body>
+</html>
+
+
+⸻
+
+⚙️ Installation Instructions
+	1.	Create folder /scripts/ (if it doesn’t exist).
+	2.	Save the file as:
+
+/scripts/session_history_dashboard.html
+
+
+	3.	Ensure your log file exists:
+
+.copilot/hooks/session-log-summary.md
+
+
+	4.	Open the HTML file in any browser:
+
+file:///path/to/scripts/session_history_dashboard.html
+
+
+
+⸻
+
+🧱 Features
+
+Feature	Description
+Self-contained	No backend, no dependencies — reads Markdown directly
+Color-coded states	Build (green/red), CI (yellow/gray)
+Auto-refresh button	Reloads session history dynamically
+Dark theme	Optimized for developer environments
+Reverse chronological order	Newest sessions appear first
+Cross-platform	Works on Windows, macOS, and Linux
+
+
+⸻
+
+🧠 Technical rationale
+	•	Type: Visualization Utility + Passive Analytics
+	•	Purpose: Allow developers and Copilot operators to review CI and build trends visually.
+	•	Mechanism: JavaScript fetches and parses Markdown into cards dynamically.
+	•	Resilience: Gracefully handles missing or malformed data; shows fallback messages.
+	•	Extendable: Can be adapted later to parse .log files for richer analytics.
+
+⸻

@@ -1,0 +1,181 @@
+Perfeito.
+Abaixo está o ficheiro README_DEV_GUIDE.md — um guia técnico conciso, escrito para desenvolvedores humanos e Copilot agents, com foco em como estender o projeto de forma segura e consistente sem alterar o ficheiro .copilot/config.yml.
+
+O conteúdo segue padrões de “prompt embedding” — isto é, as instruções são legíveis tanto por pessoas como por agentes LLM, garantindo consistência de decisões futuras.
+
+⸻
+
+🧭 README_DEV_GUIDE.md
+
+# Developer & AI Agent Guide — TimesheetManager
+
+This guide explains **how to extend and maintain** the TimesheetManager project safely — both for developers and Copilot/AI agents.
+
+---
+
+## ⚙️ Project Overview
+
+**Architecture Summary**
+
+/TimesheetManager.sln
+/TimesheetManager.Shared/   → Entities, DTOs, Enums
+/TimesheetManager.Server/   → API, Data Layer, Auth
+/TimesheetManager.Client/   → Blazor UI Pages
+/.copilot/config.yml        → One-time generation workflow
+/.github/workflows/         → CI build and test pipelines
+
+- **Framework:** .NET 8  
+- **UI:** Blazor Mixed (Server + WebAssembly)  
+- **Database:** SQL Server 2022+  
+- **ORM:** EF Core 8  
+- **Auth:** ASP.NET Identity (simplified roles)  
+
+---
+
+## 🧩 Extending the System
+
+### General Rule
+> Do **not modify** `.copilot/config.yml` for new business features.  
+> Extend the project **directly in the generated codebase** using new services, controllers, or Blazor components.
+
+### Example Extension Patterns
+
+#### ➕ Adding a New Module (e.g., Leave Management)
+1. **Shared Layer** (`TimesheetManager.Shared`)
+   - Add new entity:  
+     ```csharp
+     public class LeaveRequest {
+         public int Id { get; set; }
+         public int TechnicianId { get; set; }
+         public DateTime StartDate { get; set; }
+         public DateTime EndDate { get; set; }
+         public string Type { get; set; } // Vacation, Sick, Unpaid
+         public string Status { get; set; } // Pending, Approved, Rejected
+     }
+     ```
+
+2. **Server Layer** (`TimesheetManager.Server`)
+   - Add `DbSet<LeaveRequest>` to `AppDbContext`.  
+   - Create `LeaveController` with CRUD endpoints.  
+   - Add `Role-based authorization` if required.  
+
+3. **Client Layer** (`TimesheetManager.Client`)
+   - Create new Blazor page: `/leaves.razor`  
+   - Add form for submission and approval grid for managers.  
+
+4. **Testing**
+   - Add xUnit tests for `LeaveController`.  
+   - Add bUnit tests for `/leaves.razor` component.  
+
+---
+
+## 🧠 Business Rules Reference
+
+### Core Workflow
+| Step | Role | Action |
+|------|------|--------|
+| 1 | Technician | Submits timesheet or expense entry |
+| 2 | Project Manager | Reviews and approves/rejects |
+| 3 | (optional) Finance/Admin | May view reports, no approval required |
+
+### Simplifications
+- No multi-level approval or ERP validation.  
+- All workflows occur **locally** inside the TimesheetManager database.  
+
+---
+
+## 🧱 Database & Environment Setup
+
+**Connection String (default)**
+
+“Server=localhost;Database=TimesheetManagerDB;Trusted_Connection=True;TrustServerCertificate=True”
+
+**Requirements**
+- .NET 8 SDK  
+- SQL Server 2022 (Express or Developer)  
+- Visual Studio 2022 or VS Code + C# Dev Kit  
+
+**Local Run**
+```bash
+cd TimesheetManager.Server
+dotnet run
+
+Navigate to: https://localhost:5001
+
+⸻
+
+🧪 Testing Strategy
+
+Structure
+
+Create a new project /TimesheetManager.Tests/:
+
+dotnet new xunit -n TimesheetManager.Tests
+dotnet sln add TimesheetManager.Tests
+dotnet add TimesheetManager.Tests reference TimesheetManager.Server
+
+Recommended Tests
+
+Type	Framework	Description
+Unit	xUnit	Entities, Controllers
+Integration	EFCore.InMemory	Data operations
+UI (optional)	bUnit	Blazor components
+
+GitHub Actions automatically runs tests if detected.
+
+⸻
+
+🧱 Continuous Integration
+	•	The CI pipeline (.github/workflows/build.yml) builds and validates the solution automatically.
+	•	To trigger manually:
+
+gh workflow run build.yml
+
+
+	•	When new tests exist, they’ll run as part of this pipeline.
+
+⸻
+
+🧩 Adding Reporting or Analytics
+	•	Create a new folder /Reports/ inside Server/.
+	•	Implement LINQ-based aggregations for totals by project, technician, or period.
+	•	Expose via /api/reports.
+	•	Add a Blazor page /reports.razor with data visualizations.
+
+⸻
+
+🚀 Recommended Agent Behavior (for Copilot / AI)
+	1.	Do not regenerate the solution unless explicitly requested.
+	2.	Work with existing projects — modify code files, not YAML scaffolding.
+	3.	Follow the domain model and role logic defined in this guide.
+	4.	Validate output — code must compile, use idiomatic C# 12, and follow async patterns.
+	5.	If adding tests, ensure they’re compatible with xUnit and CI.
+	6.	Avoid adding third-party dependencies unless explicitly required.
+
+⸻
+
+🧭 Summary
+
+Area	Rule
+Project Scope	Timesheets & Expenses only (MVP)
+Extension	Via new code modules, not config
+DB	SQL Server, local environment
+Auth	Simple Technician/Manager roles
+Testing	xUnit + optional bUnit
+CI	Auto build + optional test validation
+
+
+⸻
+
+🧩 License
+
+This project is distributed under the MIT License.
+Use and modify freely with attribution to the original author.
+
+---
+
+### 🧠 Design rationale (Prompt Engineering alignment)
+- **Type:** *Instrucional + Constraint-based + Self-checking*  
+- **Purpose:** Teach both developers and Copilot how to extend safely, maintaining architectural coherence.  
+- **Effect:** Future Copilot sessions will automatically follow this structure (contextual priming).  
+
