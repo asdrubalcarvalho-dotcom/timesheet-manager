@@ -1,0 +1,218 @@
+```mermaid
+erDiagram
+    USERS {
+        id bigint PK
+        name varchar_255
+        email varchar_255
+        role varchar_255
+        email_verified_at timestamp
+        password varchar_255
+        remember_token varchar_100
+        created_at timestamp
+        updated_at timestamp
+    }
+    TECHNICIANS {
+        id bigint PK
+        name varchar_255
+        email varchar_255
+        role enum_technician_manager
+        hourly_rate decimal_8_2
+        is_active tinyint_1
+        created_by bigint
+        updated_by bigint
+        created_at timestamp
+        updated_at timestamp
+        user_id bigint
+        worker_id varchar_255
+        worker_name varchar_255
+    }
+    PROJECTS {
+        id bigint PK
+        name varchar_255
+        description text
+        start_date date
+        end_date date
+        created_by bigint
+        updated_by bigint
+        status enum_planned_active_on_hold_completed
+        created_at timestamp
+        updated_at timestamp
+        manager_id bigint
+    }
+    TASKS {
+        id bigint PK
+        project_id bigint
+        name varchar_255
+        description text
+        task_type enum_retrofit_inspection_commissioning_maintenance_installation_testing_documentation_training
+        is_active tinyint_1
+        created_by bigint
+        updated_by bigint
+        estimated_hours decimal_5_2
+        start_date date
+        end_date date
+        progress tinyint
+        dependencies json
+        created_at timestamp
+        updated_at timestamp
+    }
+    LOCATIONS {
+        id bigint PK
+        name varchar_255
+        country varchar_255
+        city varchar_255
+        address varchar_255
+        postal_code varchar_255
+        timezone varchar_255
+        meta json
+        latitude decimal_10_8
+        longitude decimal_11_8
+        asset_id bigint
+        oem_id bigint
+        is_active tinyint_1
+        created_by bigint
+        updated_by bigint
+        created_at timestamp
+        updated_at timestamp
+    }
+    TIMESHEETS {
+        id bigint PK
+        technician_id bigint
+        project_id bigint
+        task_id bigint
+        location_id bigint
+        date date
+        start_time time
+        end_time time
+        lunch_break int
+        hour_type enum_working_travel_standby_rest_on_scope_off_scope
+        check_out_time time
+        machine_status enum_online_offline
+        job_status enum_completed_ongoing
+        ai_flagged tinyint_1
+        ai_score decimal_3_2
+        ai_feedback json
+        hours_worked decimal_5_2
+        description text
+        status enum_draft_submitted_approved_rejected_closed
+        created_by bigint
+        updated_by bigint
+        rejection_reason text
+        created_at timestamp
+        updated_at timestamp
+    }
+    EXPENSES {
+        id bigint PK
+        technician_id bigint
+        project_id bigint
+        date date
+        amount decimal_10_2
+        category varchar_255
+        description text
+        attachment_path varchar_255
+        status enum_draft_submitted_approved_rejected_finance_review_finance_approved_paid
+        expense_type enum_reimbursement_mileage_company_card
+        distance_km decimal_8_2
+        rate_per_km decimal_8_2
+        vehicle_type varchar_50
+        finance_approved_by bigint
+        finance_approved_at timestamp
+        finance_notes text
+        paid_at timestamp
+        payment_reference varchar_100
+        card_transaction_id varchar_100
+        transaction_date timestamp
+        created_by bigint
+        updated_by bigint
+        rejection_reason text
+        created_at timestamp
+        updated_at timestamp
+    }
+    EVENTS {
+        id bigint PK
+        title varchar_255
+        start datetime
+        end datetime
+        project_id bigint
+        task_id bigint
+        location_id bigint
+        technician_id bigint
+        type varchar_255
+        created_at timestamp
+        updated_at timestamp
+    }
+    RESOURCES {
+        id bigint PK
+        name varchar_255
+        type varchar_255
+        meta json
+        created_at timestamp
+        updated_at timestamp
+        user_id bigint
+    }
+    PROJECT_MEMBERS {
+        id bigint PK
+        project_id bigint
+        user_id bigint
+        project_role enum_member_manager_none
+        created_by bigint
+        updated_by bigint
+        expense_role enum_member_manager_none
+        created_at timestamp
+        updated_at timestamp
+    }
+    PROJECT_RESOURCE {
+        id bigint PK
+        project_id bigint
+        resource_id bigint
+    }
+    LOCATION_TASK {
+        id bigint PK
+        location_id bigint
+        task_id bigint
+    }
+    RESOURCE_TASK {
+        id bigint PK
+        resource_id bigint
+        task_id bigint
+        allocation tinyint
+    }
+
+    LOCATIONS ||--o{ EVENTS : "location_id"
+    LOCATIONS ||--o{ LOCATION_TASK : "location_id"
+    LOCATIONS ||--o{ TIMESHEETS : "location_id"
+    PROJECTS ||--o{ EVENTS : "project_id"
+    PROJECTS ||--o{ EXPENSES : "project_id"
+    PROJECTS ||--o{ PROJECT_MEMBERS : "project_id"
+    PROJECTS ||--o{ PROJECT_RESOURCE : "project_id"
+    PROJECTS ||--o{ TASKS : "project_id"
+    PROJECTS ||--o{ TIMESHEETS : "project_id"
+    RESOURCES ||--o{ PROJECT_RESOURCE : "resource_id"
+    RESOURCES ||--o{ RESOURCE_TASK : "resource_id"
+    TASKS ||--o{ EVENTS : "task_id"
+    TASKS ||--o{ LOCATION_TASK : "task_id"
+    TASKS ||--o{ RESOURCE_TASK : "task_id"
+    TASKS ||--o{ TIMESHEETS : "task_id"
+    TECHNICIANS ||--o{ EVENTS : "technician_id"
+    TECHNICIANS ||--o{ EXPENSES : "technician_id"
+    TECHNICIANS ||--o{ TIMESHEETS : "technician_id"
+    USERS ||--o{ EXPENSES : "created_by"
+    USERS ||--o{ EXPENSES : "finance_approved_by"
+    USERS ||--o{ EXPENSES : "updated_by"
+    USERS ||--o{ LOCATIONS : "created_by"
+    USERS ||--o{ LOCATIONS : "updated_by"
+    USERS ||--o{ PROJECTS : "created_by"
+    USERS ||--o{ PROJECTS : "manager_id"
+    USERS ||--o{ PROJECTS : "updated_by"
+    USERS ||--o{ PROJECT_MEMBERS : "created_by"
+    USERS ||--o{ PROJECT_MEMBERS : "updated_by"
+    USERS ||--o{ PROJECT_MEMBERS : "user_id"
+    USERS ||--o{ RESOURCES : "user_id"
+    USERS ||--o{ TASKS : "created_by"
+    USERS ||--o{ TASKS : "updated_by"
+    USERS ||--o{ TECHNICIANS : "created_by"
+    USERS ||--o{ TECHNICIANS : "updated_by"
+    USERS ||--o{ TECHNICIANS : "user_id"
+    USERS ||--o{ TIMESHEETS : "created_by"
+    USERS ||--o{ TIMESHEETS : "updated_by"
+```

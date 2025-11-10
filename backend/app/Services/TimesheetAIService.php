@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Timesheet;
+use App\Models\Technician;
+use App\Data\TimesheetValidationSnapshot;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -23,30 +25,84 @@ class TimesheetAIService
      */
     public function generateSuggestion(int $userId, int $projectId, array $context): array
     {
+        $technicianId = $this->resolveTechnicianId($userId);
+
+        if (!$technicianId) {
+            return $this->generateStatisticalSuggestion(null, $projectId, $context);
+        }
+
         try {
             // Try AI-powered suggestion first
             if ($this->ollamaEnabled && $this->isOllamaAvailable()) {
-                $aiSuggestion = $this->generateAISuggestion($userId, $projectId, $context);
+                $aiSuggestion = $this->generateAISuggestion($technicianId, $projectId, $context);
                 if ($aiSuggestion['success']) {
                     return $aiSuggestion;
                 }
             }
             
             // Fallback to statistical analysis
-            return $this->generateStatisticalSuggestion($userId, $projectId, $context);
+            return $this->generateStatisticalSuggestion($technicianId, $projectId, $context);
             
         } catch (\Exception $e) {
             Log::error('AI Service Error: ' . $e->getMessage());
-            return $this->generateStatisticalSuggestion($userId, $projectId, $context);
+            return $this->generateStatisticalSuggestion($technicianId, $projectId, $context);
         }
+    }
+
+    /**
+     * Lightweight anomaly detection used by validation snapshots.
+     */
+    public function analyzeTimesheet(TimesheetValidationSnapshot $snapshot): array
+    {
+        $issues = [];
+        $score = 0.15; // base confidence
+
+        if ($snapshot->hoursWorked >= 10) {
+            $issues[] = 'Turno prolongado (>=10h).';
+            $score += 0.25;
+        }
+
+        if ($snapshot->dailyTotalHours > 12) {
+            $issues[] = 'Carga diária excede 12h para este técnico.';
+            $score += 0.25;
+        }
+
+        if ($snapshot->overlapRisk === 'block') {
+            $issues[] = 'Horário sobrepõe outro registo.';
+            $score += 0.2;
+        } elseif ($snapshot->overlapRisk === 'warning') {
+            $issues[] = 'Sem hora inicial/final para validar sobreposição.';
+            $score += 0.1;
+        }
+
+        if (!$snapshot->membershipOk) {
+            $issues[] = 'Técnico não está associado ao projeto.';
+            $score += 0.2;
+        }
+
+        if (!$snapshot->projectActive) {
+            $issues[] = 'Projeto encontra-se inativo.';
+            $score += 0.1;
+        }
+
+        // Basic heuristic: normalize score between 0 and 1
+        $normalizedScore = min(max($score, 0), 1);
+        $flagged = $normalizedScore >= 0.6 || !empty($issues);
+
+        return [
+            'flagged' => $flagged,
+            'score' => round($normalizedScore, 2),
+            'feedback' => $issues,
+            'source' => $this->ollamaEnabled ? 'ai' : 'heuristic',
+        ];
     }
     
     /**
      * Generate AI-powered suggestion using Ollama/Gemma
      */
-    private function generateAISuggestion(int $userId, int $projectId, array $context): array
+    private function generateAISuggestion(int $technicianId, int $projectId, array $context): array
     {
-        $userHistory = $this->getUserHistory($userId, $projectId);
+        $userHistory = $this->getUserHistory($technicianId, $projectId);
         $prompt = $this->buildPrompt($userHistory, $context);
         
         try {
@@ -78,9 +134,20 @@ class TimesheetAIService
     /**
      * Fallback statistical suggestion
      */
-    private function generateStatisticalSuggestion(int $userId, int $projectId, array $context): array
+    private function generateStatisticalSuggestion(?int $technicianId, int $projectId, array $context): array
     {
-        $recentEntries = Timesheet::where('technician_id', $userId)
+        if (!$technicianId) {
+            return [
+                'success' => true,
+                'source' => 'default',
+                'suggested_hours' => 8.0,
+                'confidence' => 0.3,
+                'description' => 'General project work',
+                'reasoning' => 'No technician history available'
+            ];
+        }
+
+        $recentEntries = Timesheet::where('technician_id', $technicianId)
             ->where('project_id', $projectId)
             ->where('date', '>=', now()->subDays(30))
             ->orderBy('date', 'desc')
@@ -185,9 +252,9 @@ JSON Response:";
     /**
      * Get user's recent timesheet history
      */
-    private function getUserHistory(int $userId, int $projectId): array
+    private function getUserHistory(int $technicianId, int $projectId): array
     {
-        return Timesheet::where('technician_id', $userId)
+        return Timesheet::where('technician_id', $technicianId)
             ->where('project_id', $projectId)
             ->where('date', '>=', now()->subDays(90))
             ->orderBy('date', 'desc')
@@ -207,5 +274,10 @@ JSON Response:";
         } catch (\Exception $e) {
             return false;
         }
+    }
+
+    private function resolveTechnicianId(int $userId): ?int
+    {
+        return Technician::where('user_id', $userId)->value('id');
     }
 }

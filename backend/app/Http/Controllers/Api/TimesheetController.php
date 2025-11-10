@@ -3,13 +3,23 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Project;
+use App\Models\Technician;
+use App\Models\User;
 use App\Models\Timesheet;
+use App\Services\TimesheetValidation\TimesheetValidationService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
 
 class TimesheetController extends Controller
 {
+    public function __construct(
+        private readonly TimesheetValidationService $validationService
+    ) {
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -20,49 +30,55 @@ class TimesheetController extends Controller
 
         $query = Timesheet::with(['technician', 'project', 'task', 'location']);
 
-        // For Technicians, only show their own timesheets
-        if ($request->user()->hasRole('Technician')) {
+        // For Technicians (users with Technician role who are NOT project managers)
+        // Only show their own timesheets
+        if ($request->user()->hasRole('Technician') && !$request->user()->isProjectManager()) {
             $technician = \App\Models\Technician::where('email', $request->user()->email)->first();
             if ($technician) {
                 $query->where('technician_id', $technician->id);
             }
         }
         
-        // For Managers, only show timesheets from projects they manage + their own timesheets
-        if ($request->user()->hasRole('Manager')) {
-            $managerProjectIds = \App\Models\Project::where('manager_id', $request->user()->id)->pluck('id')->toArray();
+        // For Project Managers, show timesheets from:
+        // 1. Projects where they are the manager (via manager_id or project_members)
+        // 2. Their own timesheets if they are also a technician  
+        // 3. Only show timesheets from 'member' technicians (NOT other managers)
+        elseif ($request->user()->isProjectManager()) {
+            $user = $request->user();
+            $allManagedProjectIds = $user->getManagedProjectIds();
+            $managerTechnician = \App\Models\Technician::where('user_id', $user->id)->first();
             
-            // Get manager's own technician record if exists
-            $managerTechnician = \App\Models\Technician::where('email', $request->user()->email)->first();
-            
-            $query->where(function ($q) use ($managerProjectIds, $managerTechnician) {
-                $hasConditions = false;
-                
-                // Timesheets from projects they manage
-                if (!empty($managerProjectIds)) {
-                    $q->whereIn('project_id', $managerProjectIds);
-                    $hasConditions = true;
-                }
-                
-                // Plus their own timesheets if they are also a technician
+            $query->where(function ($q) use ($allManagedProjectIds, $managerTechnician, $user) {
+                // Always include manager's own timesheets if they are also a technician
                 if ($managerTechnician) {
-                    if ($hasConditions) {
-                        $q->orWhere('technician_id', $managerTechnician->id);
-                    } else {
-                        $q->where('technician_id', $managerTechnician->id);
-                    }
-                    $hasConditions = true;
+                    $q->where('technician_id', $managerTechnician->id);
                 }
                 
-                // If manager has no projects and is not a technician, return empty result
-                if (!$hasConditions) {
-                    $q->whereRaw('1 = 0'); // Forces empty result
+                // Include timesheets from managed projects, but ONLY from 'member' technicians
+                if (!empty($allManagedProjectIds)) {
+                    $q->orWhere(function ($projectQuery) use ($allManagedProjectIds, $user) {
+                        $projectQuery->whereIn('project_id', $allManagedProjectIds)
+                            ->whereHas('technician', function ($techQuery) use ($allManagedProjectIds, $user) {
+                                // Technician must have a user_id
+                                $techQuery->whereNotNull('user_id')
+                                    // AND that user must have project_role='member' in one of the managed projects
+                                    ->whereHas('user.memberRecords', function ($memberQuery) use ($allManagedProjectIds) {
+                                        $memberQuery->whereIn('project_id', $allManagedProjectIds)
+                                            ->where('project_role', 'member');
+                                    });
+                            });
+                    });
+                }
+                
+                // If no conditions were added, force empty result
+                if (!$managerTechnician && empty($allManagedProjectIds)) {
+                    $q->whereRaw('1 = 0');
                 }
             });
         }
 
-        // Filter by technician (managers and admins only)
-        if ($request->has('technician_id') && $request->user()->hasAnyRole(['Manager', 'Admin'])) {
+        // Filter by technician (project managers and admins only)
+        if ($request->has('technician_id') && ($request->user()->isProjectManager() || $request->user()->hasRole('Admin'))) {
             $query->where('technician_id', $request->technician_id);
         }
 
@@ -89,14 +105,29 @@ class TimesheetController extends Controller
         
         // Adicionar informações de permissões para cada timesheet
         $timesheetsWithPermissions = $timesheets->map(function ($timesheet) use ($request) {
+            try {
+                $canView = $request->user()->can('view', $timesheet);
+                $canEdit = $request->user()->can('update', $timesheet);
+                $canDelete = $request->user()->can('delete', $timesheet);
+                $canApprove = $request->user()->can('approve', $timesheet);
+                $canReject = $request->user()->can('reject', $timesheet);
+            } catch (\App\Exceptions\UnauthorizedException $e) {
+                // Se a policy lançar exceção, considerar como sem permissão
+                $canView = false;
+                $canEdit = false;
+                $canDelete = false;
+                $canApprove = false;
+                $canReject = false;
+            }
+            
             return [
                 ...$timesheet->toArray(),
                 'permissions' => [
-                    'can_view' => $request->user()->can('view', $timesheet),
-                    'can_edit' => $request->user()->can('update', $timesheet),
-                    'can_delete' => $request->user()->can('delete', $timesheet),
-                    'can_approve' => $request->user()->can('approve', $timesheet),
-                    'can_reject' => $request->user()->can('reject', $timesheet),
+                    'can_view' => $canView,
+                    'can_edit' => $canEdit,
+                    'can_delete' => $canDelete,
+                    'can_approve' => $canApprove,
+                    'can_reject' => $canReject,
                 ]
             ];
         });
@@ -104,9 +135,9 @@ class TimesheetController extends Controller
         return response()->json([
             'data' => $timesheetsWithPermissions,
             'user_permissions' => [
-                'can_create_timesheets' => $request->user()->can('create-timesheets'),
+                'can_create_timesheets' => $request->user()->hasPermissionTo('create-timesheets'),
                 'can_view_all_timesheets' => $request->user()->hasAnyRole(['Manager', 'Admin']),
-                'can_approve_timesheets' => $request->user()->can('approve-timesheets'),
+                'can_approve_timesheets' => $request->user()->hasPermissionTo('approve-timesheets'),
             ]
         ]);
     }
@@ -121,26 +152,81 @@ class TimesheetController extends Controller
 
         $validated = $request->validated();
 
+        $project = Project::with('memberRecords')->findOrFail($validated['project_id']);
+        $isAdmin = $request->user()->hasRole('Admin');
+        $isProjectManager = $project->isUserProjectManager($request->user());
+
+        if (!$isAdmin && !$project->isUserMember($request->user())) {
+            return response()->json([
+                'error' => 'You are not assigned to this project.'
+            ], 403);
+        }
+
         // Set default status if not provided
         if (!isset($validated['status'])) {
-            $validated['status'] = 'submitted';
+            $validated['status'] = 'draft';
         }
 
-        // Find technician by authenticated user's email
-        $technician = \App\Models\Technician::where('email', $request->user()->email)->first();
-        
-        if (!$technician) {
-            return response()->json(['error' => 'Technician profile not found'], 404);
+        $technicianFromRequest = null;
+
+        // Determine technician_id based on user role and request data
+        if ($request->has('technician_id') && $validated['technician_id']) {
+            if ($isAdmin || $isProjectManager) {
+                // Admins and Project Managers can create timesheets for other technicians
+                // Verify the technician exists
+                $technicianFromRequest = Technician::find($validated['technician_id']);
+                if (!$technicianFromRequest) {
+                    return response()->json(['error' => 'Worker not found'], 404);
+                }
+                
+                if ($technicianFromRequest->user && !$project->memberRecords()
+                        ->where('user_id', $technicianFromRequest->user->id)->exists()) {
+                    return response()->json([
+                        'error' => 'This worker is not a member of the selected project.'
+                    ], 422);
+                }
+            } else {
+                // Regular users can only create timesheets for themselves
+                // Override with their own technician_id
+                $technicianFromRequest = Technician::where('email', $request->user()->email)->first();
+                if (!$technicianFromRequest) {
+                    return response()->json(['error' => 'Technician profile not found'], 404);
+                }
+                $validated['technician_id'] = $technicianFromRequest->id;
+            }
+        } else {
+            // No technician_id provided, use authenticated user's technician
+            $technicianFromRequest = Technician::where('email', $request->user()->email)->first();
+            if (!$technicianFromRequest) {
+                return response()->json(['error' => 'Technician profile not found'], 404);
+            }
+            $validated['technician_id'] = $technicianFromRequest->id;
         }
 
-        $validated['technician_id'] = $technician->id;
+        if ($technicianFromRequest) {
+            $technicianUserId = $technicianFromRequest->user_id;
+
+            if (!$technicianUserId && $technicianFromRequest->email) {
+                $relatedUser = User::where('email', $technicianFromRequest->email)->first();
+                $technicianUserId = $relatedUser?->id;
+            }
+
+            if ($technicianUserId && !$project->memberRecords()->where('user_id', $technicianUserId)->exists()) {
+                return response()->json([
+                    'error' => 'This worker is not assigned to the selected project.'
+                ], 403);
+            }
+        }
 
         try {
             $timesheet = Timesheet::create($validated);
             $timesheet->load(['technician', 'project', 'task', 'location']);
+
+            $validation = $this->validationService->summarize($timesheet, $request->user());
             
             return response()->json([
                 'data' => $timesheet,
+                'validation' => $validation->toArray(),
                 'message' => 'Timesheet criado com sucesso!',
                 'permissions' => [
                     'can_view' => $request->user()->can('view', $timesheet),
@@ -171,9 +257,11 @@ class TimesheetController extends Controller
         $this->authorize('view', $timesheet);
 
         $timesheet->load(['technician', 'project', 'task', 'location']);
+        $validation = $this->validationService->summarize($timesheet, $request->user());
         
         return response()->json([
             'data' => $timesheet,
+            'validation' => $validation->toArray(),
             'permissions' => [
                 'can_view' => $request->user()->can('view', $timesheet),
                 'can_edit' => $request->user()->can('update', $timesheet),
@@ -189,47 +277,20 @@ class TimesheetController extends Controller
      */
     public function update(Request $request, Timesheet $timesheet): JsonResponse
     {
-        \Log::info('Update request received', [
-            'timesheet_id' => $timesheet->id,
-            'request_data' => $request->all()
-        ]);
-
-        // Check if user owns this timesheet
-        $user = $request->user();
-        $technician = \App\Models\Technician::where('email', $user->email)->first();
-        
-        \Log::info('Update authorization check', [
-            'user_email' => $user->email,
-            'technician_found' => $technician ? $technician->id : null,
-            'timesheet_technician_id' => $timesheet->technician_id
-        ]);
-        
-        if (!$technician) {
-            \Log::error('Technician not found for update');
-            return response()->json(['error' => 'Technician not found'], 404);
-        }
-        
-        if ($timesheet->technician_id !== $technician->id) {
-            \Log::error('Unauthorized update attempt');
-            return response()->json(['error' => 'Unauthorized - You can only edit your own timesheets'], 403);
-        }
-
-        // Only allow editing of submitted or rejected timesheets
-        if (!$timesheet->canBeEdited()) {
-            return response()->json(['error' => 'Cannot edit approved timesheets'], 403);
-        }
+        // Policy handles all authorization logic (ownership, status, project membership)
+        $this->authorize('update', $timesheet);
 
         try {
             $validated = $request->validate([
-                'project_id' => 'exists:projects,id',
-                'task_id' => 'required|exists:tasks,id',
-                'location_id' => 'required|exists:locations,id',
-                'date' => 'date',
+                'project_id' => 'sometimes|exists:projects,id',
+                'task_id' => 'sometimes|required|exists:tasks,id',
+                'location_id' => 'sometimes|required|exists:locations,id',
+                'date' => 'sometimes|date',
                 'start_time' => 'nullable|date_format:H:i',
                 'end_time' => 'nullable|date_format:H:i',
                 'hours_worked' => 'numeric|min:0.25|max:24',
                 'description' => 'nullable|string',
-                'status' => ['nullable', 'string', Rule::in(['submitted', 'approved', 'rejected', 'closed'])]
+                'status' => ['nullable', 'string', Rule::in(['draft', 'submitted', 'rejected'])]
             ]);
 
             \Log::info('Validation passed for update', ['validated_data' => $validated]);
@@ -268,10 +329,21 @@ class TimesheetController extends Controller
 
             $timesheet->update($validated);
             $timesheet->load(['technician', 'project', 'task', 'location']);
+            $validation = $this->validationService->summarize($timesheet, $request->user());
             
             \Log::info('Timesheet updated successfully', ['timesheet_id' => $timesheet->id]);
             
-            return response()->json($timesheet);
+            return response()->json([
+                'data' => $timesheet,
+                'validation' => $validation->toArray(),
+                'permissions' => [
+                    'can_view' => $request->user()->can('view', $timesheet),
+                    'can_edit' => $request->user()->can('update', $timesheet),
+                    'can_delete' => $request->user()->can('delete', $timesheet),
+                    'can_approve' => $request->user()->can('approve', $timesheet),
+                    'can_reject' => $request->user()->can('reject', $timesheet),
+                ]
+            ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Validation failed for update', ['errors' => $e->errors()]);
             return response()->json(['error' => 'Validation failed', 'details' => $e->errors()], 422);
@@ -286,24 +358,57 @@ class TimesheetController extends Controller
      */
     public function destroy(Request $request, Timesheet $timesheet): JsonResponse
     {
-        // Check if user owns this timesheet
-        $user = $request->user();
-        $technician = \App\Models\Technician::where('email', $user->email)->first();
-        
-        if (!$technician) {
-            return response()->json(['error' => 'Technician not found'], 404);
+        \Log::info('DELETE request received', [
+            'timesheet_id' => $timesheet->id,
+            'user_id' => $request->user()->id,
+            'user_email' => $request->user()->email,
+            'timesheet_status' => $timesheet->status,
+            'technician_id' => $timesheet->technician_id,
+            'technician_user_id' => $timesheet->technician->user_id ?? null,
+        ]);
+
+        try {
+            // Policy handles all authorization logic (ownership, status, project membership)
+            $this->authorize('delete', $timesheet);
+            
+            \Log::info('DELETE authorized, executing delete', ['timesheet_id' => $timesheet->id]);
+            
+            $timesheet->delete();
+            return response()->json(['message' => 'Timesheet deleted successfully']);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            \Log::warning('DELETE denied by policy', [
+                'timesheet_id' => $timesheet->id,
+                'user_id' => $request->user()->id,
+                'reason' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'error' => 'Forbidden',
+                'message' => 'Você não tem permissão para deletar este timesheet.'
+            ], 403);
         }
-        
-        if ($timesheet->technician_id !== $technician->id) {
-            return response()->json(['error' => 'Unauthorized - You can only delete your own timesheets'], 403);
+    }
+
+    /**
+     * Get pending timesheets for approval (managers only)
+     */
+    public function pending(Request $request): JsonResponse
+    {
+        $query = Timesheet::with(['technician', 'project', 'task', 'location'])
+            ->where('status', 'submitted');
+
+        if ($request->user()->isProjectManager()) {
+            $managedProjectIds = $request->user()->getManagedProjectIds();
+
+            if (!empty($managedProjectIds)) {
+                $query->whereIn('project_id', $managedProjectIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         }
 
-        if (!$timesheet->canBeEdited()) {
-            return response()->json(['error' => 'Cannot delete approved timesheets'], 403);
-        }
-
-        $timesheet->delete();
-        return response()->json(['message' => 'Timesheet deleted successfully']);
+        $timesheets = $query->orderBy('date', 'desc')->get();
+        
+        return response()->json($timesheets);
     }
 
     /**
@@ -341,11 +446,7 @@ class TimesheetController extends Controller
      */
     public function close(Timesheet $timesheet): JsonResponse
     {
-        // Only managers can close timesheets
-        $user = request()->user();
-        if ($user->role !== 'Manager') {
-            return response()->json(['error' => 'Only managers can close timesheets'], 403);
-        }
+        $this->authorize('close', $timesheet);
 
         if (!$timesheet->canBeClosed()) {
             return response()->json(['error' => 'Only approved timesheets can be closed'], 400);
@@ -362,19 +463,270 @@ class TimesheetController extends Controller
      */
     public function reopen(Timesheet $timesheet): JsonResponse
     {
-        // Only managers can reopen timesheets
-        $user = request()->user();
-        if ($user->role !== 'Manager') {
-            return response()->json(['error' => 'Only managers can reopen timesheets'], 403);
-        }
+        $this->authorize('reopen', $timesheet);
 
         if (!$timesheet->canBeReopened()) {
-            return response()->json(['error' => 'Only approved timesheets can be reopened'], 400);
+            return response()->json(['error' => 'Only closed timesheets can be reopened'], 400);
         }
 
         $timesheet->reopen();
         $timesheet->load(['technician', 'project', 'task', 'location']);
         
         return response()->json($timesheet);
+    }
+
+    /**
+     * Manager view with validation and AI insights.
+     */
+    public function managerView(Request $request): JsonResponse
+    {
+        $request->validate([
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'status' => ['nullable', Rule::in(['draft', 'submitted', 'approved', 'rejected', 'closed', 'all', 'pending'])],
+            'technician_ids' => 'nullable|array',
+            'technician_ids.*' => 'integer|exists:technicians,id',
+        ]);
+
+        $user = $request->user();
+
+        $dateFrom = $request->input('date_from')
+            ? Carbon::parse($request->input('date_from'))
+            : Carbon::now()->subDays(6);
+
+        $dateTo = $request->input('date_to')
+            ? Carbon::parse($request->input('date_to'))
+            : Carbon::now();
+
+        $query = Timesheet::with(['technician', 'project', 'task', 'location'])
+            ->whereBetween('date', [$dateFrom->toDateString(), $dateTo->toDateString()]);
+
+        $status = $request->input('status', 'submitted');
+        if ($status && $status !== 'all') {
+            if ($status === 'pending') {
+                $query->where('status', 'submitted');
+            } else {
+                $query->where('status', $status);
+            }
+        }
+
+        if ($request->filled('technician_ids')) {
+            $query->whereIn('technician_id', $request->input('technician_ids'));
+        }
+
+        if (!$user->hasRole('Admin')) {
+            $managedProjectIds = $user->getManagedProjectIds();
+            if (empty($managedProjectIds)) {
+                return response()->json([
+                    'data' => [],
+                    'summary' => [
+                        'total' => 0,
+                        'flagged_count' => 0,
+                        'over_cap_count' => 0,
+                        'overlap_count' => 0,
+                        'pending_count' => 0,
+                        'average_ai_score' => null,
+                    ]
+                ]);
+            }
+            $query->whereIn('project_id', $managedProjectIds);
+        }
+
+        $timesheets = $query->orderBy('date')->get();
+
+        $rows = $timesheets->map(function (Timesheet $timesheet) use ($user) {
+            $validation = $this->validationService->summarize($timesheet, $user);
+            $snapshot = $validation->snapshot;
+            $date = $timesheet->date ? Carbon::parse($timesheet->date) : null;
+
+            // Get technician's project roles
+            $technicianProjectRole = null;
+            $technicianExpenseRole = null;
+            
+            if ($timesheet->technician && $timesheet->technician->user && $timesheet->project) {
+                $membership = $timesheet->project->memberRecords()
+                    ->where('user_id', $timesheet->technician->user_id)
+                    ->first();
+                    
+                if ($membership) {
+                    $technicianProjectRole = $membership->project_role;
+                    $technicianExpenseRole = $membership->expense_role;
+                }
+            }
+
+            return [
+                'id' => $timesheet->id,
+                'date' => $date?->toDateString(),
+                'week' => $date?->isoWeek(),
+                'start_time' => $timesheet->start_time ? Carbon::parse($timesheet->start_time)->format('H:i') : null,
+                'end_time' => $timesheet->end_time ? Carbon::parse($timesheet->end_time)->format('H:i') : null,
+                'hours_worked' => (float) $timesheet->hours_worked,
+                'status' => $timesheet->status,
+                'description' => $timesheet->description,
+                'project' => $timesheet->project ? [
+                    'id' => $timesheet->project->id,
+                    'name' => $timesheet->project->name,
+                ] : null,
+                'task' => $timesheet->task ? [
+                    'id' => $timesheet->task->id,
+                    'name' => $timesheet->task->name,
+                ] : null,
+                'location' => $timesheet->location ? [
+                    'id' => $timesheet->location->id,
+                    'name' => $timesheet->location->name,
+                    'city' => $timesheet->location->city,
+                    'country' => $timesheet->location->country,
+                ] : null,
+                'technician' => $timesheet->technician ? [
+                    'id' => $timesheet->technician->id,
+                    'name' => $timesheet->technician->name,
+                    'email' => $timesheet->technician->email,
+                ] : null,
+                'technician_project_role' => $technicianProjectRole,
+                'technician_expense_role' => $technicianExpenseRole,
+                'ai_flagged' => $snapshot->aiFlagged,
+                'ai_score' => $snapshot->aiScore,
+                'ai_feedback' => $snapshot->aiFeedback,
+                'validation' => $validation->toArray(),
+            ];
+        })->values();
+
+        $avgScore = $rows->avg('ai_score');
+
+        $summary = [
+            'total' => $rows->count(),
+            'flagged_count' => $rows->where('ai_flagged', true)->count(),
+            'over_cap_count' => $rows->filter(function ($row) {
+                return ($row['validation']['snapshot']['daily_total_hours'] ?? 0) > 12;
+            })->count(),
+            'overlap_count' => $rows->filter(function ($row) {
+                return ($row['validation']['snapshot']['overlap_risk'] ?? 'ok') === 'block';
+            })->count(),
+            'pending_count' => $rows->where('status', 'submitted')->count(),
+            'average_ai_score' => $avgScore !== null ? round($avgScore, 2) : null,
+        ];
+
+        return response()->json([
+            'data' => $rows,
+            'summary' => $summary,
+        ]);
+    }
+
+    /**
+     * Return validation snapshot for a timesheet.
+     */
+    public function validation(Request $request, Timesheet $timesheet): JsonResponse
+    {
+        $this->authorize('view', $timesheet);
+
+        $timesheet->load(['technician', 'project', 'task', 'location']);
+        $result = $this->validationService->summarize($timesheet, $request->user());
+
+        return response()->json($result->toArray());
+    }
+
+    /**
+     * Return authenticated user's projects with membership roles.
+     */
+    public function getUserProjects(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $projects = $user->projects()
+            ->with([
+                'tasks:id,project_id,name',
+                'memberRecords.user:id,name,email'
+            ])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($project) {
+                $project->user_project_role = $project->pivot->project_role;
+                $project->user_expense_role = $project->pivot->expense_role;
+                unset($project->pivot);
+                return $project;
+            });
+
+        return response()->json($projects);
+    }
+
+    /**
+     * Submit a draft or rejected timesheet for review.
+     */
+    public function submit(Timesheet $timesheet): JsonResponse
+    {
+        $this->authorize('submit', $timesheet);
+
+        if (!$timesheet->canBeSubmitted()) {
+            return response()->json([
+                'error' => 'Only draft or rejected timesheets can be submitted.'
+            ], 422);
+        }
+
+        $timesheet->submit();
+        $timesheet->load(['technician', 'project', 'task', 'location']);
+
+        return response()->json($timesheet);
+    }
+
+    /**
+     * Get count of pending approvals (timesheets + expenses).
+     * Lightweight endpoint for badge counts - only counts entries the user can actually approve.
+     * Excludes own entries to prevent self-approval.
+     */
+    public function pendingCounts(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Check if user has permission to approve timesheets OR expenses
+        if (!$user->hasPermissionTo('approve-timesheets') && !$user->hasPermissionTo('approve-expenses')) {
+            return response()->json([
+                'error' => 'Unauthorized - requires approval permissions'
+            ], 403);
+        }
+
+        // Admins see all pending approvals
+        if ($user->hasRole('Admin')) {
+            $timesheetsCount = Timesheet::where('status', 'submitted')->count();
+            $expensesCount = \App\Models\Expense::where('status', 'submitted')->count();
+            
+            return response()->json([
+                'timesheets' => $timesheetsCount,
+                'expenses' => $expensesCount,
+                'total' => $timesheetsCount + $expensesCount
+            ]);
+        }
+
+        // Managers: only count entries from projects they manage, excluding their own
+        $managedProjectIds = $user->getManagedProjectIds();
+
+        if (empty($managedProjectIds)) {
+            return response()->json([
+                'timesheets' => 0,
+                'expenses' => 0,
+                'total' => 0
+            ]);
+        }
+
+        // Count submitted timesheets from managed projects (excluding own entries)
+        $timesheetsCount = Timesheet::where('status', 'submitted')
+            ->whereIn('project_id', $managedProjectIds)
+            ->whereHas('technician', function ($query) use ($user) {
+                $query->where('user_id', '!=', $user->id);
+            })
+            ->count();
+
+        // Count submitted expenses from managed projects (excluding own entries)
+        $expensesCount = \App\Models\Expense::where('status', 'submitted')
+            ->whereIn('project_id', $managedProjectIds)
+            ->whereHas('technician', function ($query) use ($user) {
+                $query->where('user_id', '!=', $user->id);
+            })
+            ->count();
+
+        return response()->json([
+            'timesheets' => $timesheetsCount,
+            'expenses' => $expensesCount,
+            'total' => $timesheetsCount + $expensesCount
+        ]);
     }
 }

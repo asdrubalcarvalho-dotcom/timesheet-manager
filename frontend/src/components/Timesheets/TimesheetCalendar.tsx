@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
-import { timesheetsApi, projectsApi, tasksApi, locationsApi } from '../../services/api';
-import type { Project, Timesheet, Task, Location } from '../../types';
+import { timesheetsApi, projectsApi, tasksApi, locationsApi, techniciansApi } from '../../services/api';
+import type { Project, Timesheet, Task, Location, Technician } from '../../types';
 import { useAuth } from '../Auth/AuthContext';
+import { useNotification } from '../../contexts/NotificationContext';
+import ConfirmationDialog from '../Common/ConfirmationDialog';
 
 // API Response types
 interface ApiResponse<T> {
@@ -15,7 +17,6 @@ interface ApiResponse<T> {
 }
 
 type TimesheetApiResponse = Timesheet[] | ApiResponse<Timesheet>;
-type ProjectApiResponse = Project[] | ApiResponse<Project>;
 type TaskApiResponse = Task[] | ApiResponse<Task>;
 type LocationApiResponse = Location[] | ApiResponse<Location>;
 import {
@@ -28,7 +29,6 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  Alert,
   Card,
   CardContent,
   Chip,
@@ -36,9 +36,14 @@ import {
   Grid,
   Paper,
   Fade,
+  Collapse,
+  Badge,
+  Tooltip,
   useTheme,
   useMediaQuery,
-  Avatar
+  Avatar,
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import {
   Schedule as DurationIcon,
@@ -81,14 +86,73 @@ const timeToString = (time: Dayjs | null): string => {
   return time.format('HH:mm');
 };
 
+// Convert decimal hours to HH:MM format
+const decimalToHHMM = (decimal: number | string): string => {
+  const hours = parseFloat(decimal.toString());
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  return `${wholeHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
+const parseTimesheetDateTime = (dateOnly: string, timeValue?: string | null): Dayjs | null => {
+  if (!timeValue) {
+    return null;
+  }
+
+  const trimmedValue = String(timeValue).trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  // Check if it contains date info (DATETIME format like "2025-11-07 09:00:00")
+  const hasDateInfo = /\d{4}-\d{2}-\d{2}/.test(trimmedValue) || trimmedValue.includes('T');
+  
+  // Extract just the time part if it's a DATETIME
+  let timePartOnly = trimmedValue;
+  if (hasDateInfo && trimmedValue.includes(' ')) {
+    timePartOnly = trimmedValue.split(' ')[1]; // Get part after space
+  } else if (hasDateInfo && trimmedValue.includes('T')) {
+    timePartOnly = trimmedValue.split('T')[1].split('.')[0]; // ISO format
+  }
+
+  // Extract hours, minutes, seconds from time part
+  const match = timePartOnly.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) {
+    return null;
+  }
+
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const seconds = match[3] ? parseInt(match[3], 10) : 0;
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || Number.isNaN(seconds)) {
+    return null;
+  }
+
+  // Always combine with the provided dateOnly (ignore date in timeValue)
+  const normalizedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds
+    .toString()
+    .padStart(2, '0')}`;
+  const combined = dayjs(`${dateOnly} ${normalizedTime}`, ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm']);
+
+  return combined.isValid() ? combined : null;
+};
+
+const STATUS_STYLE_MAP: Record<string, { background: string; dot: string }> = {
+  submitted: { background: '#ffffff', dot: '#f57c00' },
+  approved: { background: '#ffffff', dot: '#388e3c' },
+  rejected: { background: '#ffffff', dot: '#d32f2f' },
+  closed: { background: '#ffffff', dot: '#7b1fa2' },
+  default: { background: '#ffffff', dot: '#90a4ae' }, // Neutral blue-gray
+};
+
+const DAILY_HOUR_CAP = 12;
 
 
 
 
-interface TimesheetCalendarProps {}
 
-const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
-  const { user, isManager, isTechnician, isAdmin, canValidateTimesheets, hasPermission } = useAuth();
+const TimesheetCalendar: React.FC = () => {
+  const { user, isManager, isAdmin, loading: authLoading } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
@@ -97,62 +161,286 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [projectRoleMap, setProjectRoleMap] = useState<Record<number, { projectRole?: 'member' | 'manager' | 'none'; expenseRole?: 'member' | 'manager' | 'none'; }>>({});
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<Timesheet | null>(null);
   
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({ 
+    open: false, 
+    title: '', 
+    message: '', 
+    recordDetails: {} as any,
+    action: (() => {}) as () => void | Promise<void>
+  });
+  
+  // Global notification hook
+  const { showSuccess, showError, showWarning } = useNotification();
+  
   // Form state
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<number>(0);
   const [projectId, setProjectId] = useState<number>(0);
   const [taskId, setTaskId] = useState<number>(0);
   const [locationId, setLocationId] = useState<number>(0);
   const [hoursWorked, setHoursWorked] = useState<number>(0);
   const [description, setDescription] = useState('');
   const [startTimeObj, setStartTimeObj] = useState<Dayjs | null>(dayjs().hour(9).minute(0).second(0));
-  const [endTimeObj, setEndTimeObj] = useState<Dayjs | null>(dayjs().hour(17).minute(30).second(0));
+  const [endTimeObj, setEndTimeObj] = useState<Dayjs | null>(dayjs().hour(10).minute(0).second(0));
+  const [timesheetScope, setTimesheetScope] = useState<'mine' | 'others' | 'all'>('mine');
+  const [validationFilter, setValidationFilter] = useState<'all' | 'ai_flagged' | 'overcap'>('all');
+  const userIsManager = isManager();
+  const userIsAdmin = isAdmin();
+
+  const roleIsAssigned = (role?: 'member' | 'manager' | 'none') => role && role !== 'none';
+
+  const formatRoleLabel = (role?: 'member' | 'manager' | 'none') => {
+    if (!role || role === 'none') return 'Nenhum';
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  };
+
+  // AI Suggestion state - with localStorage persistence
+  const [showAISuggestions, setShowAISuggestions] = useState<boolean>(() => {
+    const saved = localStorage.getItem('timesheet_ai_suggestions_enabled');
+    return saved !== null ? saved === 'true' : true; // Default: enabled
+  });
+  const [aiSuggestionExpanded, setAiSuggestionExpanded] = useState<boolean>(false);
 
   // AI Suggestion Hook
   const aiSuggestion = useTimesheetAISuggestion();
 
-  // Load initial data
+  // Calculate available technicians based on user role and visibility rules
+  const availableTechnicians = useMemo(() => {
+    if (!user) return [];
+
+    // Get current user's technician record
+    const currentUserTechnician = technicians.find(t => t.email === user.email);
+
+    // If project is selected, filter by project membership
+    if (projectId > 0) {
+      const selectedProject = projects.find(p => p.id === projectId);
+      
+      // Try both camelCase and snake_case (Laravel returns snake_case by default)
+      const memberRecords = selectedProject?.memberRecords || selectedProject?.member_records || [];
+      
+      // Get project members who have timesheet permissions (role != 'none')
+      const projectMembersWithTimesheetAccess = memberRecords.filter((member: any) => 
+        member.project_role && member.project_role !== 'none'
+      );
+
+      // Map to technician user IDs
+      const allowedTechnicianUserIds = new Set(
+        projectMembersWithTimesheetAccess.map((member: any) => member.user_id)
+      );
+
+      // Filter technicians by project membership
+      const projectTechnicians = technicians.filter(t => 
+        t.user_id && allowedTechnicianUserIds.has(t.user_id)
+      );
+
+      // Check current user's role in this project
+      const currentUserProjectMember = projectMembersWithTimesheetAccess.find(
+        (member: any) => member.user_id === user.id
+      );
+
+      // For Admins: show all technicians (bypass project membership check)
+      if (userIsAdmin) {
+        return technicians;
+      }
+
+      // For Project Managers: show only MEMBERS (not other managers) + themselves
+      if (currentUserProjectMember?.project_role === 'manager') {
+        // Get member user IDs (excluding managers)
+        const memberUserIds = new Set(
+          projectMembersWithTimesheetAccess
+            .filter((member: any) => member.project_role === 'member')
+            .map((member: any) => member.user_id)
+        );
+
+        // Filter technicians: only members + current user (manager can see their own)
+        return projectTechnicians.filter(t => 
+          t.user_id && (memberUserIds.has(t.user_id) || t.user_id === user.id)
+        );
+      }
+
+      // For regular members: only show themselves
+      // (User always has access since project appears in their dropdown)
+      return currentUserTechnician ? [currentUserTechnician] : [];
+    }
+
+    // No project selected - original logic
+    // For regular members: only show themselves
+    if (!userIsManager && !userIsAdmin) {
+      return currentUserTechnician ? [currentUserTechnician] : [];
+    }
+
+    // For Managers/Admins in "all" scope: show all visible technicians
+    if (timesheetScope === 'all') {
+      return technicians;
+    }
+
+    // For Managers/Admins in "others" scope: show all EXCEPT themselves
+    if (timesheetScope === 'others') {
+      return technicians.filter(t => t.email !== user.email);
+    }
+
+    // For Managers/Admins in "mine" scope: only show themselves
+    return currentUserTechnician ? [currentUserTechnician] : [];
+  }, [technicians, user, userIsManager, userIsAdmin, timesheetScope, projectId, projects]);
+
+  const validationSummary = useMemo(() => {
+    const aiFlaggedIds = new Set<number>();
+    const overCapIds = new Set<number>();
+    const totals = new Map<string, { hours: number; ids: number[] }>();
+
+    timesheets.forEach((ts) => {
+      if (ts.ai_flagged) {
+        aiFlaggedIds.add(ts.id);
+      }
+
+      if (ts.technician_id && ts.date) {
+        const key = `${ts.technician_id}-${dayjs(ts.date).format('YYYY-MM-DD')}`;
+        const entry = totals.get(key) ?? { hours: 0, ids: [] };
+        const decimal =
+          typeof ts.hours_worked === 'string'
+            ? parseFloat(ts.hours_worked)
+            : ts.hours_worked;
+        entry.hours += Number.isFinite(decimal) ? decimal : 0;
+        entry.ids.push(ts.id);
+        totals.set(key, entry);
+      }
+    });
+
+    totals.forEach(({ hours, ids }) => {
+      if (hours > DAILY_HOUR_CAP) {
+        ids.forEach((id) => overCapIds.add(id));
+      }
+    });
+
+    return {
+      aiFlagged: aiFlaggedIds.size,
+      aiFlaggedIds,
+      overCap: overCapIds.size,
+      overCapIds,
+    };
+  }, [timesheets]);
+
+  const toggleValidationFilter = (target: 'ai_flagged' | 'overcap') => {
+    setValidationFilter((prev) => (prev === target ? 'all' : target));
+  };
+
+
+  // Load initial data once authentication state is resolved
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+      return;
+    }
+
     loadTimesheets();
     loadProjects();
     loadTasks();
     loadLocations();
-  }, []);
+    loadTechnicians();
+  }, [authLoading, user?.id]);
+
+  useEffect(() => {
+    if (!user) {
+      if (timesheetScope !== 'mine') {
+        setTimesheetScope('mine');
+      }
+      return;
+    }
+
+    if (userIsAdmin) {
+      if (timesheetScope !== 'all') {
+        setTimesheetScope('all');
+      }
+      return;
+    }
+
+    if (!userIsManager && timesheetScope !== 'mine') {
+      setTimesheetScope('mine');
+    }
+  }, [user, userIsAdmin, userIsManager, timesheetScope]);
+
+  // Auto-select technician when creating new entry
+  useEffect(() => {
+    if (dialogOpen && !selectedEntry && availableTechnicians.length > 0 && selectedTechnicianId === 0) {
+      // Find the current user's technician record first (preferred)
+      const currentUserTechnician = availableTechnicians.find(t => t.email === user?.email);
+      
+      if (currentUserTechnician) {
+        // Auto-select the current user's technician if found
+        console.log('Auto-selecting current user technician:', currentUserTechnician);
+        setSelectedTechnicianId(currentUserTechnician.id);
+      } else {
+        // Fallback: Auto-select the first available technician (for Admins/Managers creating for others)
+        console.log('Auto-selecting first available technician:', availableTechnicians[0]);
+        setSelectedTechnicianId(availableTechnicians[0].id);
+      }
+    }
+  }, [dialogOpen, selectedEntry, availableTechnicians, selectedTechnicianId, user]);
+
 
   const loadTimesheets = async () => {
     try {
       setLoading(true);
       const response: TimesheetApiResponse = await timesheetsApi.getAll();
       console.log('Loaded timesheets:', response);
-      // A nova API retorna { data: [...], user_permissions: {...} }
+      // Handle new API format that returns { data: [...], user_permissions: {...} }
       const timesheetsData = Array.isArray(response) 
         ? response 
-        : (response as ApiResponse<Timesheet>).data || [];
+        : (response as any)?.data || [];
       setTimesheets(timesheetsData);
     } catch (error) {
       console.error('Error loading timesheets:', error);
-      setError('Failed to load timesheets');
+      showError('Failed to load timesheets');
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle view change - reload data when switching to Week view
+  const handleViewChange = useCallback((info: any) => {
+    console.log('View changed to:', info.view.type);
+    
+    // Reload data when switching to timeGridWeek to ensure proper rendering
+    if (info.view.type === 'timeGridWeek') {
+      console.log('Switching to Week view - reloading timesheets...');
+      loadTimesheets();
+    }
+  }, []);
+
   const loadProjects = async () => {
     try {
-      const data: ProjectApiResponse = await projectsApi.getAll();
-      console.log('Loaded projects:', data);
-      // Handle both direct array and wrapped response formats
-      const projectsArray = Array.isArray(data) 
-        ? data 
-        : (data as ApiResponse<Project>).data || [];
-      setProjects(projectsArray);
+      const userProjectsResponse = await projectsApi.getForCurrentUser().catch(() => ([] as Project[]));
+
+      console.log('Loaded user projects:', userProjectsResponse);
+
+      const userProjectsArray = Array.isArray(userProjectsResponse)
+        ? userProjectsResponse
+        : (userProjectsResponse as ApiResponse<Project>).data || [];
+      
+      // Use only user's projects (where user is member)
+      setProjects(userProjectsArray);
+
+      const roleMap = userProjectsArray.reduce<Record<number, { projectRole?: 'member' | 'manager' | 'none'; expenseRole?: 'member' | 'manager' | 'none'; }>>((acc, project) => {
+        acc[project.id] = {
+          projectRole: project.user_project_role,
+          expenseRole: project.user_expense_role
+        };
+        return acc;
+      }, {});
+      setProjectRoleMap(roleMap);
     } catch (error) {
       console.error('Error loading projects:', error);
-      setError('Failed to load projects');
+      showError('Failed to load projects');
     }
   };
 
@@ -167,7 +455,7 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
       setTasks(tasksArray);
     } catch (error) {
       console.error('Error loading tasks:', error);
-      setError('Failed to load tasks');
+      showError('Failed to load tasks');
     }
   };
 
@@ -182,7 +470,28 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
       setLocations(locationsArray);
     } catch (error) {
       console.error('Error loading locations:', error);
-      setError('Failed to load locations');
+      showError('Failed to load locations');
+    }
+  };
+
+  const loadTechnicians = async () => {
+    try {
+      const response = await techniciansApi.getAll();
+      console.log('Loaded technicians RAW response:', response);
+      // API returns { data: [...] } format, handle nested data property
+      let techniciansData = [];
+      if (Array.isArray(response)) {
+        techniciansData = response;
+      } else if (response && typeof response === 'object' && 'data' in response) {
+        // Check if data is an array or has nested data property
+        const responseData = response.data as any;
+        techniciansData = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+      }
+      console.log('Processed technicians:', techniciansData);
+      setTechnicians(techniciansData);
+    } catch (error) {
+      console.error('Error loading technicians:', error);
+      showError('Failed to load workers');
     }
   };
 
@@ -216,26 +525,25 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
   };
 
   // AI Suggestion Functions
-  const handleApplyAISuggestion = () => {
-    if (aiSuggestion.suggestion) {
-      console.log('Applying AI suggestion:', aiSuggestion.suggestion);
+  const handleApplyAISuggestion = (selectedHours: number | null, selectedDescription: string) => {
+    console.log('Applying AI suggestion:', { selectedHours, selectedDescription });
+    
+    // Apply hours if selected
+    if (selectedHours !== null && startTimeObj) {
+      const newEndTime = startTimeObj.add(selectedHours, 'hour');
+      setEndTimeObj(newEndTime);
       
-      // Apply suggested hours
-      setHoursWorked(aiSuggestion.suggestion.suggested_hours);
-      
-      // Apply suggested description
-      setDescription(aiSuggestion.suggestion.suggested_description);
-      
-      // If hours are provided, calculate reasonable start/end times
-      const suggestedHours = aiSuggestion.suggestion.suggested_hours;
-      const startTime = dayjs().hour(9).minute(0); // Start at 9 AM
-      const endTime = startTime.add(suggestedHours, 'hour');
-      
-      setStartTimeObj(startTime);
-      setEndTimeObj(endTime);
-      
-      aiSuggestion.applySuggestion();
+      // Recalculate hours worked
+      const calculatedHours = newEndTime.diff(startTimeObj, 'minute') / 60;
+      setHoursWorked(parseFloat(calculatedHours.toFixed(2)));
     }
+    
+    // Apply description if selected
+    if (selectedDescription) {
+      setDescription(selectedDescription);
+    }
+    
+    aiSuggestion.applySuggestion();
   };
 
   const handleDismissAISuggestion = () => {
@@ -246,6 +554,17 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
   const handleAIFeedback = (accepted: boolean) => {
     console.log('AI feedback:', accepted ? 'accepted' : 'rejected');
     aiSuggestion.provideFeedback(accepted);
+  };
+
+  const toggleAISuggestions = () => {
+    const newValue = !showAISuggestions;
+    setShowAISuggestions(newValue);
+    localStorage.setItem('timesheet_ai_suggestions_enabled', String(newValue));
+    
+    // Collapse when disabling
+    if (!newValue) {
+      setAiSuggestionExpanded(false);
+    }
   };
 
   // Update hours when start or end time changes with debouncing
@@ -287,10 +606,51 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
   }, [dialogOpen, selectedEntry, selectedDate, projectId, taskId, locationId, projects, tasks, locations, user]);
 
   const handleDateSelect = (selectInfo: DateSelectArg) => {
-    console.log('Date selected:', selectInfo.startStr);
-    setSelectedDate(dayjs(selectInfo.startStr));
+    console.log('Date select:', selectInfo.startStr, 'allDay:', selectInfo.allDay, 'isMobile:', isMobile);
+    
+    const startDateTime = dayjs(selectInfo.startStr);
+    const endDateTime = dayjs(selectInfo.endStr);
+    
+    setSelectedDate(startDateTime);
     setSelectedEntry(null);
     resetForm();
+    
+    // Se não for all-day (clicou numa hora específica na vista week/day)
+    if (!selectInfo.allDay) {
+      console.log('Time-specific click detected:', startDateTime.format('HH:mm'), '->', endDateTime.format('HH:mm'));
+      setStartTimeObj(startDateTime);
+      setEndTimeObj(endDateTime);
+      
+      // Calcular horas automaticamente
+      const hours = calculateHours(startDateTime, endDateTime);
+      setHoursWorked(hours);
+    }
+    
+    setDialogOpen(true);
+  };
+
+  const handleDateClick = (clickInfo: any) => {
+    console.log('Date click:', clickInfo.dateStr, 'allDay:', clickInfo.allDay, 'isMobile:', isMobile);
+    
+    const clickDateTime = dayjs(clickInfo.dateStr);
+    setSelectedDate(clickDateTime);
+    setSelectedEntry(null);
+    resetForm();
+    
+    // Se clicou numa hora específica (não all-day)
+    if (!clickInfo.allDay && clickInfo.date) {
+      const startTime = dayjs(clickInfo.date);
+      const endTime = startTime.add(1, 'hour'); // Auto-incrementa 1 hora
+      
+      console.log('Time-specific click:', startTime.format('HH:mm'), '->', endTime.format('HH:mm'));
+      setStartTimeObj(startTime);
+      setEndTimeObj(endTime);
+      
+      // Calcular horas automaticamente
+      const hours = calculateHours(startTime, endTime);
+      setHoursWorked(hours);
+    }
+    
     setDialogOpen(true);
   };
 
@@ -300,28 +660,66 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
     
     const timesheet = timesheets.find(t => t.id === timesheetId);
     if (timesheet) {
-      // Check if user can edit this entry
-      if (timesheet.technician && user?.email !== timesheet.technician.email && user?.role !== 'Manager') {
-        console.log('User cannot edit this entry - not owner and not manager');
-        return; // Don't open dialog for entries the user cannot edit
+      // Check if user owns this entry
+      const isOwner = isTimesheetOwnedByUser(timesheet);
+      
+      // Check if user manages this project
+      const managesProject = Boolean(userIsManager && user?.managed_projects?.includes(timesheet.project_id));
+      
+      // Owner, Manager of project, or Admin can edit timesheets
+      const canEdit = isOwner || userIsAdmin || managesProject;
+      
+      if (!canEdit) {
+        console.log('User cannot edit this entry - not owner, not manager of project, and not admin');
+        // Show warning notification
+        showWarning('You can only edit your own timesheets or timesheets from projects you manage.');
+        return;
       }
       
       console.log('Opening timesheet for editing:', timesheet);
+      
+      // Convert hours_worked to decimal format (e.g., 5.5 for 5h30m)
+      const decimalHours = typeof timesheet.hours_worked === 'string' 
+        ? parseFloat(timesheet.hours_worked)
+        : timesheet.hours_worked;
+      
+      console.log('Duration conversion:', {
+        original: timesheet.hours_worked,
+        decimal: decimalHours,
+        formatted: `${Math.floor(decimalHours)}h${Math.round((decimalHours % 1) * 60)}m`
+      });
+      
       setSelectedEntry(timesheet);
       setSelectedDate(dayjs(timesheet.date));
       setProjectId(timesheet.project_id);
       setTaskId(timesheet.task_id || 0);
       setLocationId(timesheet.location_id || 0);
-      setHoursWorked(timesheet.hours_worked);
-      setDescription(timesheet.description || '');
       
-      // Set start and end times if available
-      if (timesheet.start_time) {
-        setStartTimeObj(dayjs(`2023-01-01 ${timesheet.start_time}`));
-      }
-      if (timesheet.end_time) {
-        setEndTimeObj(dayjs(`2023-01-01 ${timesheet.end_time}`));
-      }
+      // Debug: Log technician info
+      console.log('Setting technician ID:', {
+        technician_id: timesheet.technician_id,
+        technician_object: timesheet.technician,
+        available_technicians: availableTechnicians.map(t => ({ id: t.id, name: t.name }))
+      });
+      
+      setSelectedTechnicianId(timesheet.technician_id || 0);
+      setHoursWorked(decimalHours);
+      setDescription(timesheet.description || '');
+
+      const entryDate = dayjs(timesheet.date).format('YYYY-MM-DD');
+      const parsedStart = parseTimesheetDateTime(entryDate, timesheet.start_time);
+      const parsedEnd = parseTimesheetDateTime(entryDate, timesheet.end_time);
+      
+      console.log('Time parsing:', {
+        date: entryDate,
+        start_time: timesheet.start_time,
+        end_time: timesheet.end_time,
+        parsedStart: parsedStart?.format('HH:mm'),
+        parsedEnd: parsedEnd?.format('HH:mm')
+      });
+
+      setStartTimeObj(parsedStart);
+      setEndTimeObj(parsedEnd);
       
       setDialogOpen(true);
     }
@@ -331,57 +729,79 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
     setProjectId(0);
     setTaskId(0);
     setLocationId(0);
+    setSelectedTechnicianId(0);
     setHoursWorked(0);
     setDescription('');
-    // Set default working hours (9:00 AM to 5:30 PM)
+    // Set default working hours (9:00 AM + 1 hour = 10:00 AM)
     const defaultStart = dayjs().hour(9).minute(0).second(0);
-    const defaultEnd = dayjs().hour(17).minute(30).second(0);
+    const defaultEnd = defaultStart.add(1, 'hour'); // Auto-increment by 1 hour
     setStartTimeObj(defaultStart);
     setEndTimeObj(defaultEnd);
-    setError('');
+    
+    // Reset AI suggestion state
+    setAiSuggestionExpanded(false);
+    aiSuggestion.dismissSuggestion();
   };
 
   const handleSave = async () => {
+    if (!selectedTechnicianId) {
+      showWarning('Please select a worker');
+      return;
+    }
+
     if (!projectId) {
-      setError('Please select a project');
+      showWarning('Please select a project');
       return;
     }
     
     if (!taskId) {
-      setError('Please select a task');
+      showWarning('Please select a task');
       return;
     }
     
     if (!locationId) {
-      setError('Please select a location');
+      showWarning('Please select a location');
       return;
     }
     
     if (!selectedDate) {
-      setError('Please select a date');
+      showWarning('Please select a date');
       return;
     }
     
     if (!startTimeObj || !endTimeObj) {
-      setError('Please set start and end times');
+      showWarning('Please set start and end times');
       return;
     }
     
     if (hoursWorked <= 0) {
-      setError('Hours worked must be greater than 0');
+      showWarning('Hours worked must be greater than 0');
       return;
     }
     
     if (hoursWorked > 24) {
-      setError('Hours worked cannot exceed 24 hours');
+      showWarning('Hours worked cannot exceed 24 hours');
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
+
+      // Additional security check: prevent editing other users' timesheets
+      if (selectedEntry) {
+        const isOwner = isTimesheetOwnedByUser(selectedEntry);
+        const managesProject = Boolean(userIsManager && user?.managed_projects?.includes(selectedEntry.project_id));
+        const canEdit = isOwner || userIsAdmin || managesProject;
+        
+        if (!canEdit) {
+          showWarning('You can only edit your own timesheets or timesheets from projects you manage.');
+          setLoading(false);
+          return;
+        }
+      }
 
       const timesheet = {
+        technician_id: selectedTechnicianId, // Use selected technician ID
         project_id: projectId,
         task_id: taskId,
         location_id: locationId,
@@ -389,17 +809,22 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
         hours_worked: hoursWorked,
         description: description.trim(),
         start_time: timeToString(startTimeObj),
-        end_time: timeToString(endTimeObj)
+        end_time: timeToString(endTimeObj),
+        status: 'submitted'
       };
 
       console.log('Saving timesheet:', timesheet);
+      console.log('Selected technician ID from state:', selectedTechnicianId);
+      console.log('Available technicians:', availableTechnicians);
 
       if (selectedEntry) {
         // Update existing timesheet
         await timesheetsApi.update(selectedEntry.id, timesheet);
+        showSuccess('Timesheet updated successfully');
       } else {
         // Create new timesheet
         await timesheetsApi.create(timesheet);
+        showSuccess('Timesheet created successfully');
       }
 
       console.log('Timesheet saved successfully');
@@ -411,9 +836,31 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
       if (!selectedEntry && aiSuggestion.suggestion) {
         handleAIFeedback(true); // Successful save indicates good suggestion
       }
-    } catch (error) {
-      console.error('Error saving timesheet:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save timesheet');
+    } catch (err) {
+      console.error('Error saving timesheet:', err);
+      const error = err as any; // Type assertion for axios error
+      
+      // Extract validation errors from response
+      if (error.response?.data?.errors) {
+        const validationErrors = Object.entries(error.response.data.errors)
+          .map(([field, messages]: [string, any]) => `${field}: ${messages.join(', ')}`)
+          .join('\n');
+        console.error('Validation errors:', validationErrors);
+        const errorMsg = `Validation failed: ${validationErrors}`;
+        showError(errorMsg);
+      } else if (error.response?.data?.message) {
+        // Check if message is about status immutability (should be warning, not error)
+        const message = error.response.data.message;
+        const isStatusWarning = message.includes('cannot be edited') || message.includes('Approved or closed');
+        if (isStatusWarning) {
+          showWarning(message);
+        } else {
+          showError(message);
+        }
+      } else {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to save timesheet';
+        showError(errorMsg);
+      }
       
       // Provide negative feedback to AI if suggestion was used
       if (!selectedEntry && aiSuggestion.suggestion) {
@@ -427,132 +874,479 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
   const handleDelete = async () => {
     if (!selectedEntry) return;
 
-    try {
-      setLoading(true);
-      await timesheetsApi.delete(selectedEntry.id);
-
-      if (true) {
-        console.log('Timesheet deleted successfully');
-        await loadTimesheets();
-        setDialogOpen(false);
-        resetForm();
-      } else {
-        throw new Error('Failed to delete timesheet');
+    const project = projects.find(p => p.id === selectedEntry.project_id);
+    const task = tasks.find(t => t.id === selectedEntry.task_id);
+    
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Timesheet Entry',
+      message: 'Are you sure you want to delete this timesheet entry? This action cannot be undone.',
+      recordDetails: {
+        date: formatDate(dayjs(selectedEntry.date)),
+        project: project?.name,
+        task: task?.description,
+        hours: selectedEntry.hours_worked
+      },
+      action: async () => {
+        try {
+          setLoading(true);
+          
+          console.log('Deleting timesheet:', selectedEntry.id);
+          await timesheetsApi.delete(selectedEntry.id);
+          
+          console.log('Timesheet deleted successfully');
+          showSuccess('Timesheet deleted successfully');
+          await loadTimesheets();
+          setDialogOpen(false);
+          resetForm();
+        } catch (error: any) {
+          console.error('Error deleting timesheet:', error);
+          const errorMessage = error?.response?.data?.message || error?.message || 'Failed to delete timesheet';
+          showError(errorMessage);
+        } finally {
+          setLoading(false);
+        }
+        setConfirmDialog({ ...confirmDialog, open: false });
       }
-    } catch (error) {
-      console.error('Error deleting timesheet:', error);
-      setError('Failed to delete timesheet');
-    } finally {
-      setLoading(false);
-    }
+    });
   };
+
+  const isTimesheetOwnedByUser = useCallback((timesheet: Timesheet): boolean => {
+    if (!user) {
+      return false;
+    }
+
+    // Check via technician.user_id (technicians table has user_id FK)
+    if (timesheet.technician?.user_id && user.id) {
+      return timesheet.technician.user_id === user.id;
+    }
+
+    // Fallback to email comparison
+    if (timesheet.technician?.email && user.email) {
+      return timesheet.technician.email === user.email;
+    }
+
+    return false;
+  }, [user]);
+
+  // Helper function to check if user can VIEW a timesheet
+  // Note: Backend already filters via Policy, this is just frontend safety
+  const canViewTimesheet = useCallback((timesheet: Timesheet): boolean => {
+    if (!user) {
+      return false;
+    }
+
+    // Admins can view all timesheets
+    if (userIsAdmin) {
+      return true;
+    }
+
+    // Owner can always view their own timesheets
+    if (isTimesheetOwnedByUser(timesheet)) {
+      return true;
+    }
+
+    // For Managers: Backend already filtered the timesheets
+    // If a timesheet appears in the response, the Manager is allowed to see it
+    // This includes:
+    // - Their own timesheets
+    // - Timesheets from 'member' technicians in projects they manage
+    // (Backend blocks timesheets from other managers)
+    if (userIsManager && user.managed_projects?.includes(timesheet.project_id)) {
+      return true;
+    }
+
+    return false;
+  }, [user, userIsAdmin, userIsManager, isTimesheetOwnedByUser]);
+
+  const visibleTimesheets = useMemo(() => {
+    if (!timesheets) {
+      return [] as Timesheet[];
+    }
+
+    if (!user) {
+      return [] as Timesheet[];
+    }
+
+    // First, filter by view permissions (Managers cannot see other Managers' timesheets)
+    const viewableTimesheets = timesheets.filter((timesheetItem) => canViewTimesheet(timesheetItem));
+
+    // 'mine' scope: show only user's own timesheets
+    if (timesheetScope === 'mine') {
+      return viewableTimesheets.filter((timesheetItem) => isTimesheetOwnedByUser(timesheetItem));
+    }
+
+    // 'others' scope: show all timesheets EXCEPT user's own
+    if (timesheetScope === 'others') {
+      return viewableTimesheets.filter((timesheetItem) => !isTimesheetOwnedByUser(timesheetItem));
+    }
+
+    // 'all' scope: show all timesheets (that user has permission to view)
+    const scoped = viewableTimesheets;
+
+    return scoped.filter((timesheetItem) => {
+      if (validationFilter === 'ai_flagged') {
+        return Boolean(timesheetItem.ai_flagged);
+      }
+      if (validationFilter === 'overcap') {
+        return validationSummary.overCapIds.has(timesheetItem.id);
+      }
+      return true;
+    });
+  }, [timesheets, timesheetScope, isTimesheetOwnedByUser, canViewTimesheet, user, validationFilter, validationSummary]);
 
   // Filter tasks for selected project
   const filteredTasks = (tasks || []).filter(task => task.project_id === projectId);
 
-  // Generate calendar events from timesheets
-  const calendarEvents = (timesheets || []).map((timesheet) => {
-    const isOwner = timesheet.technician && user?.email === timesheet.technician.email;
-    const canEdit = isOwner || user?.role === 'Manager';
-    
-    let eventData: any = {
-      id: timesheet.id.toString(),
-      title: `${timesheet.project?.name || 'Project'} - ${timesheet.hours_worked}h`,
-      date: timesheet.date,
-      backgroundColor: 
-        timesheet.status === 'approved' ? '#4caf50' :
-        timesheet.status === 'rejected' ? '#f44336' :
-        timesheet.status === 'submitted' ? '#ff9800' : '#2196f3',
-      borderColor: 
-        timesheet.status === 'approved' ? '#388e3c' :
-        timesheet.status === 'rejected' ? '#d32f2f' :
-        timesheet.status === 'submitted' ? '#f57c00' : '#1976d2',
-      textColor: '#ffffff',
-      extendedProps: {
-        technician: timesheet.technician,
-        project: timesheet.project,
-        task: timesheet.task,
-        location: timesheet.location,
-        hours_worked: timesheet.hours_worked,
-        description: timesheet.description,
-        status: timesheet.status,
-        start_time: timesheet.start_time,
-        end_time: timesheet.end_time,
-        isOwner: isOwner,
-        canEdit: canEdit
-      },
-      className: canEdit ? 'editable-event' : 'readonly-event'
-    };
-
-    // If we have start and end times, use them for time display
-    if (timesheet.start_time && timesheet.end_time) {
-      const startTime = dayjs(`${timesheet.date} ${timesheet.start_time}`);
-      const endTime = dayjs(`${timesheet.date} ${timesheet.end_time}`);
-      
-      // Validate the dates before using toISOString
-      if (startTime.isValid() && endTime.isValid()) {
-        eventData.start = startTime.toISOString();
-        eventData.end = endTime.toISOString();
-      } else {
-        // Fallback to all-day event
-        const eventDate = dayjs(timesheet.date);
-        if (eventDate.isValid()) {
-          eventData.start = eventDate.format('YYYY-MM-DD');
-          eventData.allDay = true;
-        } else {
-          console.error('Invalid date:', timesheet.date);
-          return null; // Skip this event
-        }
-      }
-    } else {
-      // All-day event
-      const eventDate = dayjs(timesheet.date);
-      if (eventDate.isValid()) {
-        eventData.start = eventDate.format('YYYY-MM-DD');
-        eventData.allDay = true;
-      } else {
-        console.error('Invalid date:', timesheet.date);
-        return null; // Skip this event
-      }
+  const handleTimesheetScopeChange = (_event: React.MouseEvent<HTMLElement>, newScope: 'mine' | 'others' | 'all' | null) => {
+    if (!newScope) {
+      return;
     }
 
-    return eventData;
-  }).filter(event => event !== null); // Filter out null events
+    setTimesheetScope(newScope);
+  };
+
+  // Generate calendar events from timesheets
+  const calendarEvents = useMemo(() => {
+    if (!visibleTimesheets) {
+      return [];
+    }
+
+    return visibleTimesheets.map((timesheet) => {
+      const isOwner = isTimesheetOwnedByUser(timesheet);
+      const managesProject = Boolean(userIsManager && user?.managed_projects?.includes(timesheet.project_id));
+      const canEdit = isOwner || userIsAdmin || managesProject;
+      const eventClassNames = [canEdit ? 'editable-event' : 'readonly-event'];
+
+      const statusKey = timesheet.status && STATUS_STYLE_MAP[timesheet.status]
+        ? timesheet.status
+        : 'default';
+
+      eventClassNames.push(`status-${statusKey}`);
+
+      if (isOwner) {
+        eventClassNames.push('owner-event');
+      } else {
+        eventClassNames.push('member-event');
+      }
+
+      const statusStyle = STATUS_STYLE_MAP[statusKey] ?? STATUS_STYLE_MAP.default;
+      const eventTextColor = '#0d47a1';
+
+      // Extract date in YYYY-MM-DD format
+      const dateOnly = dayjs(timesheet.date).format('YYYY-MM-DD');
+
+      const eventData: any = {
+        id: timesheet.id.toString(),
+        title: `${timesheet.project?.name || 'Project'} - ${decimalToHHMM(timesheet.hours_worked)}`,
+        backgroundColor: statusStyle.background,
+        borderColor: '#e0e0e0',
+        textColor: eventTextColor,
+        extendedProps: {
+          timesheet: timesheet, // Pass full timesheet object for time rendering
+          technician: timesheet.technician,
+          project: timesheet.project,
+          task: timesheet.task,
+          location: timesheet.location,
+          hours_worked: timesheet.hours_worked,
+          description: timesheet.description,
+          status: timesheet.status,
+          start_time: timesheet.start_time,
+          end_time: timesheet.end_time,
+          isOwner,
+          canEdit,
+          managesProject
+        },
+        className: eventClassNames.join(' ')
+      };
+
+      const startDateTime = parseTimesheetDateTime(dateOnly, timesheet.start_time);
+      const endDateTime = parseTimesheetDateTime(dateOnly, timesheet.end_time);
+      
+      // Convert hours_worked to decimal (e.g., "5.50" -> 5.5 hours)
+      const hoursDecimal = typeof timesheet.hours_worked === 'string' 
+        ? parseFloat(timesheet.hours_worked)
+        : timesheet.hours_worked;
+      const workedMinutes = hoursDecimal * 60; // Convert to minutes
+
+      if (startDateTime) {
+        eventData.start = startDateTime.toDate();
+
+        // Use endDateTime if available and valid, otherwise calculate from duration
+        if (endDateTime && endDateTime.isAfter(startDateTime)) {
+          eventData.end = endDateTime.toDate();
+        } else {
+          // Fallback: calculate end from start + duration
+          eventData.end = startDateTime.add(workedMinutes, 'minute').toDate();
+        }
+        eventData.allDay = false;
+      } else {
+        eventData.start = dateOnly;
+        eventData.allDay = true;
+      }
+
+      return eventData;
+    });
+  }, [visibleTimesheets, user, userIsManager, userIsAdmin, isTimesheetOwnedByUser, timesheetScope]);
+
+  // Custom event content renderer to show technician name
+  // Event rendering - use eventDidMount instead of eventContent to preserve height calculation
+  const handleEventDidMount = (info: any) => {
+    const { technician, isOwner, project, task, location } = info.event.extendedProps;
+    const technicianName = technician?.name || 'Unknown';
+    
+    // Get initials for badge
+    const initials = technicianName
+      .split(' ')
+      .map((word: string) => word[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+
+    // Only customize timeGrid events (Week view) - let others render normally
+    if (info.view.type === 'timeGridWeek' || info.view.type === 'timeGridDay') {
+      const fcContent = info.el.querySelector('.fc-event-main');
+      if (fcContent) {
+        // Keep the time element that FullCalendar created at the top
+        const fcTitle = fcContent.querySelector('.fc-event-title');
+        
+        if (fcTitle) {
+          // Clear the title content (we'll rebuild it with more info)
+          fcTitle.innerHTML = '';
+          fcTitle.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow: hidden;
+          `;
+          
+          // Create badge + project line
+          const projectLine = document.createElement('div');
+          projectLine.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            overflow: hidden;
+          `;
+          
+          // Create badge element
+          const badge = document.createElement('span');
+          badge.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: ${isOwner ? '#1976d2' : '#757575'};
+            color: white;
+            font-size: 0.5rem;
+            font-weight: bold;
+            flex-shrink: 0;
+          `;
+          badge.textContent = initials;
+          badge.title = technicianName;
+          
+          // Create project name
+          const projectName = document.createElement('span');
+          projectName.style.cssText = `
+            font-size: 0.7rem;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+          `;
+          projectName.textContent = project?.name || 'Project';
+          projectName.title = project?.name || '';
+          
+          projectLine.appendChild(badge);
+          projectLine.appendChild(projectName);
+          fcTitle.appendChild(projectLine);
+          
+          // Add task if available
+          if (task?.name) {
+            const taskLine = document.createElement('div');
+            taskLine.style.cssText = `
+              font-size: 0.65rem;
+              color: rgba(0,0,0,0.7);
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              padding-left: 2px;
+            `;
+            taskLine.textContent = `📋 ${task.name}`;
+            taskLine.title = task.name;
+            fcTitle.appendChild(taskLine);
+          }
+          
+          // Add location if available
+          if (location?.name) {
+            const locationLine = document.createElement('div');
+            locationLine.style.cssText = `
+              font-size: 0.6rem;
+              color: rgba(0,0,0,0.6);
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              padding-left: 2px;
+            `;
+            locationLine.textContent = `📍 ${location.name}`;
+            locationLine.title = location.name;
+            fcTitle.appendChild(locationLine);
+          }
+        }
+      }
+    }
+    
+    // Customize dayGrid events (Month view) - add badge to title
+    if (info.view.type === 'dayGridMonth') {
+      // Try different selectors for dayGrid events
+      const fcEventMain = info.el.querySelector('.fc-event-main');
+      const fcEventMainFrame = info.el.querySelector('.fc-event-main-frame');
+      const fcContent = fcEventMain || fcEventMainFrame || info.el;
+      
+      if (fcContent) {
+        // Check if badge already exists
+        if (!fcContent.querySelector('.tech-badge')) {
+          const fcTitle = fcContent.querySelector('.fc-event-title') || 
+                         fcContent.querySelector('.fc-event-title-container');
+          
+          if (fcTitle && fcTitle.parentNode) {
+            // Create badge element
+            const badge = document.createElement('span');
+            badge.className = 'tech-badge'; // Add class to prevent duplicates
+            badge.style.cssText = `
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              min-width: 14px;
+              height: 14px;
+              border-radius: 50%;
+              background-color: ${isOwner ? '#1976d2' : '#757575'};
+              color: white;
+              font-size: 0.5rem;
+              font-weight: bold;
+              margin-right: 4px;
+              flex-shrink: 0;
+              vertical-align: middle;
+            `;
+            badge.textContent = initials;
+            badge.title = technicianName;
+            
+            // Insert badge BEFORE the title element (not inside it)
+            fcTitle.parentNode.insertBefore(badge, fcTitle);
+          }
+        }
+      }
+    }
+    
+    // Customize list events (Week List and Month List) - add badge before title
+    if (info.view.type === 'listWeek' || info.view.type === 'listMonth') {
+      const fcListEventTitle = info.el.querySelector('.fc-list-event-title');
+      
+      if (fcListEventTitle) {
+        // Check if badge already exists
+        if (!fcListEventTitle.querySelector('.tech-badge')) {
+          // Create badge element
+          const badge = document.createElement('span');
+          badge.className = 'tech-badge'; // Add class to prevent duplicates
+          badge.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: ${isOwner ? '#1976d2' : '#757575'};
+            color: white;
+            font-size: 0.6rem;
+            font-weight: bold;
+            margin-right: 6px;
+            flex-shrink: 0;
+            vertical-align: middle;
+          `;
+          badge.textContent = initials;
+          badge.title = technicianName;
+          
+          // Prepend badge to title
+          fcListEventTitle.insertBefore(badge, fcListEventTitle.firstChild);
+          
+          // Add task and location info after the time (project already shown in title)
+          if (task?.name || location?.name) {
+            const detailsContainer = document.createElement('div');
+            detailsContainer.style.cssText = `
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+              margin-top: 4px;
+              font-size: 0.75rem;
+              color: rgba(0,0,0,0.7);
+            `;
+            
+            if (task?.name) {
+              const taskInfo = document.createElement('span');
+              taskInfo.textContent = `📋 ${task.name}`;
+              taskInfo.title = task.name;
+              detailsContainer.appendChild(taskInfo);
+            }
+            
+            if (location?.name) {
+              const locationInfo = document.createElement('span');
+              locationInfo.textContent = `📍 ${location.name}`;
+              locationInfo.title = location.name;
+              detailsContainer.appendChild(locationInfo);
+            }
+            
+            fcListEventTitle.appendChild(detailsContainer);
+          }
+        }
+      }
+    }
+  };
 
   return (
     <Box sx={{ 
-      p: { xs: 1, sm: 2 },
+      p: 0,
       width: '100%',
-      maxWidth: '100%'
+      maxWidth: '100%',
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden'
     }}>
-      {/* Header Card with Status Legend */}
+      {/* Header Card with Status Legend - STICKY - Compacto */}
       <Card 
         sx={{ 
-          mb: 3,
+          mb: 0,
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           color: 'white',
-          borderRadius: 3,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
+          borderRadius: 0,
+          boxShadow: 'none',
+          borderBottom: '2px solid rgba(255,255,255,0.2)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          flexShrink: 0
         }}
       >
-        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-          {/* Primeira linha: Título à esquerda e legendas à direita */}
+        <CardContent sx={{ p: { xs: 0.75, sm: 1 }, '&:last-child': { pb: { xs: 0.75, sm: 1 } } }}>
+          {/* Linha única: Título + Legendas */}
           <Box 
             sx={{ 
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              mb: 1,
               flexWrap: { xs: 'wrap', sm: 'nowrap' },
-              gap: 2
+              gap: 1.5
             }}
           >
             <Typography 
-              variant="h5" 
+              variant="h6" 
               component="h2" 
               sx={{ 
-                fontWeight: 700,
-                fontSize: { xs: '1.5rem', sm: '1.75rem' },
+                fontWeight: 600,
+                fontSize: { xs: '1.1rem', sm: '1.25rem' },
                 flexShrink: 0,
                 display: 'flex',
                 alignItems: 'center',
@@ -560,109 +1354,213 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
               }}
             >
               Timesheet
-              {/* Demonstração prática das funções de role */}
-              {isManager() && (
-                <Chip 
-                  size="small" 
-                  label="Manager" 
-                  color="primary" 
-                  sx={{ ml: 1 }} 
-                />
-              )}
-              {isTechnician() && (
-                <Chip 
-                  size="small" 
-                  label="Technician" 
-                  color="secondary" 
-                  sx={{ ml: 1 }} 
-                />
-              )}
-              {isAdmin() && (
+              {userIsAdmin && (
                 <Chip 
                   size="small" 
                   label="Admin" 
                   color="error" 
-                  sx={{ ml: 1 }} 
+                  sx={{ ml: 0.5, height: 20 }} 
                 />
               )}
             </Typography>
             
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
-              <Chip 
-                icon={<Avatar sx={{ bgcolor: '#ff9800 !important', width: 16, height: 16 }}>●</Avatar>} 
-                label="Submitted" 
-                variant="filled"
-                size="small"
-                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-              />
-              <Chip 
-                icon={<Avatar sx={{ bgcolor: '#4caf50 !important', width: 16, height: 16 }}>●</Avatar>} 
-                label="Approved" 
-                variant="filled"
-                size="small"
-                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-              />
-              <Chip 
-                icon={<Avatar sx={{ bgcolor: '#f44336 !important', width: 16, height: 16 }}>●</Avatar>} 
-                label="Rejected" 
-                variant="filled"
-                size="small"
-                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-              />
-              <Chip 
-                icon={<Avatar sx={{ bgcolor: '#9c27b0 !important', width: 16, height: 16 }}>●</Avatar>} 
-                label="Closed" 
-                variant="filled"
-                size="small"
-                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-              />
-            </Box>
-
-            {/* Demonstração prática da função hasPermission() */}
-            {hasPermission('manage-users') && (
-              <Box sx={{ mt: 1, p: 1, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 1 }}>
-                <Typography variant="caption" sx={{ color: 'white', opacity: 0.9 }}>
-                  🛠️ Admin Panel: User management features available
-                </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 1,
+                justifyContent: { xs: 'flex-start', sm: 'flex-end' }
+              }}
+            >
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                <Chip 
+                  icon={<Avatar sx={{ bgcolor: '#ff9800 !important', width: 12, height: 12 }}>●</Avatar>} 
+                  label="Submitted" 
+                  variant="filled"
+                  size="small"
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
+                />
+                <Chip 
+                  icon={<Avatar sx={{ bgcolor: '#4caf50 !important', width: 12, height: 12 }}>●</Avatar>} 
+                  label="Approved" 
+                  variant="filled"
+                  size="small"
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
+                />
+                <Chip 
+                  icon={<Avatar sx={{ bgcolor: '#f44336 !important', width: 12, height: 12 }}>●</Avatar>} 
+                  label="Rejected" 
+                  variant="filled"
+                  size="small"
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
+                />
+                <Chip 
+                  icon={<Avatar sx={{ bgcolor: '#9c27b0 !important', width: 12, height: 12 }}>●</Avatar>} 
+                  label="Closed" 
+                  variant="filled"
+                  size="small"
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
+                />
               </Box>
-            )}
+              {(userIsManager || userIsAdmin) && (
+                <ToggleButtonGroup
+                  value={timesheetScope}
+                  exclusive
+                  onChange={handleTimesheetScopeChange}
+                  size="small"
+                  sx={{
+                    ml: { xs: 0, sm: 1.5 },
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    borderRadius: '999px',
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    '& .MuiToggleButton-root': {
+                      color: 'rgba(255,255,255,0.85)',
+                      fontSize: '0.75rem',
+                      px: 1.5,
+                      border: 'none',
+                      textTransform: 'none',
+                      '&.Mui-selected': {
+                        backgroundColor: 'rgba(255,255,255,0.3)',
+                        color: '#ffffff'
+                      },
+                      '&:hover': {
+                        backgroundColor: 'rgba(255,255,255,0.2)'
+                      }
+                    }
+                  }}
+                >
+                  <ToggleButton value="mine">Mine</ToggleButton>
+                  <ToggleButton value="others">Others</ToggleButton>
+                  <ToggleButton value="all">All</ToggleButton>
+                </ToggleButtonGroup>
+              )}
+            </Box>
           </Box>
-          
-          {/* Segunda linha: Instruções à esquerda */}
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              opacity: 0.9,
-              fontSize: { xs: '0.875rem', sm: '1rem' },
-              mb: 1
-            }}
-          >
-            Click on a date to create a new entry. Click on your entries to edit them.
-            {user?.role === 'Manager' && ' As a manager, you can edit all entries.'}
-          </Typography>
         </CardContent>
       </Card>
 
-      {/* Calendar Container */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 1,
+          alignItems: 'center',
+          pt: 0.5,
+          mb: 0.5
+        }}
+      >
+        <Tooltip title="Entries flagged by AI Cortex">
+          <span>
+            <Chip
+              label={`AI alerts (${validationSummary.aiFlagged})`}
+              color={validationFilter === 'ai_flagged' ? 'warning' : 'default'}
+              variant={validationSummary.aiFlagged ? 'filled' : 'outlined'}
+              onClick={() => toggleValidationFilter('ai_flagged')}
+              disabled={!validationSummary.aiFlagged}
+              sx={{ fontWeight: 600 }}
+            />
+          </span>
+        </Tooltip>
+        <Tooltip title="Days where technician's total exceeds 12h">
+          <span>
+            <Chip
+              label={`Daily > ${DAILY_HOUR_CAP}h (${validationSummary.overCap})`}
+              color={validationFilter === 'overcap' ? 'warning' : 'default'}
+              variant={validationSummary.overCap ? 'filled' : 'outlined'}
+              onClick={() => toggleValidationFilter('overcap')}
+              disabled={!validationSummary.overCap}
+              sx={{ fontWeight: 600 }}
+            />
+          </span>
+        </Tooltip>
+        {validationFilter !== 'all' && (
+          <Chip
+            label="Clear filter"
+            onClick={() => setValidationFilter('all')}
+            variant="outlined"
+          />
+        )}
+      </Box>
+
+      {/* Calendar Container - Scrollable */}
       <Paper 
         elevation={0}
         sx={{ 
-          borderRadius: 3,
-          overflow: 'hidden',
+          borderRadius: 0,
+          overflow: 'auto',
+          flex: 1,
           border: '1px solid',
           borderColor: 'grey.200',
+          display: 'flex',
+          flexDirection: 'column',
           '& .fc': {
-            height: { xs: '500px', sm: '600px', md: '700px' },
+            height: '100%',
             width: '100%',
-            fontFamily: theme.typography.fontFamily
+            fontFamily: theme.typography.fontFamily,
+            display: 'flex',
+            flexDirection: 'column'
+          },
+          '& .fc-view-harness': {
+            flex: 1,
+            overflow: 'auto',
+            marginTop: '0 !important',
+            paddingTop: '0 !important'
+          },
+          // Remove ALL space between toolbar and calendar body
+          '& .fc-scrollgrid-section': {
+            marginTop: '0 !important',
+            paddingTop: '0 !important'
+          },
+          '& .fc-scrollgrid-section-header': {
+            paddingTop: '0 !important',
+            marginTop: '0 !important'
+          },
+          '& .fc-scrollgrid-section-header > *': {
+            marginTop: '0 !important',
+            paddingTop: '0 !important'
+          },
+          '& .fc-col-header': {
+            marginTop: '0 !important',
+            paddingTop: '0 !important'
+          },
+          '& .fc-daygrid-body, & .fc-timegrid-body': {
+            marginTop: '0 !important',
+            paddingTop: '0 !important'
+          },
+          '& .fc-scroller-harness': {
+            marginTop: '0 !important',
+            paddingTop: '0 !important'
+          },
+          '& .fc-daygrid, & .fc-timegrid': {
+            marginTop: '0 !important'
+          },
+          '& table': {
+            marginTop: '0 !important'
           },
           // Enhanced calendar styling
           '& .fc-header-toolbar': {
             flexDirection: { xs: 'column', sm: 'row' },
-            gap: { xs: 1, sm: 0 },
-            padding: { xs: '12px', sm: '16px' },
+            gap: { xs: 0.5, sm: 0 },
+            padding: { xs: '4px 8px', sm: '6px 12px' },
             backgroundColor: '#f8f9fa',
-            borderBottom: '2px solid #e9ecef'
+            borderBottom: '2px solid #e9ecef',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            flexShrink: 0,
+            marginBottom: '0 !important',
+            paddingBottom: '6px !important'
+          },
+          '& .fc-header-toolbar .fc-toolbar-chunk': {
+            display: 'flex',
+            alignItems: 'center',
+            gap: { xs: 0.5, sm: 0.75 },
+            flexWrap: 'wrap',
+            justifyContent: { xs: 'center', sm: 'flex-start' }
+          },
+          '& .fc-header-toolbar .fc-toolbar-chunk:last-of-type': {
+            justifyContent: { xs: 'center', sm: 'flex-end' }
           },
           '& .fc-toolbar-title': {
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
@@ -710,26 +1608,121 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
             color: 'white',
             fontWeight: 600
           },
+          // TimeGrid column headers - show weekday and day number
+          '& .fc-col-header-cell': {
+            padding: '4px 4px',
+            fontWeight: 600,
+            fontSize: '0.875rem'
+          },
+          '& .fc-col-header-cell-cushion': {
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '2px'
+          },
+          // Today column highlighting in week view
+          '& .fc-day-today': {
+            backgroundColor: 'rgba(102, 126, 234, 0.08) !important'
+          },
+          // Base event styles - minimal to let FullCalendar handle positioning
           '& .fc-event': {
-            borderRadius: '6px',
-            padding: '2px 6px',
-            fontSize: { xs: '0.7rem', sm: '0.8rem' },
-            fontWeight: 500,
             cursor: 'pointer',
             transition: 'all 0.2s ease',
-            border: 'none !important',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            color: '#0d47a1',
+            fontWeight: 400
           },
-          '& .fc-event:hover': {
+          // DayGrid and List specific styling - custom padding only for these views
+          '& .fc-daygrid-event, & .fc-list-event': {
+            borderRadius: '8px',
+            padding: { xs: '4px 8px 4px 18px', sm: '6px 10px 6px 20px' },
+            fontSize: { xs: '0.65rem', sm: '0.75rem' },
+            border: '1px solid #e0e0e0',
+            borderLeft: '4px solid transparent',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+            backgroundClip: 'padding-box',
+            position: 'relative'
+          },
+          // TimeGrid events - minimal styling to preserve FullCalendar's height/position calculations
+          '& .fc-timegrid-event': {
+            borderRadius: '4px',
+            fontSize: { xs: '0.65rem', sm: '0.7rem' },
+            border: '1px solid #e0e0e0',
+            borderLeft: '4px solid transparent',
+            padding: '3px 5px' // Minimal padding to avoid interfering with height
+          },
+          // TimeGrid event time - make it prominent at the top
+          '& .fc-timegrid-event .fc-event-time': {
+            fontSize: '0.65rem',
+            fontWeight: 600,
+            display: 'block',
+            marginBottom: '2px',
+            color: '#0d47a1'
+          },
+          // TimeGrid event title - allow multi-line content
+          '& .fc-timegrid-event .fc-event-title': {
+            fontSize: '0.65rem',
+            lineHeight: '1.2',
+            display: 'block'
+          },
+          '& .fc-daygrid-event-dot': {
+            display: 'none'
+          },
+          // TimeGrid specific: Let FullCalendar handle event sizing and positioning
+          
+          // Status identification: Colored left border
+          '& .fc-daygrid-event.status-submitted, & .fc-timegrid-event.status-submitted, & .fc-list-event.status-submitted': {
+            borderLeftColor: '#f57c00 !important',
+            borderLeftWidth: '4px !important'
+          },
+          '& .fc-daygrid-event.status-approved, & .fc-timegrid-event.status-approved, & .fc-list-event.status-approved': {
+            borderLeftColor: '#388e3c !important',
+            borderLeftWidth: '4px !important'
+          },
+          '& .fc-daygrid-event.status-rejected, & .fc-timegrid-event.status-rejected, & .fc-list-event.status-rejected': {
+            borderLeftColor: '#d32f2f !important',
+            borderLeftWidth: '4px !important'
+          },
+          '& .fc-daygrid-event.status-closed, & .fc-timegrid-event.status-closed, & .fc-list-event.status-closed': {
+            borderLeftColor: '#7b1fa2 !important',
+            borderLeftWidth: '4px !important'
+          },
+          '& .fc-daygrid-event.status-default, & .fc-timegrid-event.status-default, & .fc-list-event.status-default': {
+            borderLeftColor: '#90a4ae !important',
+            borderLeftWidth: '4px !important'
+          },
+          // List view: Force white background for ALL entries by default
+          '& .fc-list-day': {
+            backgroundColor: '#ffffff !important'
+          },
+          '& .fc-list-event': {
+            backgroundColor: '#ffffff !important'
+          },
+          '& .fc-list-event:hover': {
+            backgroundColor: '#f5f5f5 !important'
+          },
+          // Hover effects - only scale for daygrid and list to avoid layout shifts in timeGrid
+          '& .fc-daygrid-event:hover, & .fc-list-event:hover': {
             transform: 'scale(1.02)',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             zIndex: 10
+          },
+          // TimeGrid events - subtle hover without scale to preserve alignment
+          '& .fc-timegrid-event:hover': {
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            zIndex: 10
+          },
+          '& .owner-event, & .member-event': {
+            '& .fc-event-title, & .fc-event-time': {
+              color: '#0d47a1 !important',
+              fontWeight: 400
+            }
           },
           '& .readonly-event': {
             opacity: 0.6,
             cursor: 'not-allowed !important',
             '&:hover': {
-              transform: 'none !important'
+              transform: 'none !important',
+              boxShadow: 'none !important'
             }
           }
         }}
@@ -740,35 +1733,89 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
-            right: isMobile ? 'dayGridMonth,listWeek' : 'dayGridMonth,timeGridWeek,listWeek,listMonth'
+            right: 'dayGridMonth,timeGridWeek,listWeek,listMonth'
+          }}
+          buttonText={{
+            today: 'Today',
+            dayGridMonth: 'Month',
+            timeGridWeek: 'Week',
+            listWeek: 'Week List',
+            listMonth: 'Month List'
           }}
           events={calendarEvents}
           selectable={true}
           selectMirror={true}
+          selectOverlap={true}
+          selectConstraint={{
+            startTime: '00:00',
+            endTime: '24:00',
+          }}
+          eventDidMount={handleEventDidMount}
+          datesSet={handleViewChange}
           dayMaxEvents={isMobile ? 2 : 3}
           weekends={true}
           select={handleDateSelect}
           eventClick={handleEventClick}
-          height="auto"
+          dateClick={handleDateClick}
+          height="100%" // Usar 100% da altura disponível
           locale="en"
           firstDay={1}
           weekNumbers={!isMobile}
+          // Time grid configurations - Todas as 24 horas
+          slotMinTime="00:00:00" // Início: meia-noite
+          slotMaxTime="24:00:00" // Fim: meia-noite do dia seguinte (23:59)
+          slotDuration="00:30:00" // Intervalo de 30 minutos
+          slotLabelInterval="01:00:00" // Mostrar label a cada 1 hora
+          slotLabelFormat={{
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // Formato 24 horas (HH:mm)
+          }}
+          eventTimeFormat={{
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }}
+          displayEventTime={true}
+          displayEventEnd={true}
+          scrollTime="08:00:00"
+          scrollTimeReset={false}
+          selectAllow={(selectInfo) => {
+            const start = dayjs(selectInfo.start);
+            const end = dayjs(selectInfo.end);
+            return start.isSame(end, 'day') || start.add(1, 'second').isSame(end, 'day');
+          }}
+          // Enhanced mobile-specific configurations
+          longPressDelay={isMobile ? 150 : 1000}
+          selectLongPressDelay={isMobile ? 150 : 1000}
+          eventLongPressDelay={isMobile ? 150 : 1000}
+          // Improve touch interactions  
+          selectMinDistance={isMobile ? 3 : 0}
+          // Ensure events are clickable on all devices
+          eventStartEditable={false}
+          eventDurationEditable={false}
+          // Additional mobile optimizations
+          stickyHeaderDates={true} // Headers das datas também sticky
+          dayHeaderFormat={isMobile ? { weekday: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric' }}
+          allDaySlot={false} // Remove all-day slot - not used
+          nowIndicator={true} // Mostrar linha do horário atual
         />
       </Paper>
 
       {/* Enhanced Timesheet Entry Dialog */}
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en">
-        <Dialog 
-          open={dialogOpen} 
-          onClose={() => setDialogOpen(false)} 
-          maxWidth="md" 
+        <Dialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          maxWidth="sm"
           fullWidth
           PaperProps={{
             sx: {
-              borderRadius: 3,
+              borderRadius: 2,
               mx: { xs: 1, sm: 2 },
               my: { xs: 1, sm: 2 },
-              maxHeight: { xs: '95vh', sm: '90vh' },
+              maxHeight: { xs: '98vh', sm: '92vh' },
+              maxWidth: { xs: '100%', sm: '510px' },
               overflow: 'hidden'
             }
           }}
@@ -776,17 +1823,29 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
           <DialogTitle 
             sx={{ 
               background: selectedEntry 
-                ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                : 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)',
+                ? (selectedEntry.status === 'approved' ? 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)' :
+                   selectedEntry.status === 'rejected' ? 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)' :
+                   selectedEntry.status === 'closed' ? 'linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%)' :
+                   'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)') // submitted or default
+                : 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', // new entries default to submitted color
               color: 'white',
-              p: 3
+              p: 1.5,
+              position: 'sticky',
+              top: 0,
+              zIndex: 1
             }}
           >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: isMobile ? 1 : 0
+            }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 {selectedEntry ? <EditIcon /> : <AddIcon />}
                 <Typography 
-                  variant="h6" 
+                  variant={isMobile ? "h6" : "h5"} 
                   component="span"
                   sx={{ fontWeight: 600 }}
                 >
@@ -794,24 +1853,17 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                 </Typography>
               </Box>
               
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 1, 
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                justifyContent: isMobile ? 'center' : 'flex-end'
+              }}>
                 {selectedEntry && selectedEntry.technician && (
                   <Chip
-                    label={`Owner: ${selectedEntry.technician.name}`}
+                    label={isMobile ? selectedEntry.technician.name : `Owner: ${selectedEntry.technician.name}`}
                     color="primary"
-                    size="small"
-                    variant="filled"
-                    sx={{ 
-                      bgcolor: 'rgba(255,255,255,0.2)',
-                      color: 'white',
-                      fontWeight: 500
-                    }}
-                  />
-                )}
-                
-                {selectedEntry && (
-                  <Chip
-                    label={selectedEntry.status.charAt(0).toUpperCase() + selectedEntry.status.slice(1)}
                     size="small"
                     variant="filled"
                     sx={{ 
@@ -824,7 +1876,7 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                 
                 {hoursWorked > 0 && (
                   <Chip 
-                    label={`${hoursWorked}h`}
+                    label={`${decimalToHHMM(hoursWorked)}`}
                     size="small"
                     variant="filled"
                     icon={<DurationIcon />}
@@ -837,10 +1889,54 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                   />
                 )}
                 
+                {/* AI Suggestions Toggle - Only show for new entries */}
+                {!selectedEntry && (
+                  <Badge
+                    badgeContent={aiSuggestion.suggestion ? '!' : 0}
+                    color="error"
+                    variant="dot"
+                    invisible={!aiSuggestion.suggestion}
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        animation: aiSuggestion.suggestion ? 'pulse 2s infinite' : 'none',
+                        '@keyframes pulse': {
+                          '0%': {
+                            transform: 'scale(1)',
+                            opacity: 1,
+                          },
+                          '50%': {
+                            transform: 'scale(1.3)',
+                            opacity: 0.8,
+                          },
+                          '100%': {
+                            transform: 'scale(1)',
+                            opacity: 1,
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <IconButton 
+                      onClick={toggleAISuggestions}
+                      sx={{ 
+                        color: 'white',
+                        bgcolor: showAISuggestions ? 'rgba(255,255,255,0.2)' : 'transparent',
+                        '&:hover': {
+                          bgcolor: 'rgba(255,255,255,0.3)'
+                        }
+                      }}
+                      size={isMobile ? "medium" : "small"}
+                      title={showAISuggestions ? 'Hide AI Suggestions' : 'Show AI Suggestions'}
+                    >
+                      <Typography sx={{ fontSize: '1.2rem' }}>🤖</Typography>
+                    </IconButton>
+                  </Badge>
+                )}
+                
                 <IconButton 
                   onClick={() => setDialogOpen(false)}
                   sx={{ color: 'white' }}
-                  size="small"
+                  size={isMobile ? "medium" : "small"}
                 >
                   <CloseIcon />
                 </IconButton>
@@ -848,39 +1944,70 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
             </Box>
           </DialogTitle>
 
-          <DialogContent sx={{ p: 3, backgroundColor: '#fafafa' }}>
+          <DialogContent sx={{ p: 1.5, backgroundColor: '#fafafa' }}>
             <Fade in={dialogOpen}>
               <Box>
-                {error && (
-                  <Alert 
-                    severity="error" 
-                    sx={{ mb: 3, borderRadius: 2 }}
-                    onClose={() => setError('')}
-                  >
-                    {error}
-                  </Alert>
-                )}
-                
-                {/* AI Suggestion Component */}
-                {!selectedEntry && (
-                  <Box sx={{ mb: 3 }}>
-                    <AISuggestionCard
-                      suggestion={aiSuggestion.suggestion}
-                      isLoading={aiSuggestion.isLoading}
-                      isAIAvailable={aiSuggestion.isAIAvailable}
-                      error={aiSuggestion.error}
-                      onApply={handleApplyAISuggestion}
-                      onDismiss={handleDismissAISuggestion}
-                      onFeedback={handleAIFeedback}
-                    />
-                  </Box>
+                {/* AI Suggestion Component - Collapsible */}
+                {!selectedEntry && showAISuggestions && (
+                  <Collapse in={aiSuggestionExpanded || aiSuggestion.suggestion !== null || aiSuggestion.isLoading}>
+                    <Box sx={{ mb: 2 }}>
+                      <AISuggestionCard
+                        suggestion={aiSuggestion.suggestion}
+                        isLoading={aiSuggestion.isLoading}
+                        isAIAvailable={aiSuggestion.isAIAvailable}
+                        error={aiSuggestion.error}
+                        onApply={handleApplyAISuggestion}
+                        onDismiss={handleDismissAISuggestion}
+                        onFeedback={handleAIFeedback}
+                      />
+                    </Box>
+                  </Collapse>
                 )}
 
-                <Grid container spacing={3}>
+                <Grid container spacing={1.5}>
+                  {/* Worker Selection Row - FIRST */}
+                  <Grid item xs={12}>
+                    <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
+                      <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
+                        👤 Worker
+                      </Typography>
+                      
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="Worker"
+                        value={selectedTechnicianId || 0}
+                        onChange={(e) => {
+                          const newTechId = parseInt(e.target.value);
+                          console.log('Technician manually changed to:', newTechId);
+                          setSelectedTechnicianId(newTechId);
+                        }}
+                        disabled={!userIsManager && !userIsAdmin && availableTechnicians.length === 1}
+                      >
+                        <MenuItem value={0} disabled>
+                          Select Worker
+                        </MenuItem>
+                        {/* Show current timesheet owner even if not in availableTechnicians */}
+                        {selectedEntry && selectedEntry.technician && 
+                         !availableTechnicians.find(t => t.id === selectedEntry.technician_id) && (
+                          <MenuItem key={selectedEntry.technician.id} value={selectedEntry.technician.id}>
+                            {selectedEntry.technician.name} (Entry Owner)
+                          </MenuItem>
+                        )}
+                        {availableTechnicians.map((tech) => (
+                          <MenuItem key={tech.id} value={tech.id}>
+                            {tech.name} {tech.email === user?.email ? '(You)' : ''}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Paper>
+                  </Grid>
+
                   {/* Date and Time Row */}
                   <Grid item xs={12}>
-                    <Paper sx={{ p: 3, borderRadius: 2, bgcolor: 'white' }}>
-                      <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
+                      <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
                         <TimeIcon color="primary" />
                         Date & Time
                       </Typography>
@@ -895,20 +2022,30 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                             slotProps={{
                               textField: {
                                 fullWidth: true,
-                                variant: 'outlined'
+                                variant: 'outlined',
+                                size: 'small'
                               }
                             }}
                           />
                         </Grid>
                         
-                        <Grid item xs={6} sm={3}>
+                        <Grid item xs={6} sm={4}>
                           <TimePicker
                             label="Start Time"
                             value={startTimeObj}
                             onChange={(newTime) => {
                               setStartTimeObj(newTime);
-                              if (newTime) {
-                                const newEndTime = newTime.add(1, 'hour'); // Increment by 1 hour
+                              // Only auto-adjust end time if it would become invalid (before start time)
+                              if (newTime && endTimeObj) {
+                                // If new start time is after current end time, adjust end time
+                                if (newTime.isAfter(endTimeObj) || newTime.isSame(endTimeObj)) {
+                                  const newEndTime = newTime.add(1, 'hour');
+                                  setEndTimeObj(newEndTime);
+                                }
+                                // Otherwise keep the existing end time (user already set it)
+                              } else if (newTime && !endTimeObj) {
+                                // If no end time set yet, auto-increment by 1 hour
+                                const newEndTime = newTime.add(1, 'hour');
                                 setEndTimeObj(newEndTime);
                               }
                             }}
@@ -918,13 +2055,14 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                             slotProps={{
                               textField: {
                                 fullWidth: true,
-                                variant: 'outlined'
+                                variant: 'outlined',
+                                size: 'small'
                               }
                             }}
                           />
                         </Grid>
                         
-                        <Grid item xs={6} sm={3}>
+                        <Grid item xs={6} sm={4}>
                           <TimePicker
                             label="End Time"
                             value={endTimeObj}
@@ -935,27 +2073,8 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                             slotProps={{
                               textField: {
                                 fullWidth: true,
-                                variant: 'outlined'
-                              }
-                            }}
-                          />
-                        </Grid>
-                        
-                        <Grid item xs={12} sm={2}>
-                          <TextField
-                            fullWidth
-                            label="Duration"
-                            value={`${hoursWorked}h`}
-                            InputProps={{
-                              readOnly: true,
-                              endAdornment: <DurationIcon color="action" />
-                            }}
-                            sx={{
-                              '& .MuiInputBase-input': {
-                                fontWeight: 600,
-                                fontSize: '1.1rem',
-                                textAlign: 'center',
-                                color: hoursWorked > 0 ? 'success.main' : 'text.secondary'
+                                variant: 'outlined',
+                                size: 'small'
                               }
                             }}
                           />
@@ -966,8 +2085,8 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
 
                   {/* Project Details Row */}
                   <Grid item xs={12}>
-                    <Paper sx={{ p: 3, borderRadius: 2, bgcolor: 'white' }}>
-                      <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
+                      <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
                         <ProjectIcon color="primary" />
                         Project Details
                       </Typography>
@@ -977,6 +2096,7 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                           <TextField
                             select
                             fullWidth
+                            size="small"
                             label="Project"
                             value={projectId}
                             onChange={(e) => {
@@ -985,11 +2105,49 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                               setTaskId(0); // Reset task when project changes
                             }}
                             variant="outlined"
+                            SelectProps={{
+                              renderValue: (value) => {
+                                const selectedProject = projects.find(p => p.id === value);
+                                return selectedProject ? selectedProject.name : 'Select a project';
+                              }
+                            }}
                           >
                             <MenuItem value={0}>Select a project</MenuItem>
                             {(projects || []).map((project) => (
                               <MenuItem key={project.id} value={project.id}>
-                                {project.name}
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 2 }}>
+                                  <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
+                                    {project.name}
+                                  </Typography>
+                                  {projectRoleMap[project.id] && (
+                                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                                      {roleIsAssigned(projectRoleMap[project.id]?.projectRole) && (
+                                        <Chip
+                                          size="small"
+                                          icon={<span style={{ fontSize: '14px' }}>⏱️</span>}
+                                          color={projectRoleMap[project.id]?.projectRole === 'manager' ? 'primary' : 'default'}
+                                          label={formatRoleLabel(projectRoleMap[project.id]?.projectRole)}
+                                          sx={{ 
+                                            height: '22px',
+                                            '& .MuiChip-label': { px: 1, fontSize: '0.75rem' }
+                                          }}
+                                        />
+                                      )}
+                                      {roleIsAssigned(projectRoleMap[project.id]?.expenseRole) && (
+                                        <Chip
+                                          size="small"
+                                          icon={<span style={{ fontSize: '14px' }}>💰</span>}
+                                          color={projectRoleMap[project.id]?.expenseRole === 'manager' ? 'warning' : 'default'}
+                                          label={formatRoleLabel(projectRoleMap[project.id]?.expenseRole)}
+                                          sx={{ 
+                                            height: '22px',
+                                            '& .MuiChip-label': { px: 1, fontSize: '0.75rem' }
+                                          }}
+                                        />
+                                      )}
+                                    </Box>
+                                  )}
+                                </Box>
                               </MenuItem>
                             ))}
                           </TextField>
@@ -999,6 +2157,7 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                           <TextField
                             select
                             fullWidth
+                            size="small"
                             label="Task"
                             value={taskId}
                             onChange={(e) => setTaskId(Number(e.target.value))}
@@ -1018,6 +2177,7 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                           <TextField
                             select
                             fullWidth
+                            size="small"
                             label="Location"
                             value={locationId}
                             onChange={(e) => setLocationId(Number(e.target.value))}
@@ -1027,11 +2187,27 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                             }}
                           >
                             <MenuItem value={0}>Select a location</MenuItem>
-                            {(locations || []).map((location) => (
-                              <MenuItem key={location.id} value={location.id}>
-                                {location.name}
-                              </MenuItem>
-                            ))}
+                            {(locations || []).map((location) => {
+                              const latitude = Number(location.latitude);
+                              const longitude = Number(location.longitude);
+                              const hasCoordinates = !Number.isNaN(latitude) && !Number.isNaN(longitude);
+
+                              return (
+                                <MenuItem key={location.id} value={location.id}>
+                                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                    <Typography variant="body2" component="span">
+                                      {location.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {[location.city, location.country].filter(Boolean).join(', ')}
+                                      {hasCoordinates && (
+                                        <> — {latitude.toFixed(4)}, {longitude.toFixed(4)}</>
+                                      )}
+                                    </Typography>
+                                  </Box>
+                                </MenuItem>
+                              );
+                            })}
                           </TextField>
                         </Grid>
                       </Grid>
@@ -1040,8 +2216,8 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
 
                   {/* Description Row */}
                   <Grid item xs={12}>
-                    <Paper sx={{ p: 3, borderRadius: 2, bgcolor: 'white' }}>
-                      <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
+                      <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
                         <TaskIcon color="primary" />
                         Description
                       </Typography>
@@ -1049,12 +2225,21 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                       <TextField
                         fullWidth
                         multiline
-                        rows={3}
+                        size="small"
+                        minRows={1}
+                        maxRows={4}
                         label="Work Description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Describe the work performed..."
                         variant="outlined"
+                        sx={{
+                          '& .MuiInputBase-root': {
+                            resize: 'vertical',
+                            overflow: 'auto',
+                            minHeight: '40px'
+                          }
+                        }}
                       />
                     </Paper>
                   </Grid>
@@ -1063,12 +2248,12 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
             </Fade>
           </DialogContent>
 
-          <DialogActions sx={{ p: 3, bgcolor: '#f5f5f5', gap: 2 }}>
+          <DialogActions sx={{ p: 1.5, bgcolor: '#f5f5f5', gap: 1 }}>
             <Button
               onClick={() => setDialogOpen(false)}
               variant="outlined"
-              size="large"
-              sx={{ minWidth: 100 }}
+              size="small"
+              sx={{ minWidth: 80 }}
             >
               Cancel
             </Button>
@@ -1078,64 +2263,44 @@ const TimesheetCalendar: React.FC<TimesheetCalendarProps> = () => {
                 onClick={handleDelete}
                 color="error"
                 variant="outlined"
-                size="large"
+                size="small"
                 disabled={loading || (selectedEntry.status === 'approved')}
-                sx={{ minWidth: 100 }}
+                sx={{ minWidth: 80 }}
               >
                 Delete
               </Button>
-            )}
-
-            {/* Demonstração prática da função canValidateTimesheets() */}
-            {selectedEntry && canValidateTimesheets() && selectedEntry.status === 'submitted' && (
-              <>
-                <Button
-                  onClick={() => {
-                    // TODO: Implementar aprovação
-                    console.log('Approving timesheet:', selectedEntry.id);
-                  }}
-                  color="success"
-                  variant="contained"
-                  size="large"
-                  disabled={loading}
-                  sx={{ minWidth: 100 }}
-                >
-                  Approve
-                </Button>
-                <Button
-                  onClick={() => {
-                    // TODO: Implementar rejeição
-                    console.log('Rejecting timesheet:', selectedEntry.id);
-                  }}
-                  color="warning"
-                  variant="outlined"
-                  size="large"
-                  disabled={loading}
-                  sx={{ minWidth: 100 }}
-                >
-                  Reject
-                </Button>
-              </>
             )}
             
             <Button
               onClick={handleSave}
               variant="contained"
-              size="large"
+              size="small"
               disabled={loading}
               startIcon={loading ? null : <SaveIcon />}
               sx={{ 
-                minWidth: 120,
+                minWidth: 90,
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 '&:hover': {
                   background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
                 }
               }}
             >
-              {loading ? 'Saving...' : 'Save Entry'}
+              {loading ? 'Saving...' : 'SAVE'}
             </Button>
           </DialogActions>
         </Dialog>
+
+        <ConfirmationDialog
+          open={confirmDialog.open}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          recordDetails={confirmDialog.recordDetails}
+          confirmText="Delete"
+          cancelText="Cancel"
+          confirmColor="error"
+          onConfirm={confirmDialog.action}
+          onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
+        />
       </LocalizationProvider>
     </Box>
   );

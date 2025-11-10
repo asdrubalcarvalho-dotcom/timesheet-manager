@@ -46,29 +46,10 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
-# Wait for database\n\
-until nc -z -v -w30 database 3306; do\n\
-    echo "Waiting for database connection..."\n\
-    sleep 5\n\
-done\n\
-echo "Database is up!"\n\
-\n\
-# Run migrations\n\
-php artisan migrate --force\n\
-\n\
-# Seed database if needed\n\
-php artisan db:seed --force\n\
-\n\
-# Clear and optimize\n\
 php artisan config:cache\n\
 php artisan route:cache\n\
 php artisan view:cache\n\
-\n\
-# Start PHP-FPM\n\
 php-fpm' > /usr/local/bin/start-laravel.sh && chmod +x /usr/local/bin/start-laravel.sh
-
-# Install netcat for database wait script
-RUN apt-get update && apt-get install -y netcat-traditional
 
 EXPOSE 9000
 

@@ -13,17 +13,32 @@ class ProjectController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $projects = Project::with(['timesheets', 'expenses', 'manager'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = Project::with(['timesheets', 'expenses', 'manager']);
+        
+        // Filter to only user's projects if requested (like timesheets)
+        if ($request->boolean('my_projects')) {
+            \Log::info('Filtering projects for user: ' . $request->user()->id);
+            $user = $request->user();
+            $query->where(function ($q) use ($user) {
+                // Projects where user is manager
+                $q->where('manager_id', $user->id)
+                  // OR projects where user is a member
+                  ->orWhereHas('memberRecords', function ($memberQuery) use ($user) {
+                      $memberQuery->where('user_id', $user->id);
+                  });
+            });
+        }
+        
+        $projects = $query->orderBy('created_at', 'desc')->get();
+        \Log::info('Returning projects count: ' . $projects->count());
             
         return response()->json([
             'data' => $projects,
             'user_permissions' => [
                 'can_manage_projects' => auth()->user()->can('manage-projects'),
-                'is_manager' => auth()->user()->hasRole('Manager'),
+                'is_manager' => auth()->user()->isProjectManager(), // Based on project relationships
                 'is_admin' => auth()->user()->hasRole('Admin'),
             ]
         ]);

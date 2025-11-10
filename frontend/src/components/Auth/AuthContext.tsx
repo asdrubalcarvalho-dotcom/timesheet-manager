@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 
 interface User {
@@ -12,6 +12,12 @@ interface User {
   is_technician: boolean;
   is_admin: boolean;
   managed_projects: number[];
+  project_memberships?: Array<{
+    project_id: number;
+    project_role: 'member' | 'manager';
+    expense_role: 'member' | 'manager';
+    finance_role: 'none' | 'member' | 'manager';
+  }>;
 }
 
 interface AuthContextType {
@@ -46,6 +52,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const normalizeUser = useCallback((userData: any): User => {
+    const roles: string[] = Array.isArray(userData?.roles) ? userData.roles : [];
+    const permissions: string[] = Array.isArray(userData?.permissions) ? userData.permissions : [];
+    const managedProjectsRaw = Array.isArray(userData?.managed_projects) ? userData.managed_projects : [];
+    const projectMemberships = Array.isArray(userData?.project_memberships) ? userData.project_memberships : [];
+
+    return {
+      id: Number(userData?.id),
+      name: userData?.name ?? '',
+      email: userData?.email ?? '',
+      role: (userData?.role ?? 'Technician') as User['role'],
+      roles,
+      permissions,
+      is_manager: Boolean(userData?.is_manager ?? roles.includes('Manager')),
+      is_technician: Boolean(userData?.is_technician ?? roles.includes('Technician')),
+      is_admin: Boolean(userData?.is_admin ?? roles.includes('Admin')),
+      managed_projects: managedProjectsRaw.map((projectId: any) => Number(projectId)).filter((id: number) => !Number.isNaN(id)),
+      project_memberships: projectMemberships,
+    };
+  }, []);
+
   // Check for existing session on mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -61,7 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           if (response.ok) {
             const userData = await response.json();
-            setUser(userData);
+            setUser(normalizeUser(userData));
           } else {
             localStorage.removeItem('auth_token');
           }
@@ -75,7 +102,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     checkAuth();
-  }, []);
+  }, [normalizeUser]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -96,7 +123,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const data = await response.json();
         console.log('Login success:', data);
         localStorage.setItem('auth_token', data.token);
-        setUser(data.user);
+        setUser(normalizeUser(data.user));
         return true;
       } else {
         const errorData = await response.json();
@@ -115,9 +142,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Role checking utility functions
-  const isManager = (): boolean => user?.is_manager || false;
-  const isTechnician = (): boolean => user?.is_technician || false;
-  const isAdmin = (): boolean => user?.is_admin || false;
+  const isManager = (): boolean => user?.is_manager || user?.roles?.includes('Manager') || false;
+  const isTechnician = (): boolean => user?.is_technician || user?.roles?.includes('Technician') || false;
+  const isAdmin = (): boolean => user?.is_admin || user?.roles?.includes('Admin') || false;
   
   const canValidateTimesheets = (): boolean => {
     return user?.permissions?.includes('approve-timesheets') || false;

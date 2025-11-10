@@ -1,0 +1,75 @@
+```mermaid
+erDiagram
+    USERS {
+        id bigint PK
+        name varchar(255) NN
+        email varchar(255) NN
+        role varchar(255) NN
+        email_verified_at timestamp
+        password varchar(255) NN
+        remember_token varchar(100)
+        created_at timestamp
+        updated_at timestamp
+    }
+    PERMISSIONS {
+        id bigint PK
+        name varchar(255) NN
+        guard_name varchar(255) NN
+        created_at timestamp
+        updated_at timestamp
+    }
+    ROLES {
+        id bigint PK
+        name varchar(255) NN
+        guard_name varchar(255) NN
+        created_at timestamp
+        updated_at timestamp
+    }
+    ROLE_HAS_PERMISSIONS {
+        permission_id bigint PK
+        role_id bigint PK
+    }
+    MODEL_HAS_ROLES {
+        role_id bigint PK
+        model_type varchar(255) PK
+        model_id bigint PK
+    }
+    MODEL_HAS_PERMISSIONS {
+        permission_id bigint PK
+        model_type varchar(255) PK
+        model_id bigint PK
+    }
+    SOCIAL_ACCOUNTS {
+        id bigint PK
+        user_id bigint NN
+        provider_name varchar(255) NN
+        provider_id varchar(255) NN
+        provider_email varchar(255)
+        provider_username varchar(255)
+        avatar varchar(255)
+        access_token varchar(1024)
+        refresh_token varchar(1024)
+        token_expires_at timestamp
+        metadata json
+        created_at timestamp
+        updated_at timestamp
+    }
+    PERSONAL_ACCESS_TOKENS {
+        id bigint PK
+        tokenable_type varchar(255) NN
+        tokenable_id bigint NN
+        name text NN
+        token varchar(64) NN
+        abilities text
+        last_used_at timestamp
+        expires_at timestamp
+        created_at timestamp
+        updated_at timestamp
+    }
+
+    PERMISSIONS ||--o{ MODEL_HAS_PERMISSIONS : "permission_id"
+    PERMISSIONS ||--o{ ROLE_HAS_PERMISSIONS : "permission_id"
+    ROLES ||--o{ MODEL_HAS_ROLES : "role_id"
+    ROLES ||--o{ ROLE_HAS_PERMISSIONS : "role_id"
+    USERS ||--o{ SOCIAL_ACCOUNTS : "user_id"
+```

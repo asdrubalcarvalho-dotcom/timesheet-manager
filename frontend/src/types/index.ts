@@ -18,7 +18,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: 'Technician' | 'Manager';
+  role: 'Technician' | 'Manager' | 'Admin';
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +51,10 @@ export interface Technician {
   email: string;
   role: 'Technician' | 'Manager';
   hourly_rate?: number;
+  user_id?: number;
+  is_active?: boolean;
+  worker_id?: string | null;
+  worker_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +66,11 @@ export interface Project {
   start_date: string;
   end_date?: string;
   status: 'active' | 'completed' | 'on_hold';
+  manager_id?: number;
+  user_project_role?: 'member' | 'manager' | 'none';
+  user_expense_role?: 'member' | 'manager' | 'none';
+  memberRecords?: ProjectMember[];
+  member_records?: ProjectMember[]; // Laravel snake_case
   created_at: string;
   updated_at: string;
 }
@@ -81,13 +90,33 @@ export interface Task {
 export interface Location {
   id: number;
   name: string;
+  country: string;
+  city: string;
   address?: string;
+  postal_code?: string;
   latitude?: number;
   longitude?: number;
-  description?: string;
   is_active: boolean;
+  asset_id?: number | null;
+  oem_id?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProjectMember {
+  id: number;
+  project_id: number;
+  user_id: number;
+  project_role: 'member' | 'manager' | 'none';
+  expense_role: 'member' | 'manager' | 'none';
+  finance_role: 'member' | 'manager' | 'none';
+  created_at: string;
+  updated_at: string;
+  user?: {
+    id: number;
+    name: string;
+    email: string;
+  };
 }
 
 export interface Timesheet {
@@ -101,13 +130,60 @@ export interface Timesheet {
   end_time?: string;
   hours_worked: number;
   description?: string;
-  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  status: 'submitted' | 'approved' | 'rejected' | 'closed' | 'draft';
   created_at: string;
   updated_at: string;
   technician?: Technician;
   project?: Project;
   task?: Task;
   location?: Location;
+  ai_flagged?: boolean;
+  ai_score?: number | null;
+  ai_feedback?: string[] | null;
+}
+
+export type TimesheetOverlapRisk = 'ok' | 'warning' | 'block';
+
+export interface TimesheetValidationSnapshot {
+  timesheet_id?: number | null;
+  technician_id: number;
+  project_id: number;
+  task_id: number;
+  location_id: number;
+  date: string;
+  hours_worked: number;
+  start_time?: string | null;
+  end_time?: string | null;
+  daily_total_hours: number;
+  overlap_risk: TimesheetOverlapRisk;
+  membership_ok: boolean;
+  project_active: boolean;
+  ai_flagged: boolean;
+  ai_score?: number | null;
+  ai_feedback?: string[] | null;
+}
+
+export interface TimesheetAIInsights {
+  flagged: boolean;
+  score?: number | null;
+  feedback?: string[];
+  source?: string;
+}
+
+export interface TimesheetValidationResult {
+  status: 'ok' | 'warning' | 'block';
+  warnings: string[];
+  notes: Record<string, unknown>;
+  snapshot: TimesheetValidationSnapshot;
+  ai?: TimesheetAIInsights | null;
+}
+
+export interface TimesheetPermissions {
+  can_view: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  can_approve: boolean;
+  can_reject: boolean;
 }
 
 export interface Expense {
@@ -118,11 +194,53 @@ export interface Expense {
   amount: number;
   description?: string;
   attachment_path?: string;
-  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  status: 'draft' | 'submitted' | 'approved' | 'finance_review' | 'finance_approved' | 'paid' | 'rejected' | 'closed';
+  expense_type: 'reimbursement' | 'mileage' | 'company_card';
+  category?: 'fuel' | 'meals' | 'materials' | 'accommodation' | 'other';
+  distance_km?: number;
+  rate_per_km?: number;
+  vehicle_type?: 'car' | 'motorcycle' | 'bicycle';
+  rejection_reason?: string;
+  payment_reference?: string;
   created_at: string;
   updated_at: string;
   technician?: Technician;
   project?: Project;
+}
+
+export interface TimesheetManagerRow {
+  id: number;
+  date: string;
+  week?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  hours_worked: number;
+  status: Timesheet['status'];
+  description?: string;
+  technician?: Pick<Technician, 'id' | 'name' | 'email'> | null;
+  project?: Pick<Project, 'id' | 'name'> | null;
+  task?: Pick<Task, 'id' | 'name'> | null;
+  location?: Pick<Location, 'id' | 'name' | 'city' | 'country'> | null;
+  ai_flagged?: boolean;
+  ai_score?: number | null;
+  ai_feedback?: string[] | null;
+  validation?: TimesheetValidationResult;
+  technician_project_role?: 'member' | 'manager' | 'none' | null;
+  technician_expense_role?: 'member' | 'manager' | 'none' | null;
+}
+
+export interface TimesheetManagerSummary {
+  total: number;
+  flagged_count: number;
+  over_cap_count: number;
+  overlap_count: number;
+  pending_count: number;
+  average_ai_score: number | null;
+}
+
+export interface TimesheetManagerResponse {
+  data: TimesheetManagerRow[];
+  summary: TimesheetManagerSummary;
 }
 
 export interface ApiResponse<T> {
@@ -158,4 +276,49 @@ export interface ExpenseFormData {
   amount: number;
   description?: string;
   attachment?: File;
+}
+
+// Dashboard Statistics Types
+export interface DashboardSummary {
+  total_hours: number;
+  total_expenses: number;
+  pending_timesheets: number;
+  pending_expenses: number;
+  approved_timesheets: number;
+  approved_expenses: number;
+}
+
+export interface ProjectStats {
+  project_name: string;
+  total_hours?: number;
+  total_amount?: number;
+}
+
+export interface StatusStats {
+  status: string;
+  count: number;
+  total_hours?: number;
+  total_amount?: number;
+}
+
+export interface DailyTrend {
+  date: string;
+  hours?: number;
+  amount?: number;
+}
+
+export interface DashboardStatistics {
+  summary: DashboardSummary;
+  hours_by_project: ProjectStats[];
+  expenses_by_project: ProjectStats[];
+  hours_by_status: StatusStats[];
+  expenses_by_status: StatusStats[];
+  daily_hours: DailyTrend[];
+  daily_expenses: DailyTrend[];
+}
+
+export interface TopProject {
+  project_name: string;
+  value: number;
+  metric: 'hours' | 'expenses';
 }

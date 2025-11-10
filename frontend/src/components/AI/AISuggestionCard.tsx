@@ -29,7 +29,7 @@ interface AISuggestionCardProps {
   isLoading: boolean;
   isAIAvailable: boolean;
   error: string | null;
-  onApply: () => void;
+  onApply: (selectedHours: number | null, selectedDescription: string) => void;
   onDismiss: () => void;
   onFeedback: (accepted: boolean) => void;
 }
@@ -43,6 +43,18 @@ export const AISuggestionCard: React.FC<AISuggestionCardProps> = ({
   onDismiss,
   onFeedback
 }) => {
+  const [selectedDescription, setSelectedDescription] = React.useState<string>('');
+  const [selectedHours, setSelectedHours] = React.useState<number | null>(null);
+
+  // Update selected description when suggestion changes
+  React.useEffect(() => {
+    if (suggestion?.suggested_description) {
+      // Reset selections when new suggestion arrives
+      setSelectedDescription('');
+      setSelectedHours(null);
+    }
+  }, [suggestion]);
+
   // Don't render if AI is not available and there's no suggestion
   if (!isAIAvailable && !suggestion && !isLoading && !error) {
     return null;
@@ -89,26 +101,28 @@ export const AISuggestionCard: React.FC<AISuggestionCardProps> = ({
           }
         }}
       >
-        {/* Enhanced AI Badge */}
+        {/* AI Badge - Right positioned where Confidence was */}
         <Box
           sx={{
             position: 'absolute',
-            top: -16,
-            left: 20,
+            top: 8,
+            right: 8,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '20px',
-            padding: '8px 16px',
-            boxShadow: '0 4px 16px rgba(102, 126, 234, 0.3)',
+            borderRadius: '12px',
+            padding: '2px 8px',
+            zIndex: 10,
+            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
             display: 'flex',
             alignItems: 'center',
-            gap: 1
+            gap: 0.5,
+            width: 'fit-content'
           }}
         >
           <Avatar sx={{ 
             bgcolor: 'rgba(255, 255, 255, 0.2)', 
-            width: 24, 
-            height: 24,
-            '& .MuiSvgIcon-root': { fontSize: 16 }
+            width: 16, 
+            height: 16,
+            '& .MuiSvgIcon-root': { fontSize: 12 }
           }}>
             <RobotIcon />
           </Avatar>
@@ -117,15 +131,16 @@ export const AISuggestionCard: React.FC<AISuggestionCardProps> = ({
             sx={{ 
               color: 'white', 
               fontWeight: 700,
-              fontSize: '0.75rem',
-              letterSpacing: 0.5
+              fontSize: '0.6rem',
+              letterSpacing: 0.3,
+              whiteSpace: 'nowrap'
             }}
           >
             AI CORTEX
           </Typography>
         </Box>
 
-      <CardContent sx={{ pt: 3 }}>
+      <CardContent sx={{ pt: 2, pb: 1.5 }}>
         {/* Loading State */}
         {isLoading && (
           <Box>
@@ -156,8 +171,8 @@ export const AISuggestionCard: React.FC<AISuggestionCardProps> = ({
         {/* Suggestion Content */}
         {suggestion && (
           <Box>
-            {/* Header with Confidence */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            {/* Header with Confidence inline */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
               <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <MagicIcon color="primary" />
                 Smart Suggestion
@@ -170,65 +185,119 @@ export const AISuggestionCard: React.FC<AISuggestionCardProps> = ({
               />
             </Box>
 
-            {/* Main Suggestion */}
+            {/* Hours Selection - Clickable Chips */}
             <Box sx={{ mb: 2 }}>
-              <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                Suggested Hours: {suggestion.suggested_hours}h
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75, fontSize: '0.8rem' }}>
+                Suggested Duration (click to select):
               </Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>Description:</strong> {suggestion.suggested_description}
-              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip
+                  label={`${suggestion.suggested_hours}h`}
+                  variant={selectedHours === suggestion.suggested_hours ? "filled" : "outlined"}
+                  color="primary"
+                  size="medium"
+                  clickable
+                  onClick={() => setSelectedHours(
+                    selectedHours === suggestion.suggested_hours ? null : suggestion.suggested_hours
+                  )}
+                  sx={{ fontWeight: 'bold' }}
+                />
+                {/* Alternative hours options */}
+                {[4, 6, 8].filter(h => h !== suggestion.suggested_hours).map((hours) => (
+                  <Chip
+                    key={hours}
+                    label={`${hours}h`}
+                    variant={selectedHours === hours ? "filled" : "outlined"}
+                    color="primary"
+                    size="medium"
+                    clickable
+                    onClick={() => setSelectedHours(selectedHours === hours ? null : hours)}
+                  />
+                ))}
+              </Box>
             </Box>
 
-            {/* Alternative Descriptions */}
-            {suggestion.alternative_descriptions && suggestion.alternative_descriptions.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Alternative descriptions:
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  {suggestion.alternative_descriptions.map((desc: string, index: number) => (
-                    <Chip
-                      key={index}
-                      label={desc}
-                      variant="outlined"
-                      size="small"
-                      sx={{ mb: 0.5 }}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            <Divider sx={{ my: 2 }} />
-
-            {/* Reasoning */}
+            {/* Description Selection - Clickable Chips */}
             <Box sx={{ mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75, fontSize: '0.8rem' }}>
+                Suggested Description (click to select):
+              </Typography>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column',
+                gap: 0.75
+              }}>
+                {/* Primary suggestion */}
+                <Chip
+                  label={suggestion.suggested_description}
+                  variant={selectedDescription === suggestion.suggested_description ? "filled" : "outlined"}
+                  color="primary"
+                  clickable
+                  onClick={() => setSelectedDescription(
+                    selectedDescription === suggestion.suggested_description ? '' : suggestion.suggested_description
+                  )}
+                  sx={{ 
+                    height: 'auto',
+                    py: 1,
+                    '& .MuiChip-label': { 
+                      whiteSpace: 'normal',
+                      textAlign: 'left'
+                    }
+                  }}
+                />
+                {/* Alternative descriptions */}
+                {suggestion.alternative_descriptions?.map((desc, idx) => (
+                  <Chip
+                    key={idx}
+                    label={desc}
+                    variant={selectedDescription === desc ? "filled" : "outlined"}
+                    color="primary"
+                    clickable
+                    onClick={() => setSelectedDescription(selectedDescription === desc ? '' : desc)}
+                    sx={{ 
+                      height: 'auto',
+                      py: 1,
+                      '& .MuiChip-label': { 
+                        whiteSpace: 'normal',
+                        textAlign: 'left'
+                      }
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            <Divider sx={{ my: 1.5 }} />
+
+            {/* Reasoning - Compact */}
+            <Box sx={{ mb: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <InfoIcon fontSize="small" color="info" />
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                   AI Reasoning:
                 </Typography>
               </Box>
-              <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+              <Typography variant="body2" sx={{ fontStyle: 'italic', fontSize: '0.75rem', lineHeight: 1.3 }}>
                 {suggestion.reasoning}
               </Typography>
             </Box>
 
             {/* Action Buttons */}
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Button
                   variant="contained"
                   color="primary"
                   startIcon={<AcceptIcon />}
                   onClick={() => {
-                    onApply();
+                    onApply(selectedHours, selectedDescription);
                     onFeedback(true);
                   }}
                   size="small"
+                  disabled={!selectedHours && !selectedDescription}
+                  sx={{ fontSize: '0.75rem', px: 2 }}
                 >
-                  Apply Suggestion
+                  APPLY SUGGESTION
                 </Button>
                 <Button
                   variant="outlined"
@@ -239,8 +308,9 @@ export const AISuggestionCard: React.FC<AISuggestionCardProps> = ({
                     onFeedback(false);
                   }}
                   size="small"
+                  sx={{ fontSize: '0.75rem', px: 1.5 }}
                 >
-                  Dismiss
+                  DISMISS
                 </Button>
               </Box>
 

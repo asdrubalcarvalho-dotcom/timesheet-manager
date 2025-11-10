@@ -1,5 +1,18 @@
 import axios from 'axios';
-import type { ApiResponse, Technician, Project, Timesheet, Expense, TimesheetFormData, ExpenseFormData } from '../types';
+import type { 
+  ApiResponse, 
+  Technician, 
+  Project, 
+  Timesheet, 
+  Expense, 
+  TimesheetFormData, 
+  ExpenseFormData,
+  TimesheetValidationResult,
+  TimesheetPermissions,
+  TimesheetManagerResponse,
+  DashboardStatistics,
+  TopProject
+} from '../types';
 
 const API_BASE_URL = 'http://localhost:8080/api';
 
@@ -19,6 +32,20 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+export interface TimesheetMutationResponse {
+  data: Timesheet;
+  validation?: TimesheetValidationResult;
+  message?: string;
+  permissions?: TimesheetPermissions;
+}
+
+export interface TimesheetManagerViewParams {
+  date_from?: string;
+  date_to?: string;
+  status?: string;
+  technician_ids?: number[];
+}
 
 // Technicians API
 export const techniciansApi = {
@@ -43,6 +70,9 @@ export const projectsApi = {
   getAll: (): Promise<Project[]> =>
     api.get('/projects').then(res => res.data),
   
+  getForCurrentUser: (): Promise<Project[]> =>
+    api.get('/user/projects').then(res => res.data),
+  
   getById: (id: number): Promise<Project> =>
     api.get(`/projects/${id}`).then(res => res.data),
   
@@ -66,26 +96,35 @@ export const timesheetsApi = {
   }): Promise<Timesheet[]> =>
     api.get('/timesheets', { params }).then(res => res.data),
   
-  getById: (id: number): Promise<Timesheet> =>
+  getById: (id: number): Promise<TimesheetMutationResponse> =>
     api.get(`/timesheets/${id}`).then(res => res.data),
   
-  create: (data: TimesheetFormData): Promise<Timesheet> =>
+  create: (data: TimesheetFormData): Promise<TimesheetMutationResponse> =>
     api.post('/timesheets', data).then(res => res.data),
   
-  update: (id: number, data: Partial<TimesheetFormData>): Promise<Timesheet> =>
+  update: (id: number, data: Partial<TimesheetFormData>): Promise<TimesheetMutationResponse> =>
     api.put(`/timesheets/${id}`, data).then(res => res.data),
   
   delete: (id: number): Promise<void> =>
     api.delete(`/timesheets/${id}`).then(res => res.data),
+
+  getValidation: (id: number): Promise<TimesheetValidationResult> =>
+    api.get(`/timesheets/${id}/validation`).then(res => res.data),
+
+  getManagerView: (params?: TimesheetManagerViewParams): Promise<TimesheetManagerResponse> =>
+    api.get('/timesheets/manager-view', { params }).then(res => res.data),
+  
+  getPendingCounts: (): Promise<{ timesheets: number; expenses: number; total: number }> =>
+    api.get('/timesheets/pending-counts').then(res => res.data),
   
   submit: (id: number): Promise<Timesheet> =>
     api.patch(`/timesheets/${id}/submit`).then(res => res.data),
   
   approve: (id: number): Promise<Timesheet> =>
-    api.patch(`/timesheets/${id}/approve`).then(res => res.data),
+    api.put(`/timesheets/${id}/approve`).then(res => res.data),
   
-  reject: (id: number): Promise<Timesheet> =>
-    api.patch(`/timesheets/${id}/reject`).then(res => res.data),
+  reject: (id: number, reason: string): Promise<Timesheet> =>
+    api.put(`/timesheets/${id}/reject`, { reason }).then(res => res.data),
 };
 
 // Expenses API
@@ -168,6 +207,23 @@ export const locationsApi = {
   
   getById: (id: number): Promise<any> =>
     api.get(`/locations/${id}`).then(res => res.data),
+};
+
+// Dashboard API
+export const dashboardApi = {
+  getStatistics: (params?: {
+    date_from?: string;
+    date_to?: string;
+  }): Promise<DashboardStatistics> =>
+    api.get('/dashboard/statistics', { params }).then(res => res.data),
+  
+  getTopProjects: (params?: {
+    limit?: number;
+    metric?: 'hours' | 'expenses';
+    date_from?: string;
+    date_to?: string;
+  }): Promise<TopProject[]> =>
+    api.get('/dashboard/top-projects', { params }).then(res => res.data),
 };
 
 export default api;

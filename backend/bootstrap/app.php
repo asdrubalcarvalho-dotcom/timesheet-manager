@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Registrar middleware de permissões
         $middleware->alias([
             'permission' => \App\Http\Middleware\CheckPermission::class,
+            'can.edit.timesheets' => \App\Http\Middleware\CanEditTimesheets::class,
+            'can.edit.expenses' => \App\Http\Middleware\CanEditExpenses::class,
+            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

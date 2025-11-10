@@ -1,16 +1,28 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Box } from '@mui/material';
+import { Box, CircularProgress, Typography } from '@mui/material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
-import { Header } from './components/Layout/Header';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { useLocation, useNavigate } from 'react-router-dom';
+import SideMenu from './components/Layout/SideMenu';
 import { LoginForm } from './components/Auth/LoginForm';
-import TimesheetCalendar from './components/Timesheets/TimesheetCalendar';
-import { ExpenseManager } from './components/Expenses/ExpenseManager';
-import { ApprovalManager } from './components/Approvals/ApprovalManager';
+const TimesheetCalendar = React.lazy(() => import('./components/Timesheets/TimesheetCalendar'));
+const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
+const PlanningGantt = React.lazy(() => import('./components/Planning/PlanningGantt'));
+const ExpenseManager = React.lazy(() => import('./components/Expenses/ExpenseManager'));
+const ApprovalManager = React.lazy(() => import('./components/Approvals/ApprovalManager'));
+const AIInsights = React.lazy(() => import('./components/AIInsights/AIInsights'));
+const AdminDashboard = React.lazy(() => import('./components/Admin/AdminDashboard'));
+const ProjectsManager = React.lazy(() => import('./components/Admin/ProjectsManager'));
+const TasksManager = React.lazy(() => import('./components/Admin/TasksManager'));
+const LocationsManager = React.lazy(() => import('./components/Admin/LocationsManager'));
+const UsersManager = React.lazy(() => import('./components/Admin/UsersManager'));
+const AdminAccessManagerPage = React.lazy(() => import('./pages/AdminAccessManager'));
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -42,85 +54,139 @@ const queryClient = new QueryClient({
   },
 });
 
-// Wrapper for TimesheetCalendar that gets user from context
-const TimesheetCalendarWrapper: React.FC = () => {
-  const { user } = useAuth();
-  return <TimesheetCalendar user={user} />;
+// Page type definition
+type Page = 'timesheets' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-users' | 'planning' | 'admin-access';
+
+const DEFAULT_PAGE: Page = 'timesheets';
+
+const pageToPath: Record<Page, string> = {
+  timesheets: '/timesheets',
+  expenses: '/expenses',
+  approvals: '/approvals',
+  dashboard: '/dashboard',
+  'ai-insights': '/ai-insights',
+  team: '/team',
+  planning: '/planning',
+  admin: '/admin',
+  'admin-projects': '/admin/projects',
+  'admin-tasks': '/admin/tasks',
+  'admin-locations': '/admin/locations',
+  'admin-users': '/admin/users',
+  'admin-access': '/admin/access'
 };
 
-// Protected Route component
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return <div>Loading...</div>;
+const pathToPage = (pathname: string): Page => {
+  if (pathname === '/' || pathname === '') {
+    return DEFAULT_PAGE;
   }
-  
+
+  const entry = Object.entries(pageToPath).find(([, path]) => path === pathname);
+  return (entry?.[0] as Page) || DEFAULT_PAGE;
+};
+
+const ModuleLoader: React.FC<{ label?: string }> = ({ label = 'A carregar módulo...' }) => (
+  <Box
+    sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+      minHeight: 200,
+      color: 'text.secondary'
+    }}
+  >
+    <CircularProgress size={32} />
+    <Typography variant="body2">{label}</Typography>
+  </Box>
+);
+
+// Main App Content with Side Menu
+const AppContent: React.FC = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentPage = pathToPage(location.pathname);
+
+  useEffect(() => {
+    if (location.pathname === '/' || location.pathname === '') {
+      navigate(pageToPath[DEFAULT_PAGE], { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <LoginForm />;
   }
-  
-  return <>{children}</>;
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'timesheets':
+        return <TimesheetCalendar />;
+      case 'expenses':
+        return <ExpenseManager />;
+      case 'approvals':
+        return <ApprovalManager />;
+      case 'dashboard':
+        return <Dashboard />;
+      case 'ai-insights':
+        return <AIInsights />;
+      case 'team':
+        return (
+          <Box sx={{ p: 3 }}>
+            <h1>👥 Team</h1>
+            <p>Gestão de equipe em breve...</p>
+          </Box>
+        );
+      case 'planning':
+        return <PlanningGantt />;
+      case 'admin':
+        return <AdminDashboard />;
+      case 'admin-projects':
+        return <ProjectsManager />;
+      case 'admin-tasks':
+        return <TasksManager />;
+      case 'admin-locations':
+        return <LocationsManager />;
+      case 'admin-users':
+        return <UsersManager />;
+      case 'admin-access':
+        return <AdminAccessManagerPage />;
+      default:
+        return <TimesheetCalendar />;
+    }
 };
 
-// Manager-only Route component
-const ManagerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  
-  if (user?.role !== 'Manager') {
-    return <Navigate to="/timesheets" replace />;
-  }
-  
-  return <>{children}</>;
-};
+  const handlePageChange = (page: string) => {
+    const nextPage = page as Page;
+    const targetPath = pageToPath[nextPage] || pageToPath[DEFAULT_PAGE];
 
-// Main App Layout
-const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  
+    if (location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
+  };
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%' }}>
-      {user && <Header />}
-      <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100%' }}>
-        {children}
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <SideMenu 
+        currentPage={currentPage} 
+        onPageChange={handlePageChange} 
+      />
+      <Box 
+        component="main" 
+        sx={{ 
+          flexGrow: 1,
+          minWidth: 0,
+          p: 3,
+          minHeight: '100vh',
+          bgcolor: 'grey.50',
+          overflowX: 'hidden'
+        }}
+      >
+        <Suspense fallback={<ModuleLoader />}>
+          {renderPage()}
+        </Suspense>
       </Box>
     </Box>
-  );
-};
-
-// App Routes
-const AppRoutes: React.FC = () => {
-  return (
-    <Routes>
-      <Route path="/login" element={<LoginForm />} />
-      <Route
-        path="/timesheets"
-        element={
-          <ProtectedRoute>
-            <TimesheetCalendarWrapper />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/expenses"
-        element={
-          <ProtectedRoute>
-            <ExpenseManager />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/approval"
-        element={
-          <ProtectedRoute>
-            <ManagerRoute>
-              <ApprovalManager />
-            </ManagerRoute>
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/" element={<Navigate to="/timesheets" replace />} />
-    </Routes>
   );
 };
 
@@ -129,17 +195,14 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Router future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true
-        }}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <CssBaseline />
           <AuthProvider>
-            <AppLayout>
-              <AppRoutes />
-            </AppLayout>
+            <NotificationProvider>
+              <AppContent />
+            </NotificationProvider>
           </AuthProvider>
-        </Router>
+        </LocalizationProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\TimesheetAIService;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class SuggestionController extends Controller
 {
@@ -87,10 +90,21 @@ class SuggestionController extends Controller
     public function getStatus(): JsonResponse
     {
         try {
+            $projectId = Project::value('id');
+
+            if (!$projectId) {
+                return response()->json([
+                    'success' => true,
+                    'ai_available' => false,
+                    'fallback_working' => true,
+                    'service_type' => 'statistical'
+                ]);
+            }
+
             // Test basic functionality
             $testSuggestion = $this->aiService->generateSuggestion(
                 Auth::id(),
-                1,  // Assume project 1 exists
+                $projectId,
                 [
                     'project_name' => 'Test Project',
                     'date' => now()->format('Y-m-d')
@@ -112,5 +126,44 @@ class SuggestionController extends Controller
                 'fallback_working' => false
             ], 503);
         }
+    }
+
+    /**
+     * Provide simple AI-style suggestions for access management dashboard.
+     */
+    public function getAccessSuggestions(): JsonResponse
+    {
+        $usersWithoutRoles = User::doesntHave('roles')->count();
+        $roleCoverage = Role::withCount('permissions')
+            ->orderBy('permissions_count', 'asc')
+            ->take(3)
+            ->get()
+            ->map(fn (Role $role) => [
+                'role' => $role->name,
+                'permissions_count' => $role->permissions_count,
+            ]);
+        $orphanPermissions = Permission::doesntHave('roles')->pluck('name');
+
+        $suggestion = 'Access matrix está saudável.';
+        if ($usersWithoutRoles > 0 || $orphanPermissions->isNotEmpty()) {
+            $parts = [];
+            if ($usersWithoutRoles > 0) {
+                $parts[] = "{$usersWithoutRoles} utilizador(es) sem função atribuída";
+            }
+            if ($orphanPermissions->isNotEmpty()) {
+                $parts[] = 'permissões sem função: ' . $orphanPermissions->take(3)->implode(', ');
+            }
+            $suggestion = 'Reveja rapidamente: ' . implode(' e ', $parts);
+        }
+
+        return response()->json([
+            'success' => true,
+            'suggestion' => $suggestion,
+            'metrics' => [
+                'users_without_roles' => $usersWithoutRoles,
+                'roles_review' => $roleCoverage,
+                'orphan_permissions' => $orphanPermissions,
+            ],
+        ]);
     }
 }

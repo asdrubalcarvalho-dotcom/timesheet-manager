@@ -13,9 +13,7 @@ class LocationController extends Controller
      */
     public function index(): JsonResponse
     {
-        $locations = Location::where('is_active', true)
-            ->orderBy('name')
-            ->get();
+        $locations = Location::orderBy('name')->get();
 
         return response()->json([
             'success' => true,
@@ -30,10 +28,14 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'country' => 'required|string|max:255',
+            'city' => 'required|string|max:255',
             'address' => 'nullable|string',
+            'postal_code' => 'nullable|string|max:50',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
-            'description' => 'nullable|string',
+            'asset_id' => 'nullable|integer',
+            'oem_id' => 'nullable|integer',
             'is_active' => 'boolean'
         ]);
 
@@ -66,10 +68,14 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'country' => 'required|string|max:255',
+            'city' => 'required|string|max:255',
             'address' => 'nullable|string',
+            'postal_code' => 'nullable|string|max:50',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
-            'description' => 'nullable|string',
+            'asset_id' => 'nullable|integer',
+            'oem_id' => 'nullable|integer',
             'is_active' => 'boolean'
         ]);
 
@@ -109,7 +115,7 @@ class LocationController extends Controller
     public function active(): JsonResponse
     {
         $locations = Location::where('is_active', true)
-            ->select('id', 'name', 'address')
+            ->select('id', 'name', 'address', 'city', 'country', 'latitude', 'longitude')
             ->orderBy('name')
             ->get();
 
