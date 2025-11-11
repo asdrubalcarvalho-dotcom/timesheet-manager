@@ -69,7 +69,7 @@ services:
     networks:
       - timesheet-network
     environment:
-      - VITE_API_URL=http://localhost:80
+      - VITE_API_URL=http://localhost:8080
 
 networks:
   timesheet-network:

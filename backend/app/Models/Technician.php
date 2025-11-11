@@ -2,17 +2,26 @@
 
 namespace App\Models;
 
+use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Technician extends Model
 {
+    use HasAuditFields;
+
     protected $fillable = [
         'name',
         'email',
         'role',
         'hourly_rate',
-        'is_active'
+        'is_active',
+        'user_id',
+        'worker_id',
+        'worker_name',
+        'created_by',
+        'updated_by'
     ];
 
     protected $casts = [
@@ -28,6 +37,11 @@ class Technician extends Model
     public function expenses(): HasMany
     {
         return $this->hasMany(Expense::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function isManager(): bool

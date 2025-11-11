@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\HasAuditFields;
 
 class Timesheet extends Model
 {
+    use HasAuditFields;
+
     protected $fillable = [
         'technician_id',
         'project_id',
@@ -22,8 +25,13 @@ class Timesheet extends Model
         'check_out_time',
         'machine_status',
         'job_status',
+        'ai_flagged',
+        'ai_score',
+        'ai_feedback',
         'status',
-        'rejection_reason'
+        'rejection_reason',
+        'created_by',
+        'updated_by'
     ];
 
     protected $casts = [
@@ -32,7 +40,10 @@ class Timesheet extends Model
         'end_time' => 'datetime:H:i',
         'check_out_time' => 'datetime:H:i',
         'hours_worked' => 'decimal:2',
-        'lunch_break' => 'integer'
+        'lunch_break' => 'integer',
+        'ai_flagged' => 'boolean',
+        'ai_score' => 'decimal:2',
+        'ai_feedback' => 'array'
     ];
 
     public function technician(): BelongsTo
@@ -57,9 +68,9 @@ class Timesheet extends Model
 
     public function canBeEdited(): bool
     {
-        // Only submitted and rejected can be edited
+        // Draft, submitted and rejected can be edited
         // approved and closed cannot be edited directly
-        return in_array($this->status, ['submitted', 'rejected']);
+        return in_array($this->status, ['draft', 'submitted', 'rejected']);
     }
 
     public function isApproved(): bool
@@ -89,12 +100,20 @@ class Timesheet extends Model
 
     public function canBeReopened(): bool
     {
-        return $this->status === 'approved';
+        return $this->status === 'closed';
+    }
+
+    public function canBeSubmitted(): bool
+    {
+        return in_array($this->status, ['draft', 'rejected']);
     }
 
     public function submit(): void
     {
-        $this->update(['status' => 'submitted']);
+        $this->update([
+            'status' => 'submitted',
+            'rejection_reason' => null
+        ]);
     }
 
     public function approve(): void

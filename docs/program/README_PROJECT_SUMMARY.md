@@ -214,7 +214,7 @@ php artisan route:list
 1. **Technicians** submit daily time entries for projects
 2. Entries are displayed in a calendar view with FullCalendar
 3. **Managers** can approve or reject submissions
-4. Status colors: Orange (Pending), Green (Approved), Red (Rejected)
+4. Status colors: Orange (Submitted), Green (Approved), Red (Rejected), Purple (Closed)
 
 ### Expense Management
 1. **Technicians** submit expense claims with optional receipts

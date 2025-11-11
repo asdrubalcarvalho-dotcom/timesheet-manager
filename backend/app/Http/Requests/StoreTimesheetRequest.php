@@ -25,6 +25,7 @@ class StoreTimesheetRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'technician_id' => 'nullable|exists:technicians,id', // Optional for Managers/Admins
             'project_id' => 'required|exists:projects,id',
             'task_id' => 'required|exists:tasks,id',
             'location_id' => 'required|exists:locations,id',
@@ -33,7 +34,7 @@ class StoreTimesheetRequest extends FormRequest
             'end_time' => 'nullable|date_format:H:i|after:start_time',
             'hours_worked' => 'required|numeric|min:0.25|max:24',
             'description' => 'required|string|max:1000',
-            'status' => ['nullable', 'string', Rule::in(['submitted', 'approved', 'rejected', 'closed'])]
+            'status' => ['nullable', 'string', Rule::in(['draft', 'submitted'])]
         ];
     }
 
@@ -61,15 +62,30 @@ class StoreTimesheetRequest extends FormRequest
             return false;
         }
 
-        // Find technician by authenticated user's email
-        $technician = \App\Models\Technician::where('email', $this->user()->email)->first();
+        // Determine which technician to check for overlaps
+        $technicianId = null;
         
-        if (!$technician) {
-            return false;
+        // If technician_id is provided in request (Managers/Admins creating for others)
+        if ($this->has('technician_id') && $this->technician_id) {
+            $technicianId = $this->technician_id;
+        } else {
+            // Otherwise, use authenticated user's technician record
+            $technician = \App\Models\Technician::where('user_id', $this->user()->id)->first();
+            
+            if (!$technician) {
+                // Fallback to email if user_id relationship not set yet
+                $technician = \App\Models\Technician::where('email', $this->user()->email)->first();
+            }
+            
+            if (!$technician) {
+                return false;
+            }
+            
+            $technicianId = $technician->id;
         }
 
-        // Check for existing overlapping timesheets
-        $existingTimesheets = Timesheet::where('technician_id', $technician->id)
+        // Check for existing overlapping timesheets for this technician
+        $existingTimesheets = Timesheet::where('technician_id', $technicianId)
             ->whereDate('date', $this->date)
             ->whereNotNull('start_time')
             ->whereNotNull('end_time')
@@ -77,8 +93,20 @@ class StoreTimesheetRequest extends FormRequest
             
         foreach ($existingTimesheets as $existing) {
             // Extract time part only from datetime fields for comparison
-            $existingStart = $existing->start_time ? $existing->start_time->format('H:i') : null;
-            $existingEnd = $existing->end_time ? $existing->end_time->format('H:i') : null;
+            // Handle both string and DateTime formats
+            $existingStart = $existing->start_time;
+            if ($existingStart instanceof \Carbon\Carbon || $existingStart instanceof \DateTime) {
+                $existingStart = $existingStart->format('H:i');
+            }
+            
+            $existingEnd = $existing->end_time;
+            if ($existingEnd instanceof \Carbon\Carbon || $existingEnd instanceof \DateTime) {
+                $existingEnd = $existingEnd->format('H:i');
+            }
+            
+            if (!$existingStart || !$existingEnd) {
+                continue; // Skip if times are null
+            }
             
             // Check if new timesheet overlaps with this existing one
             // Overlap occurs when: new_start < existing_end AND existing_start < new_end

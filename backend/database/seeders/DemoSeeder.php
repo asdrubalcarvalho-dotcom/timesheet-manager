@@ -23,21 +23,27 @@ class DemoSeeder extends Seeder
                 'email' => 'joao.silva@example.com',
                 'role' => 'technician',
                 'hourly_rate' => 45.00,
-                'is_active' => true
+                'is_active' => true,
+                'worker_id' => 'WRK-001',
+                'worker_name' => 'João Silva'
             ],
             [
                 'name' => 'Maria Santos',
                 'email' => 'maria.santos@example.com',
                 'role' => 'technician',
                 'hourly_rate' => 50.00,
-                'is_active' => true
+                'is_active' => true,
+                'worker_id' => 'WRK-002',
+                'worker_name' => 'Maria Santos'
             ],
             [
                 'name' => 'Carlos Manager',
                 'email' => 'carlos.manager@example.com',
                 'role' => 'manager',
                 'hourly_rate' => 80.00,
-                'is_active' => true
+                'is_active' => true,
+                'worker_id' => 'WRK-003',
+                'worker_name' => 'Carlos Manager'
             ]
         ];
 

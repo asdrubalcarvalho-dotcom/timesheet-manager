@@ -30,11 +30,21 @@ class DatabaseSeeder extends Seeder
             'password' => bcrypt('password'),
         ]);
 
-        // Run IT tasks and professional locations seeders first
-        $this->call(TaskSeeder::class);
-        $this->call(LocationSeeder::class);
-        
-        // Run demo data seeder
-        $this->call(DemoSeeder::class);
+        User::factory()->create([
+            'name' => 'System Administrator',
+            'email' => 'admin@timeperk.com',
+            'role' => 'Admin',
+            'password' => bcrypt('admin123'),
+        ]);
+
+        $this->call([
+            RolesAndPermissionsSeeder::class,
+            LocationSeeder::class,
+            DemoSeeder::class,
+            TaskSeeder::class,
+            ProjectMemberSeeder::class,
+            TechnicianUserLinkerSeeder::class,
+            AdminUserSeeder::class,
+        ]);
     }
 }

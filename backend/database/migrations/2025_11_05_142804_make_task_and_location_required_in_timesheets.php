@@ -12,6 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         // First, ensure all existing timesheets have task_id and location_id
         DB::table('timesheets')
             ->whereNull('task_id')
@@ -45,6 +49,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         // Drop foreign key constraints
         Schema::table('timesheets', function (Blueprint $table) {
             $table->dropForeign(['task_id']);

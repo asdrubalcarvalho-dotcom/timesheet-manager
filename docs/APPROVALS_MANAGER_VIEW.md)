@@ -1,0 +1,193 @@
+# 🧭 TimePerk Approvals Manager View — Functional Design
+
+**Version:** 1.0  
+**Last Update:** 2025-11-09  
+**Author:** TimePerk UX / AI Team
+
+---
+
+## 🎯 Objective
+Provide managers and administrators with a **hybrid validation interface** for reviewing, filtering, and approving timesheet entries in bulk.  
+The module merges a **multi-technician calendar** and a **smart validation grid**, enhanced by **AI Cortex** cognitive feedback.
+
+---
+
+## 🧱 1️⃣ Core Concepts
+
+### Dual Mode Interface
+- **Calendar Manager** – visual overview of workload, anomalies, and submission state.  
+- **Table Validations** – detailed grid for mass actions and data exports.
+
+Users can switch between modes via a **toggle at the top right** of the screen.
+
+[ Calendar | Table ]  ← toggle
+
+### Shared Data Layer
+Both modes use the same data endpoint:
+
+GET /api/timesheets/manager-view?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&with_ai_summary=true
+
+The API returns:
+- List of entries with validation & AI metadata.
+- Aggregated summary (counts, averages) for the dashboard header.
+
+---
+
+## 📅 2️⃣ Calendar Manager Mode
+
+### Layout
+- **Multi-resource view:** one lane per technician.  
+- **Badges:**  
+  - 🧠 AI Flagged  
+  - 🔴 > 12 hours  
+  - ⚡ Overlap  
+  - 🟣 Weekend  
+
+### Controls
+| Element | Function |
+|----------|-----------|
+| Multi-select Technician Combo | Filters visible resources. |
+| Date Range Picker | Limits calendar scope. |
+| Legend / Help Buttons | Opens color-code and badge explanations. |
+| View Switch | Week / Month / Timeline toggle. |
+
+### Behavior
+- Clicking an event opens a **snapshot modal** (task, project, location, AI score, notes).  
+- Hover shows tooltip with summary and anomaly reason.  
+- Dragging across days allows multi-selection → batch approve/reject.
+
+---
+
+## 🧾 3️⃣ Table Validations Mode
+
+### Layout
+Smart DataGrid (MUI DataGrid Pro):
+
+| Column | Type | Notes |
+|---------|------|-------|
+| **Status** | Icon + color | 🟢 Validated / ⚪ Pending / 🔴 Rejected |
+| **User** | Text | Technician name |
+| **Week** | Numeric | ISO Week Number |
+| **Date** | Date | Localized format |
+| **Start / End** | Time | HH:mm |
+| **Hours** | Decimal | Computed duration |
+| **Project / Task / Location** | Text | Join from relations |
+| **Description** | Truncated + hover tooltip |
+| **AI Score** | Bar + color chip | Tooltip with feedback summary |
+
+### Bulk Action Bar
+
+[✅ Validate] [🚫 Invalidate] [🗑 Delete] [⬇ Export]
+
+Grouping and filtering supported:
+- Drag column header → group by Technician / Project.
+- Filters: date, project, task, status, AI flag.
+
+### Expanded Row (Snapshot)
+Clicking a row expands an inline card:
+
+┌────────────────────────────────────────────┐
+│ Task: Frontend Dev • Loc: Lisbon           │
+│ AI Score 0.83 ⚠ “Unusual time pattern.”    │
+│ Notes: “Homepage layout redesign.”         │
+│ History: 2025-10-30 → 6 h OK; 10-31 → 8 h OK │
+│ [View on Calendar] [Open Details]          │
+└────────────────────────────────────────────┘
+
+---
+
+## 🧠 4️⃣ AI Cortex Integration
+
+### Per-Row Indicators
+| Range | Color | Meaning |
+|--------|--------|----------|
+| 0.00–0.40 | 🟢 | Consistent pattern |
+| 0.41–0.70 | 🟡 | Slight anomaly |
+| 0.71–1.00 | 🔴 | High anomaly (AI flagged) |
+
+Hover → tooltip with:
+
+AI Cortex: 0.83 (“Anomalous hour range for this technician”)
+Recommendation: Verify project allocation.
+
+### Summary Panel (top of view)
+Shows totals and distributions:
+
+AI Alerts 8 | >12 h 3 | Overlaps 2 | Pending 25
+Avg AI Score: 0.42 | Validated Today: 15
+
+### API Structure
+```json
+{
+  "data": [
+    {
+      "id": 351,
+      "technician": "João Silva",
+      "project": "Website Redesign",
+      "task": "Frontend Dev",
+      "date": "2025-11-03",
+      "hours": 8.0,
+      "status": "pending",
+      "ai_score": 0.83,
+      "ai_feedback": ["Unusual hour pattern"],
+      "over_12h": false,
+      "overlap": true,
+      "location": "Lisbon Zone 1",
+      "description": "Homepage layout work"
+    }
+  ],
+  "summary": {
+    "flagged_count": 4,
+    "total_pending": 27,
+    "average_ai_score": 0.38
+  }
+}
+
+
+⸻
+
+⚙️ 5️⃣ Technical Implementation Plan
+
+Step	Task	Component
+1️⃣	Create new endpoint /api/timesheets/manager-view	Backend
+2️⃣	Reuse <Calendar /> with multiResource prop	Frontend
+3️⃣	Implement <ValidationGrid /> using MUI DataGrid Pro	Frontend
+4️⃣	Add top-level toggle “Calendar / Table”	UI Shell
+5️⃣	Implement LegendPanel + AISnapshotModal	Shared UI
+6️⃣	Connect AI Cortex data (ai_score, ai_feedback)	Backend + Frontend
+7️⃣	Persist user filters (localStorage / API preferences)	UX
+8️⃣	Optimize caching (React Query / Pinia Query)	Performance
+
+
+⸻
+
+🧩 6️⃣ UX Extras
+	•	Saved Filters: remember technician/project/date range per user.
+	•	Keyboard Shortcuts:
+	•	V = Validate selected
+	•	I = Invalidate selected
+	•	E = Export
+	•	Color Legend: visible via “Legend” button.
+	•	AI Snapshot Modal: detailed explanation of flagged entries.
+	•	Bulk Validation Feedback: confirm modal summarizing results and AI flags.
+
+⸻
+
+🚀 7️⃣ Future Enhancements
+	•	AI Cortex retraining from confirmed validations.
+	•	Manager Analytics Dashboard:
+	•	% AI flags per project / user
+	•	average approval time
+	•	Conversational Assistant:
+	•	“Why was João Silva’s entry flagged by AI?”
+	•	“Show projects with highest anomaly rate.”
+
+⸻
+
+✅ Summary
+
+The Approvals Manager view combines:
+	•	a multi-technician calendar for macro oversight, and
+	•	a data-rich grid for precision and speed.
+Powered by AI Cortex, it transforms raw validations into intelligent, explainable decisions.
+

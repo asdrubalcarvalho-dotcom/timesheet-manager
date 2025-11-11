@@ -38,20 +38,24 @@ class RolesAndPermissionsSeeder extends Seeder
             
             // Management permissions
             'view-reports',
+            'view-projects',
+            'view-tasks',
+            'view-locations',
             'manage-users',
+            'manage-technicians',
             'manage-projects',
             'manage-tasks',
             'manage-locations',
         ];
 
         foreach ($permissions as $permission) {
-            Permission::create(['name' => $permission]);
+            Permission::firstOrCreate(['name' => $permission]);
         }
 
         // Create roles and assign permissions
         
         // Technician role (basic user)
-        $technicianRole = Role::create(['name' => 'Technician']);
+        $technicianRole = Role::firstOrCreate(['name' => 'Technician']);
         $technicianRole->givePermissionTo([
             'view-timesheets',
             'create-timesheets', 
@@ -62,7 +66,7 @@ class RolesAndPermissionsSeeder extends Seeder
         ]);
 
         // Manager role (can approve and manage)
-        $managerRole = Role::create(['name' => 'Manager']);
+        $managerRole = Role::firstOrCreate(['name' => 'Manager']);
         $managerRole->givePermissionTo([
             'view-timesheets',
             'create-timesheets',
@@ -75,10 +79,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit-all-expenses',
             'approve-expenses',
             'view-reports',
+            'view-projects',
+            'view-tasks',
+            'view-locations',
         ]);
 
         // Admin role (full access)
-        $adminRole = Role::create(['name' => 'Admin']);
+        $adminRole = Role::firstOrCreate(['name' => 'Admin']);
         $adminRole->givePermissionTo(Permission::all());
 
         // Assign roles to existing users based on their current 'role' field

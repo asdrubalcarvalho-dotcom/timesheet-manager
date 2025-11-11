@@ -38,9 +38,18 @@ class TaskController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'project_id' => 'required|exists:projects,id',
+            'task_type' => 'nullable|in:retrofit,inspection,commissioning,maintenance,installation,testing,documentation,training',
             'estimated_hours' => 'nullable|numeric|min:0',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'progress' => 'nullable|integer|min:0|max:100',
+            'dependencies' => 'nullable|array',
             'is_active' => 'boolean'
         ]);
+
+        if (isset($validated['dependencies'])) {
+            $validated['dependencies'] = array_values($validated['dependencies']);
+        }
 
         $task = Task::create($validated);
         $task->load('project');
@@ -74,9 +83,18 @@ class TaskController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'project_id' => 'required|exists:projects,id',
+            'task_type' => 'nullable|in:retrofit,inspection,commissioning,maintenance,installation,testing,documentation,training',
             'estimated_hours' => 'nullable|numeric|min:0',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'progress' => 'nullable|integer|min:0|max:100',
+            'dependencies' => 'nullable|array',
             'is_active' => 'boolean'
         ]);
+
+        if (isset($validated['dependencies'])) {
+            $validated['dependencies'] = array_values($validated['dependencies']);
+        }
 
         $task->update($validated);
         $task->load('project');

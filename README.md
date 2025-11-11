@@ -50,6 +50,45 @@ The system allows:
 
 ---
 
+## 🛠️ Admin Panel (New - November 2025)
+
+**TimePerk Cortex** includes a complete administration panel for managing master data:
+
+### Features
+- **Full CRUD Operations**: Create, Read, Update, Delete for all master tables
+- **MUI DataGrid Integration**: Professional tables with pagination, sorting, and filtering
+- **4 Management Modules**:
+  - **Projects**: Manage projects with status tracking (Active/Completed/On Hold)
+  - **Tasks**: Task management with optional project assignment
+  - **Locations**: Work location management
+  - **Users**: Team member and user account management (with payroll identifiers)
+- **Color-Coded Design**: Each module has its own color theme for visual clarity
+- **Mobile Responsive**: All admin pages adapt to mobile devices
+- **Role Protection**: Admin panel visible only to users with Admin role
+
+### Access Credentials
+```
+Email: admin@timeperk.com
+Password: admin123
+⚠️ Change password in production!
+```
+
+### Admin Routes
+- `/admin` - Admin Dashboard with module cards
+- `/admin-projects` - Projects CRUD manager
+- `/admin-tasks` - Tasks CRUD manager
+- `/admin-locations` - Locations CRUD manager
+- `/admin-users` - Users CRUD manager
+
+### Technical Implementation
+- **Components**: AdminLayout, AdminDashboard, ProjectsManager, TasksManager, LocationsManager, UsersManager
+- **Authorization**: `isAdmin()` check in AuthContext, menu hidden for non-admins
+- **Navigation**: Administration submenu in SideMenu (collapsible section)
+- **Seeder**: `AdminUserSeeder` creates default admin account
+- **Documentation**: See `docs/ADMIN_PANEL_IMPLEMENTATION.md` for complete guide
+
+---
+
 ## ⚙️ Technical Architecture
 
 ### Docker Services
@@ -501,7 +540,30 @@ GitHub Actions workflow at .github/workflows/build.yml:
 	•	Backend: Composer install, key generate, PHPUnit (if present)
 	•	Frontend: Node 20, npm ci, npm run build
 
-License
+---
+
+## 📚 Documentation
+
+### User Guides
+- **[Admin Panel Guide](docs/ADMIN_PANEL_GUIDE.md)** - User-facing documentation for administration features
+- **[Admin Panel Implementation](docs/ADMIN_PANEL_IMPLEMENTATION.md)** - Technical implementation guide
+
+### Developer Guides
+- **[Development Guidelines](docs/DEVELOPMENT_GUIDELINES.md)** - Coding standards and best practices
+- **[Developer Guide](README_DEV_GUIDE.md)** - Human developer guide with extension patterns
+- **[AI Developer Guide](docs/ai/README_DEV_GUIDE_AI.md)** - Concise AI agent operational guide
+
+### Architecture & Context
+- **[AI Context](docs/ai/ai_context.json)** - Machine-readable context for automated agents
+- **[Technical Specifications](docs/ai/TECHNICAL_SPECIFICATIONS.md)** - Detailed technical documentation
+
+### Change Logs
+- **[Improvements Log](IMPROVEMENTS_LOG.md)** - Portuguese changelog
+- **[Implemented Improvements](docs/IMPLEMENTED_IMPROVEMENTS.md)** - Complete feature log in English
+
+---
+
+## License
 
 MIT
 

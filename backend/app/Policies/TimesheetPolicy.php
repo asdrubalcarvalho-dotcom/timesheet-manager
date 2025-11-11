@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Timesheet;
 use App\Models\User;
+use App\Exceptions\UnauthorizedException;
 use Illuminate\Auth\Access\Response;
 
 class TimesheetPolicy
@@ -14,7 +15,7 @@ class TimesheetPolicy
     public function viewAny(User $user): bool
     {
         // Usuário precisa da permissão view-timesheets
-        return $user->can('view-timesheets');
+        return $user->hasPermissionTo('view-timesheets');
     }
 
     /**
@@ -27,24 +28,34 @@ class TimesheetPolicy
             return false;
         }
 
-        // Tecnicos só podem ver seus próprios timesheets
-        if ($user->hasRole('Technician')) {
-            return $timesheet->technician->email === $user->email;
-        }
-
-        // Managers podem ver timesheets de projetos que gerem + os seus próprios
-        if ($user->hasRole('Manager')) {
-            // Pode ver se é o manager do projeto
-            if ($timesheet->project->manager_id === $user->id) {
-                return true;
-            }
-            
-            // Pode ver se é o próprio técnico (manager que também é técnico)
-            return $timesheet->technician->email === $user->email;
-        }
-
         // Admins podem ver todos
-        return $user->hasRole('Admin');
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        // Verificar se o user é membro do projeto
+        if (!$timesheet->project->isUserMember($user)) {
+            return false;
+        }
+
+        // Se é o próprio timesheet, pode ver
+        if ($timesheet->technician && $timesheet->technician->email === $user->email) {
+            return true;
+        }
+
+        // Se é Project Manager no projeto, pode ver timesheets de members (não de outros managers)
+        if ($timesheet->project->isUserProjectManager($user)) {
+            // Verificar se o owner do timesheet é member (não manager) no projeto
+            // Verificar se technician tem user associado antes de chamar getUserProjectRole
+            if ($timesheet->technician && $timesheet->technician->user) {
+                $ownerProjectRole = $timesheet->project->getUserProjectRole($timesheet->technician->user);
+                return $ownerProjectRole === 'member';
+            }
+            // Se technician não tem user, permitir visualização por managers
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -52,90 +63,111 @@ class TimesheetPolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create-timesheets');
+        return $user->hasPermissionTo('create-timesheets');
     }
 
-    /**
+        /**
      * Determine whether the user can update the model.
+     * 
+     * Middleware já verificou permissões genéricas (edit-own-timesheets ou edit-all-timesheets).
+     * Policy verifica APENAS: ownership, status e project membership.
      */
     public function update(User $user, Timesheet $timesheet): bool
     {
-        // Verificar permissão básica
-        if (!$user->can('edit-timesheets')) {
-            return false;
-        }
-
-        // Não pode editar timesheets aprovados (a menos que seja Admin)
-        if ($timesheet->status === 'approved' && !$user->hasRole('Admin')) {
-            return false;
-        }
-
-        // Tecnicos só podem editar seus próprios timesheets
-        if ($user->hasRole('Technician')) {
-            return $timesheet->technician->email === $user->email 
-                && in_array($timesheet->status, ['draft', 'submitted']);
-        }
-
-        // Managers podem editar timesheets de projetos que gerem + os seus próprios
-        if ($user->hasRole('Manager')) {
-            // Pode editar se é o manager do projeto
-            if ($timesheet->project->manager_id === $user->id) {
-                return true;
-            }
-            
-            // Pode editar se é o próprio timesheet (se o manager também é técnico)
-            return $timesheet->technician->email === $user->email
-                && in_array($timesheet->status, ['draft', 'submitted']);
+        // Verificar status imutável PRIMEIRO
+        if (in_array($timesheet->status, ['approved', 'closed']) && !$user->hasRole('Admin')) {
+            throw new UnauthorizedException(
+                'Approved or closed timesheets cannot be edited. Only administrators can edit timesheets in this state.'
+            );
         }
 
         // Admins podem editar todos (respeitando regras de status)
-        return $user->hasRole('Admin');
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        // Ownership: Se é o próprio timesheet, pode editar (se não estiver aprovado/fechado)
+        if ($timesheet->technician && $timesheet->technician->user_id === $user->id) {
+            return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
+        }
+
+        // Project Manager: Pode editar timesheets de MEMBERS do projeto (não de outros managers)
+        if ($timesheet->project->isUserProjectManager($user)) {
+            // Verificar se o dono do timesheet é 'member' (não 'manager')
+            if ($timesheet->technician && $timesheet->technician->user) {
+                $ownerProjectRole = $timesheet->project->getUserProjectRole($timesheet->technician->user);
+                if ($ownerProjectRole === 'manager') {
+                    throw new UnauthorizedException(
+                        'Project Managers cannot edit timesheets from other Project Managers.'
+                    );
+                }
+                if ($ownerProjectRole === 'member') {
+                    return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
+                }
+            }
+        }
+
+        throw new UnauthorizedException(
+            'You do not have permission to edit this timesheet. Only the owner, Project Managers (for members), or Administrators can edit timesheets.'
+        );
     }
 
-    /**
+        /**
      * Determine whether the user can delete the model.
+     * 
+     * Middleware já verificou permissões genéricas (edit-own-timesheets ou edit-all-timesheets).
+     * Policy verifica APENAS: ownership, status e project membership.
      */
     public function delete(User $user, Timesheet $timesheet): bool
     {
-        // Verificar permissão básica
-        if (!$user->can('delete-timesheets')) {
-            return false;
+        // Verificar status imutável PRIMEIRO
+        if (in_array($timesheet->status, ['approved', 'closed']) && !$user->hasRole('Admin')) {
+            throw new UnauthorizedException(
+                'Approved or closed timesheets cannot be deleted. Only administrators can delete timesheets in this state.'
+            );
         }
 
-        // Não pode deletar timesheets aprovados (a menos que seja Admin)
-        if ($timesheet->status === 'approved' && !$user->hasRole('Admin')) {
-            return false;
+        // Admins podem apagar todos (respeitando regras de status)
+        if ($user->hasRole('Admin')) {
+            return true;
         }
 
-        // Tecnicos só podem deletar seus próprios timesheets em draft
-        if ($user->hasRole('Technician')) {
-            return $timesheet->technician->email === $user->email 
-                && $timesheet->status === 'draft';
+        // Ownership: Se é o próprio timesheet, pode apagar (se não estiver aprovado/fechado)
+        if ($timesheet->technician && $timesheet->technician->user_id === $user->id) {
+            return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
         }
 
-        // Managers podem deletar timesheets de projetos que gerem + os seus próprios
-        if ($user->hasRole('Manager')) {
-            // Pode deletar se é o manager do projeto (respeitando status)
-            if ($timesheet->project->manager_id === $user->id) {
-                return $timesheet->status !== 'approved';
+        // Project Manager: Pode apagar timesheets de MEMBERS do projeto (não de outros managers)
+        if ($timesheet->project->isUserProjectManager($user)) {
+            // Verificar se o dono do timesheet é 'member' (não 'manager')
+            if ($timesheet->technician && $timesheet->technician->user) {
+                $ownerProjectRole = $timesheet->project->getUserProjectRole($timesheet->technician->user);
+                if ($ownerProjectRole === 'manager') {
+                    throw new UnauthorizedException(
+                        'Project Managers cannot delete timesheets from other Project Managers.'
+                    );
+                }
+                if ($ownerProjectRole === 'member') {
+                    return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
+                }
             }
-            
-            // Pode deletar se é o próprio timesheet (se o manager também é técnico)
-            return $timesheet->technician->email === $user->email
-                && $timesheet->status === 'draft';
         }
 
-        // Admins podem deletar (respeitando regras)
-        return $user->hasRole('Admin');
+        throw new UnauthorizedException(
+            'You do not have permission to delete this timesheet. Only the owner, Project Managers (for members), or Administrators can delete timesheets.'
+        );
     }
 
     /**
      * Determine whether the user can approve the timesheet.
+     * 
+     * REGRA: Managers PODEM aprovar os próprios timesheets.
+     *        Managers NÃO podem aprovar timesheets de OUTROS managers do mesmo projeto.
      */
     public function approve(User $user, Timesheet $timesheet): bool
     {
         // Verificar permissão básica
-        if (!$user->can('approve-timesheets') || $timesheet->status !== 'submitted') {
+        if (!$user->hasPermissionTo('approve-timesheets') || $timesheet->status !== 'submitted') {
             return false;
         }
 
@@ -144,22 +176,41 @@ class TimesheetPolicy
             return true;
         }
 
-        // Managers podem aprovar apenas timesheets dos projetos que gerem
-        if ($user->hasRole('Manager')) {
-            return $timesheet->project->manager_id === $user->id;
+        // Verificar se o user é membro do projeto
+        if (!$timesheet->project->isUserMember($user)) {
+            return false;
         }
 
-        // Technicians nunca podem aprovar
+        // Apenas Project Managers podem aprovar timesheets
+        if ($timesheet->project->isUserProjectManager($user)) {
+            // Se for o próprio timesheet, pode aprovar
+            if ($timesheet->technician && $timesheet->technician->user_id === $user->id) {
+                return true;
+            }
+            
+            // IMPORTANTE: Managers NÃO podem aprovar timesheets de OUTROS managers
+            // Pode aprovar apenas timesheets de members ou próprios
+            if ($timesheet->technician && $timesheet->technician->user) {
+                $ownerProjectRole = $timesheet->project->getUserProjectRole($timesheet->technician->user);
+                return $ownerProjectRole === 'member';
+            }
+            // Se technician não tem user, permitir aprovação por managers
+            return true;
+        }
+
         return false;
     }
 
     /**
      * Determine whether the user can reject the timesheet.
+     * 
+     * REGRA: Managers PODEM rejeitar os próprios timesheets.
+     *        Managers NÃO podem rejeitar timesheets de OUTROS managers do mesmo projeto.
      */
     public function reject(User $user, Timesheet $timesheet): bool
     {
         // Verificar permissão básica
-        if (!$user->can('approve-timesheets') || !in_array($timesheet->status, ['submitted', 'approved'])) {
+        if (!$user->hasPermissionTo('approve-timesheets') || !in_array($timesheet->status, ['submitted', 'approved'])) {
             return false;
         }
 
@@ -168,13 +219,81 @@ class TimesheetPolicy
             return true;
         }
 
-        // Managers podem rejeitar apenas timesheets dos projetos que gerem
-        if ($user->hasRole('Manager')) {
-            return $timesheet->project->manager_id === $user->id;
+        // Verificar se o user é membro do projeto
+        if (!$timesheet->project->isUserMember($user)) {
+            return false;
         }
 
-        // Technicians nunca podem rejeitar
+        // Apenas Project Managers podem rejeitar timesheets
+        if ($timesheet->project->isUserProjectManager($user)) {
+            // Se for o próprio timesheet, pode rejeitar
+            if ($timesheet->technician && $timesheet->technician->user_id === $user->id) {
+                return true;
+            }
+            
+            // IMPORTANTE: Managers NÃO podem rejeitar timesheets de OUTROS managers
+            // Pode rejeitar apenas timesheets de members ou próprios
+            if ($timesheet->technician && $timesheet->technician->user) {
+                $ownerProjectRole = $timesheet->project->getUserProjectRole($timesheet->technician->user);
+                return $ownerProjectRole === 'member';
+            }
+            // Se technician não tem user, permitir rejeição por managers
+            return true;
+        }
+
         return false;
+    }
+
+    public function submit(User $user, Timesheet $timesheet): bool
+    {
+        if (!$timesheet->canBeSubmitted()) {
+            return false;
+        }
+
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        if ($timesheet->technician && $timesheet->technician->user_id === $user->id) {
+            return true;
+        }
+
+        return $timesheet->project->isUserProjectManager($user);
+    }
+
+    /**
+     * Determine whether the user can close the timesheet (mark as payroll processed).
+     * 
+     * Status 'closed' indica que o timesheet foi processado pelo RH/Payroll.
+     * Apenas Admin ou Project Manager pode fechar manualmente.
+     */
+    public function close(User $user, Timesheet $timesheet): bool
+    {
+        if (!$user->hasPermissionTo('approve-timesheets') || !$timesheet->canBeClosed()) {
+            return false;
+        }
+
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        return $timesheet->project->isUserProjectManager($user);
+    }
+
+    /**
+     * Reopen an approved timesheet to allow edits (supervisor action).
+     */
+    public function reopen(User $user, Timesheet $timesheet): bool
+    {
+        if (!$user->hasPermissionTo('approve-timesheets') || !$timesheet->canBeReopened()) {
+            return false;
+        }
+
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+
+        return $timesheet->project->isUserProjectManager($user);
     }
 
     /**
