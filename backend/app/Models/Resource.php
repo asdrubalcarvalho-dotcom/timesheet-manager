@@ -5,10 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+// Resource records live in tenant database; do NOT use BelongsToTenant trait
 
 class Resource extends Model
 {
+    // removed BelongsToTenant to avoid adding tenant_id where it doesn't exist
+
     protected $fillable = [
+        'tenant_id',
         'name',
         'type',
         'meta',

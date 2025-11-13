@@ -7,13 +7,15 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  IconButton
+  IconButton,
+  Fab
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Group as GroupIcon
+  Group as GroupIcon,
+  FolderOpen as FolderOpenIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -22,6 +24,7 @@ import dayjs from 'dayjs';
 import AdminLayout from './AdminLayout';
 import ProjectMembersDialog from './ProjectMembersDialog';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
+import EmptyState from '../Common/EmptyState';
 import api from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 
@@ -109,19 +112,31 @@ const ProjectsManager: React.FC = () => {
     setEditingProject(null);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault(); // Prevent default form submission
+    }
+
     try {
+      const cleanData = {
+        name: formData.name,
+        description: formData.description || null,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+        status: formData.status,
+      };
+
       if (editingProject) {
-        await api.put(`/projects/${editingProject.id}`, formData);
+        await api.put(`/projects/${editingProject.id}`, cleanData);
         showSuccess('Project updated successfully');
       } else {
-        await api.post('/projects', formData);
+        await api.post('/projects', cleanData);
         showSuccess('Project created successfully');
       }
       fetchProjects();
       handleCloseDialog();
-    } catch {
-      showError('Failed to save project');
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to save project');
     }
   };
 
@@ -245,49 +260,78 @@ const ProjectsManager: React.FC = () => {
 
   return (
     <AdminLayout title="Projects Management">
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
+      {!loading && projects.length === 0 ? (
+        <EmptyState
+          icon={FolderOpenIcon}
+          title="No projects yet"
+          subtitle="Create your first project to start organizing your team's work"
+          actionLabel="New Project"
+          onAction={() => handleOpenDialog()}
+        />
+      ) : (
+        <Box sx={{ height: 600, width: '100%' }}>
+          <DataGrid
+            rows={projects}
+            columns={columns}
+            loading={loading}
+            pageSizeOptions={[10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10 } }
+            }}
+            disableRowSelectionOnClick
+            sx={{
+              '& .MuiDataGrid-cell:focus': {
+                outline: 'none'
+              },
+              '& .MuiDataGrid-row:hover': {
+                bgcolor: 'rgba(102, 126, 234, 0.04)'
+              },
+              border: 'none',
+              '& .MuiDataGrid-columnHeaders': {
+                bgcolor: 'rgba(102, 126, 234, 0.08)',
+                borderRadius: '8px 8px 0 0'
+              }
+            }}
+          />
+        </Box>
+      )}
+
+      {/* Floating Action Button */}
+      {projects.length > 0 && (
+        <Fab
+          color="primary"
           onClick={() => handleOpenDialog()}
           sx={{
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             '&:hover': {
               background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
             }
           }}
         >
-          New Project
-        </Button>
-      </Box>
+          <AddIcon />
+        </Fab>
+      )}
 
-      <Box sx={{ height: 600, width: '100%' }}>
-        <DataGrid
-          rows={projects}
-          columns={columns}
-          loading={loading}
-          pageSizeOptions={[10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 10 } }
-          }}
-          disableRowSelectionOnClick
-          sx={{
-            '& .MuiDataGrid-cell:focus': {
-              outline: 'none'
-            },
-            '& .MuiDataGrid-row:hover': {
-              bgcolor: 'rgba(102, 126, 234, 0.04)'
-            }
-          }}
-        />
-      </Box>
-
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>
           {editingProject ? 'Edit Project' : 'New Project'}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box 
+            component="form" 
+            onSubmit={handleSave}
+            id="project-form"
+            sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}
+          >
             <TextField
               label="Name"
               fullWidth
@@ -307,13 +351,23 @@ const ProjectsManager: React.FC = () => {
               label="Start Date"
               value={formData.start_date ? dayjs(formData.start_date) : null}
               onChange={(newValue) => setFormData({ ...formData, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
-              slotProps={{ textField: { fullWidth: true } }}
+              slotProps={{ 
+                textField: { 
+                  fullWidth: true,
+                  required: true 
+                } 
+              }}
             />
             <DatePicker
               label="End Date"
               value={formData.end_date ? dayjs(formData.end_date) : null}
               onChange={(newValue) => setFormData({ ...formData, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
-              slotProps={{ textField: { fullWidth: true } }}
+              slotProps={{ 
+                textField: { 
+                  fullWidth: true,
+                  required: true 
+                } 
+              }}
             />
             <TextField
               label="Status"
@@ -333,12 +387,10 @@ const ProjectsManager: React.FC = () => {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button
-            onClick={handleSave}
+            type="submit"
+            form="project-form"
             variant="contained"
-            disabled={!formData.name}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-            }}
+            color="primary"
           >
             {editingProject ? 'Update' : 'Create'}
           </Button>

@@ -4,10 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+// SocialAccount stored in tenant DB; BelongsToTenant not required
 
 class SocialAccount extends Model
 {
+    // BelongsToTenant removed
+
     protected $fillable = [
+        'tenant_id',
         'user_id',
         'provider_name',
         'provider_id',

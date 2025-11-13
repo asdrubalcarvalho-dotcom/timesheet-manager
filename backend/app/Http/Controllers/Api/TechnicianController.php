@@ -14,26 +14,46 @@ class TechnicianController extends Controller
         /**
      * Display a listing of technicians visible to the authenticated user.
      * - Regular users: see only themselves
-     * - Project Managers: see themselves + ONLY members (not other managers) from their managed projects
-     * - Admins: see all technicians (excluding other Admin users)
+     * - Project Managers (project_role='manager'): see themselves + ONLY members (not other managers) from their managed projects
+     * - Admins (Spatie System Role): see all technicians (excluding Owner users for privacy)
+     * - Owner (Spatie System Role): see ALL users including themselves
      * 
-     * NOTE: "Project Manager" is determined by project relationships (manager_id or project_members),
+     * NOTE: "Project Manager" is determined by project relationships (manager_id or project_members.project_role),
      * NOT by Spatie role 'Manager'.
      */
     public function index(): JsonResponse
     {
         $user = Auth::user();
 
-        // Admin can see all technicians, but exclude users with Admin role
-        if ($user->hasRole('Admin')) {
-            $technicians = Technician::whereHas('user', function($q) {
-                $q->whereDoesntHave('roles', function($roleQuery) {
-                    $roleQuery->where('name', 'Admin');
+        // Owner (system role) can see ALL users including themselves
+        if ($user->hasRole('Owner')) {
+            $technicians = Technician::with(['user.roles'])
+                ->orderBy('name')
+                ->get()
+                ->map(function ($tech) {
+                    $techArray = $tech->toArray();
+                    $techArray['is_owner'] = $tech->user && $tech->user->hasRole('Owner');
+                    return $techArray;
                 });
-            })
-            ->orWhereNull('user_id') // Include technicians without user relation
-            ->orderBy('name')
-            ->get();
+            return response()->json(['data' => $technicians]);
+        }
+
+        // Admin (system role) can see all technicians, but exclude users with Owner role (for privacy)
+        if ($user->hasRole('Admin')) {
+            $technicians = Technician::with(['user.roles'])
+                ->whereHas('user', function($q) {
+                    $q->whereDoesntHave('roles', function($roleQuery) {
+                        $roleQuery->where('name', 'Owner');
+                    });
+                })
+                ->orWhereNull('user_id') // Include technicians without user relation
+                ->orderBy('name')
+                ->get()
+                ->map(function ($tech) {
+                    $techArray = $tech->toArray();
+                    $techArray['is_owner'] = false; // Admin can't see owners
+                    return $techArray;
+                });
             return response()->json(['data' => $technicians]);
         }
 
@@ -51,23 +71,39 @@ class TechnicianController extends Controller
                 ->filter()
                 ->toArray();
 
-            // Get technician records for member users + current manager
-            $technicians = Technician::where(function($q) use ($memberUserIds, $user) {
-                $q->whereIn('user_id', $memberUserIds)
-                  ->orWhere('user_id', $user->id);
-            })
-            ->orderBy('name')
-            ->get();
+            // Get technician records for member users + current manager (exclude Owners)
+            $technicians = Technician::with(['user.roles'])
+                ->where(function($q) use ($memberUserIds, $user) {
+                    $q->whereIn('user_id', $memberUserIds)
+                      ->orWhere('user_id', $user->id);
+                })
+                ->whereDoesntHave('user.roles', function($q) {
+                    $q->where('name', 'Owner');
+                })
+                ->orderBy('name')
+                ->get()
+                ->map(function ($tech) {
+                    $techArray = $tech->toArray();
+                    $techArray['is_owner'] = false;
+                    return $techArray;
+                });
             
             return response()->json(['data' => $technicians]);
         }
 
-        // Regular users see only themselves
-        $technician = Technician::where('user_id', $user->id)
+        // Regular users see only themselves (exclude if Owner)
+        $technician = Technician::with(['user.roles'])
+            ->where('user_id', $user->id)
             ->orWhere('email', $user->email)
             ->first();
 
         $technicians = $technician ? [$technician] : [];
+        $technicians = array_map(function($tech) {
+            $techArray = is_array($tech) ? $tech : $tech->toArray();
+            $techArray['is_owner'] = false;
+            return $techArray;
+        }, $technicians);
+        
         return response()->json(['data' => $technicians]);
     }
 
@@ -100,9 +136,44 @@ class TechnicianController extends Controller
 
     /**
      * Update the specified resource in storage.
+     * Owner users can only be edited by themselves and only their name.
      */
     public function update(Request $request, Technician $technician): JsonResponse
     {
+        $currentUser = Auth::user();
+        
+        // Check if technician is an Owner
+        if ($technician->user && $technician->user->hasRole('Owner')) {
+            // Only the Owner themselves can edit
+            if ($currentUser->id !== $technician->user_id) {
+                return response()->json([
+                    'message' => 'Owner users cannot be edited by other users.'
+                ], 403);
+            }
+            
+            // Owner can update: name, hourly_rate, worker_id, worker_name, password
+            $validated = $request->validate([
+                'name' => 'string|max:255',
+                'hourly_rate' => 'nullable|numeric|min:0',
+                'worker_id' => ['nullable','string','max:64', Rule::unique('technicians','worker_id')->ignore($technician->id)],
+                'worker_name' => 'nullable|string|max:255',
+                'password' => 'nullable|string|min:6',
+            ]);
+            
+            // Update technician fields
+            $technician->update(array_filter($validated, fn($key) => $key !== 'password', ARRAY_FILTER_USE_KEY));
+            
+            // Update password in User model if provided
+            if (!empty($validated['password']) && $technician->user) {
+                $technician->user->update([
+                    'password' => bcrypt($validated['password'])
+                ]);
+            }
+            
+            return response()->json($technician);
+        }
+        
+        // Normal users - full validation
         $validated = $request->validate([
             'name' => 'string|max:255',
             'email' => ['email', Rule::unique('technicians')->ignore($technician->id)],
@@ -111,17 +182,35 @@ class TechnicianController extends Controller
             'is_active' => 'boolean',
             'worker_id' => ['nullable','string','max:64', Rule::unique('technicians','worker_id')->ignore($technician->id)],
             'worker_name' => 'nullable|string|max:255',
+            'password' => 'nullable|string|min:6',
         ]);
 
-        $technician->update($validated);
+        // Update technician fields (exclude password)
+        $technician->update(array_filter($validated, fn($key) => $key !== 'password', ARRAY_FILTER_USE_KEY));
+        
+        // Update password in User model if provided
+        if (!empty($validated['password']) && $technician->user) {
+            $technician->user->update([
+                'password' => bcrypt($validated['password'])
+            ]);
+        }
+        
         return response()->json($technician);
     }
 
     /**
      * Remove the specified resource from storage.
+     * Owner users cannot be deleted.
      */
     public function destroy(Technician $technician): JsonResponse
     {
+        // Prevent deletion of Owner users
+        if ($technician->user && $technician->user->hasRole('Owner')) {
+            return response()->json([
+                'message' => 'Owner users cannot be deleted.'
+            ], 403);
+        }
+        
         $technician->delete();
         return response()->json(['message' => 'Technician deleted successfully']);
     }

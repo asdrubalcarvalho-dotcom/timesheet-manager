@@ -246,6 +246,8 @@ export const AIInsights: React.FC = () => {
                       </Box>
                     </Box>
                   }
+                  primaryTypographyProps={{ component: 'div' }}
+                  secondaryTypographyProps={{ component: 'div' }}
                 />
               </ListItem>
               {index < insights.length - 1 && <Divider />}

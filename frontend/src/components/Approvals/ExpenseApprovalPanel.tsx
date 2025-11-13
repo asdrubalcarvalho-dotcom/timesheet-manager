@@ -19,7 +19,17 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Zoom
+  Zoom,
+  Collapse,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  OutlinedInput,
+  InputAdornment,
+  ToggleButtonGroup,
+  ToggleButton,
+  Badge
 } from '@mui/material';
 import {
   CheckCircle,
@@ -40,7 +50,14 @@ import {
   AccessTime,
   AccountBalanceWallet,
   Visibility,
-  Image as ImageIcon
+  Image as ImageIcon,
+  FilterList,
+  Search,
+  Clear,
+  ExpandMore,
+  ExpandLess,
+  AttachMoney,
+  Category as CategoryIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
@@ -49,6 +66,13 @@ import type { Expense } from '../../types';
 import { useNotification } from '../../contexts/NotificationContext';
 
 dayjs.extend(isBetween);
+
+// Helper function to build attachment URL with auth token and tenant
+const getAttachmentUrl = (expenseId: number): string => {
+  const token = localStorage.getItem('auth_token');
+  const tenant = localStorage.getItem('tenant_slug');
+  return `http://localhost:8080/api/expenses/${expenseId}/attachment?token=${token}&tenant=${tenant}`;
+};
 
 interface ExpenseApprovalPanelProps {
   expenses: Expense[];
@@ -71,8 +95,16 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
   const [selectedExpenses, setSelectedExpenses] = useState<Set<number>>(new Set());
   const [dateFrom, setDateFrom] = useState<Dayjs>(dayjs().subtract(1, 'month'));
   const [dateTo, setDateTo] = useState<Dayjs>(dayjs().add(1, 'month'));
-  const [statusFilter] = useState<string[]>(['submitted', 'finance_review', 'finance_approved']);
-  const [typeFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(['submitted', 'finance_review', 'finance_approved']);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [minAmount, setMinAmount] = useState<number | ''>('');
+  const [maxAmount, setMaxAmount] = useState<number | ''>('');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'project'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -80,15 +112,87 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentReference, setPaymentReference] = useState('');
 
+  // Extrair valores únicos para filtros
+  const uniqueCategories = useMemo(() => {
+    const categories = new Set(expenses.map(e => e.category).filter(Boolean));
+    return Array.from(categories).sort();
+  }, [expenses]);
+
+  const uniqueProjects = useMemo(() => {
+    const projects = new Set(expenses.map(e => e.project?.name).filter(Boolean));
+    return Array.from(projects).sort();
+  }, [expenses]);
+
+  // Contar filtros ativos
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (statusFilter.length < 4) count++;
+    if (typeFilter.length > 0) count++;
+    if (categoryFilter.length > 0) count++;
+    if (projectFilter.length > 0) count++;
+    if (searchTerm) count++;
+    if (minAmount !== '') count++;
+    if (maxAmount !== '') count++;
+    return count;
+  }, [statusFilter, typeFilter, categoryFilter, projectFilter, searchTerm, minAmount, maxAmount]);
+
+  // Limpar todos os filtros
+  const clearAllFilters = () => {
+    setStatusFilter(['submitted', 'finance_review', 'finance_approved']);
+    setTypeFilter([]);
+    setCategoryFilter([]);
+    setProjectFilter([]);
+    setSearchTerm('');
+    setMinAmount('');
+    setMaxAmount('');
+    setDateFrom(dayjs().subtract(1, 'month'));
+    setDateTo(dayjs().add(1, 'month'));
+  };
+
   // Filtrar expenses
   const filteredExpenses = useMemo(() => {
-    return expenses.filter(exp => {
+    let result = expenses.filter(exp => {
       const dateMatch = dayjs(exp.date).isBetween(dateFrom, dateTo, 'day', '[]');
       const statusMatch = statusFilter.length === 0 || statusFilter.includes(exp.status);
       const typeMatch = typeFilter.length === 0 || typeFilter.includes(exp.expense_type);
-      return dateMatch && statusMatch && typeMatch;
+      const categoryMatch = categoryFilter.length === 0 || categoryFilter.includes(exp.category);
+      const projectMatch = projectFilter.length === 0 || projectFilter.includes(exp.project?.name || '');
+      
+      // Search term (description, category, project name)
+      const searchMatch = !searchTerm || 
+        exp.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        exp.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        exp.project?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Amount range
+      const amount = parseFloat(String(exp.amount)) || 0;
+      const minMatch = minAmount === '' || amount >= minAmount;
+      const maxMatch = maxAmount === '' || amount <= maxAmount;
+      
+      return dateMatch && statusMatch && typeMatch && categoryMatch && projectMatch && searchMatch && minMatch && maxMatch;
     });
-  }, [expenses, dateFrom, dateTo, statusFilter, typeFilter]);
+
+    // Sorting
+    result.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'date':
+          comparison = dayjs(a.date).unix() - dayjs(b.date).unix();
+          break;
+        case 'amount':
+          comparison = (parseFloat(String(a.amount)) || 0) - (parseFloat(String(b.amount)) || 0);
+          break;
+        case 'project':
+          comparison = (a.project?.name || '').localeCompare(b.project?.name || '');
+          break;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [expenses, dateFrom, dateTo, statusFilter, typeFilter, categoryFilter, projectFilter, searchTerm, minAmount, maxAmount, sortBy, sortOrder]);
 
   // Agrupar por status
   const expensesByStatus = useMemo(() => {
@@ -150,6 +254,20 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       .filter(exp => canSelectExpense(exp))
       .forEach(exp => newSet.add(exp.id));
     setSelectedExpenses(newSet);
+  };
+
+  // Deselect all in status
+  const deselectAllInStatus = (status: string) => {
+    const newSet = new Set(selectedExpenses);
+    expensesByStatus[status].forEach(exp => newSet.delete(exp.id));
+    setSelectedExpenses(newSet);
+  };
+
+  // Check if all selectable expenses in status are selected
+  const areAllSelectedInStatus = (status: string): boolean => {
+    const selectableInStatus = expensesByStatus[status]?.filter(exp => canSelectExpense(exp)) || [];
+    if (selectableInStatus.length === 0) return false;
+    return selectableInStatus.every(exp => selectedExpenses.has(exp.id));
   };
 
   // Clear selection
@@ -391,7 +509,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   >
                     <Box
                       component="img"
-                      src={`http://localhost:8080/storage/${expense.attachment_path}`}
+                      src={getAttachmentUrl(expense.id)}
                       alt="Receipt"
                       sx={{
                         width: '100%',
@@ -399,15 +517,10 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                         objectFit: 'cover',
                         display: 'block'
                       }}
-                      onError={(e) => {
-                        // Fallback for non-image files
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        (e.target as HTMLImageElement).parentElement!.innerHTML = `
-                          <div style="display: flex; align-items: center; justify-content: center; height: 80px; background: rgba(0,0,0,0.05)">
-                            <span style="font-size: 0.75rem; color: #666">📄 Attachment available</span>
-                          </div>
-                        `;
-                      }}
+                    onError={(e) => {
+                      // Hide if image fails to load
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
                     />
                     <Box
                       className="overlay"
@@ -453,7 +566,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               />
 
               <Stack direction="row" spacing={0.5}>
-                {expense.attachment_path && expense.expense_type !== 'mileage' && (
+                {expense.attachment_path && (
                   <Tooltip title="View Receipt">
                     <IconButton 
                       size="small" 
@@ -465,16 +578,6 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                       sx={{ p: 0.5 }}
                     >
                       <Visibility fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                )}
-                {expense.attachment_path && (
-                  <Tooltip title="Download Receipt">
-                    <IconButton size="small" onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(`http://localhost:8080/storage/${expense.attachment_path}`, '_blank');
-                    }} sx={{ p: 0.5 }}>
-                      <FileDownload fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 )}
@@ -538,10 +641,14 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 size="small"
                 variant="outlined"
                 fullWidth
-                onClick={() => selectAllInStatus(status)}
+                onClick={() => areAllSelectedInStatus(status) ? deselectAllInStatus(status) : selectAllInStatus(status)}
                 sx={{ mt: 1, borderColor: color, color, py: 0.5 }}
+                startIcon={areAllSelectedInStatus(status) ? <Clear /> : <CheckCircle />}
               >
-                Select All ({selectableExpenses.length})
+                {areAllSelectedInStatus(status) 
+                  ? `Deselect All (${selectableExpenses.length})` 
+                  : `Select All (${selectableExpenses.length})`
+                }
               </Button>
             )}
           </CardContent>
@@ -556,9 +663,16 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ 
+      height: '100vh', 
+      display: 'flex', 
+      flexDirection: 'column',
+      overflow: 'hidden',
+      p: 2,
+      pt: 1
+    }}>
       {/* Top Stats Bar */}
-      <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+      <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', flexShrink: 0 }}>
         <CardContent sx={{ py: 1.5 }}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={3}>
@@ -644,27 +758,245 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
         </CardContent>
       </Card>
 
-      {/* Filters */}
+      {/* Advanced Filters */}
       <Card sx={{ mb: 2 }}>
         <CardContent sx={{ py: 2 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={3}>
-              <DatePicker
-                label="From Date"
-                value={dateFrom}
-                onChange={(val) => val && setDateFrom(val)}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
+          {/* Filter Header */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: filtersExpanded ? 2 : 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Badge badgeContent={activeFiltersCount} color="primary">
+                <FilterList />
+              </Badge>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Filters
+              </Typography>
+              {activeFiltersCount > 0 && (
+                <Chip 
+                  label={`${filteredExpenses.length} results`} 
+                  size="small" 
+                  color="primary" 
+                  variant="outlined"
+                />
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {activeFiltersCount > 0 && (
+                <Button
+                  size="small"
+                  startIcon={<Clear />}
+                  onClick={clearAllFilters}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Clear All
+                </Button>
+              )}
+              <IconButton size="small" onClick={() => setFiltersExpanded(!filtersExpanded)}>
+                {filtersExpanded ? <ExpandLess /> : <ExpandMore />}
+              </IconButton>
+            </Box>
+          </Box>
+
+          <Collapse in={filtersExpanded}>
+            <Grid container spacing={2}>
+              {/* Search */}
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Search description, category, project..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchTerm && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setSearchTerm('')}>
+                          <Clear fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    )
+                  }}
+                />
+              </Grid>
+
+              {/* Sort */}
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Sort By</InputLabel>
+                  <Select
+                    value={sortBy}
+                    label="Sort By"
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                  >
+                    <MenuItem value="date">Date</MenuItem>
+                    <MenuItem value="amount">Amount</MenuItem>
+                    <MenuItem value="project">Project</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Sort Order */}
+              <Grid item xs={12} md={3}>
+                <ToggleButtonGroup
+                  value={sortOrder}
+                  exclusive
+                  onChange={(_, val) => val && setSortOrder(val)}
+                  size="small"
+                  fullWidth
+                >
+                  <ToggleButton value="asc">Ascending</ToggleButton>
+                  <ToggleButton value="desc">Descending</ToggleButton>
+                </ToggleButtonGroup>
+              </Grid>
+
+              {/* Date Range */}
+              <Grid item xs={12} md={3}>
+                <DatePicker
+                  label="From Date"
+                  value={dateFrom}
+                  onChange={(val) => val && setDateFrom(val)}
+                  slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <DatePicker
+                  label="To Date"
+                  value={dateTo}
+                  onChange={(val) => val && setDateTo(val)}
+                  slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                />
+              </Grid>
+
+              {/* Amount Range */}
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Min Amount"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(e.target.value ? parseFloat(e.target.value) : '')}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">€</InputAdornment>
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Max Amount"
+                  value={maxAmount}
+                  onChange={(e) => setMaxAmount(e.target.value ? parseFloat(e.target.value) : '')}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">€</InputAdornment>
+                  }}
+                />
+              </Grid>
+
+              {/* Status Filter */}
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    multiple
+                    value={statusFilter}
+                    label="Status"
+                    onChange={(e) => setStatusFilter(e.target.value as string[])}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((value) => (
+                          <Chip key={value} label={value.replace('_', ' ')} size="small" />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    <MenuItem value="submitted">Submitted</MenuItem>
+                    <MenuItem value="finance_review">Finance Review</MenuItem>
+                    <MenuItem value="finance_approved">Finance Approved</MenuItem>
+                    <MenuItem value="paid">Paid</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Expense Type Filter */}
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    multiple
+                    value={typeFilter}
+                    label="Type"
+                    onChange={(e) => setTypeFilter(e.target.value as string[])}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((value) => (
+                          <Chip key={value} label={value.replace('_', ' ')} size="small" />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    <MenuItem value="reimbursement">Reimbursement</MenuItem>
+                    <MenuItem value="mileage">Mileage</MenuItem>
+                    <MenuItem value="company_card">Company Card</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Category Filter */}
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Category</InputLabel>
+                  <Select
+                    multiple
+                    value={categoryFilter}
+                    label="Category"
+                    onChange={(e) => setCategoryFilter(e.target.value as string[])}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((value) => (
+                          <Chip key={value} label={value} size="small" />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    {uniqueCategories.map((cat) => (
+                      <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {/* Project Filter */}
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Project</InputLabel>
+                  <Select
+                    multiple
+                    value={projectFilter}
+                    label="Project"
+                    onChange={(e) => setProjectFilter(e.target.value as string[])}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((value) => (
+                          <Chip key={value} label={value} size="small" />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    {uniqueProjects.map((proj) => (
+                      <MenuItem key={proj} value={proj}>{proj}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <DatePicker
-                label="To Date"
-                value={dateTo}
-                onChange={(val) => val && setDateTo(val)}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
-            </Grid>
-          </Grid>
+          </Collapse>
         </CardContent>
       </Card>
 
@@ -682,7 +1014,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       </Box>
 
       {/* Reject Dialog */}
-      <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={rejectDialogOpen} 
+        onClose={() => setRejectDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>Reject Expenses</DialogTitle>
         <DialogContent>
           <TextField
@@ -705,7 +1043,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       </Dialog>
 
       {/* Payment Dialog */}
-      <Dialog open={paymentDialogOpen} onClose={() => setPaymentDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={paymentDialogOpen} 
+        onClose={() => setPaymentDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>Mark as Paid</DialogTitle>
         <DialogContent>
           <TextField
@@ -752,37 +1096,52 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
         <DialogContent>
           {selectedExpense?.attachment_path && (
             <Box sx={{ textAlign: 'center', py: 2 }}>
-              <Box
-                component="img"
-                src={`http://localhost:8080/storage/${selectedExpense.attachment_path}`}
-                alt="Receipt"
-                sx={{
-                  maxWidth: '100%',
-                  maxHeight: '70vh',
-                  borderRadius: 1,
-                  boxShadow: 3
-                }}
-                onError={(e) => {
-                  // Fallback for non-image files
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  const parent = (e.target as HTMLImageElement).parentElement;
-                  if (parent) {
-                    parent.innerHTML = `
-                      <div style="padding: 60px; text-align: center; background: #f5f5f5; border-radius: 8px;">
-                        <div style="font-size: 64px; margin-bottom: 16px;">📄</div>
-                        <div style="font-size: 16px; color: #666; margin-bottom: 16px;">
-                          Preview not available for this file type
-                        </div>
-                        <a href="http://localhost:8080/storage/${selectedExpense.attachment_path}" 
-                           target="_blank" 
-                           style="color: #1976d2; text-decoration: none; font-weight: 600;">
-                          Click here to download
-                        </a>
-                      </div>
-                    `;
-                  }
-                }}
-              />
+              {selectedExpense.attachment_path.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                <Box
+                  component="img"
+                  src={getAttachmentUrl(selectedExpense.id)}
+                  alt="Receipt"
+                  sx={{
+                    maxWidth: '100%',
+                    maxHeight: '70vh',
+                    objectFit: 'contain',
+                    borderRadius: 1,
+                    boxShadow: 3
+                  }}
+                />
+              ) : selectedExpense.attachment_path.endsWith('.pdf') ? (
+                <iframe
+                  src={getAttachmentUrl(selectedExpense.id)}
+                  title="PDF Receipt"
+                  allow="fullscreen"
+                  style={{ 
+                    width: '100%', 
+                    height: '70vh', 
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                  }}
+                />
+              ) : (
+                <Box sx={{ 
+                  p: 8, 
+                  bgcolor: 'background.default', 
+                  borderRadius: 2
+                }}>
+                  <Typography variant="h1" sx={{ fontSize: 64, mb: 2 }}>📄</Typography>
+                  <Typography variant="body1" color="text.secondary" mb={2}>
+                    Preview not available for this file type
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    startIcon={<FileDownload />}
+                    href={getAttachmentUrl(selectedExpense.id)}
+                    target="_blank"
+                  >
+                    Download File
+                  </Button>
+                </Box>
+              )}
               {selectedExpense.description && (
                 <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
                   <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
@@ -804,7 +1163,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
         <DialogActions>
           <Button 
             startIcon={<FileDownload />}
-            onClick={() => selectedExpense?.attachment_path && window.open(`http://localhost:8080/storage/${selectedExpense.attachment_path}`, '_blank')}
+            onClick={() => selectedExpense?.id && window.open(getAttachmentUrl(selectedExpense.id), '_blank')}
           >
             Download
           </Button>

@@ -11,17 +11,38 @@ import {
   Grid,
   TextField,
   Autocomplete,
-  Paper
+  Paper,
+  Collapse,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  InputAdornment,
+  ToggleButtonGroup,
+  ToggleButton,
+  Badge,
+  IconButton
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { Check, Close, Person as PersonIcon } from '@mui/icons-material';
+import { 
+  Check, 
+  Close, 
+  Person as PersonIcon,
+  FilterList,
+  Search,
+  Clear,
+  ExpandMore,
+  ExpandLess,
+  AccessTime
+} from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid';
 import dayjs, { Dayjs } from 'dayjs';
 import type { TimesheetManagerRow, TimesheetManagerSummary, Technician, Expense, Project, Task, Location, Timesheet } from '../../types';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
-import { timesheetsApi, projectsApi, tasksApi, locationsApi } from '../../services/api';
+import { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth } from '../../services/api';
+import { useTenantGuard } from '../../hooks/useTenantGuard';
 import TimesheetEditDialog from '../Timesheets/TimesheetEditDialog';
 import PageHeader from '../Common/PageHeader';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
@@ -36,6 +57,7 @@ const formatDate = (value: Dayjs) => value.format('YYYY-MM-DD');
 const ApprovalManager: React.FC = () => {
   const { isManager, isAdmin, user } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para counts
+  useTenantGuard(); // Ensure tenant_slug exists
   const canManageTimesheets = isManager() || isAdmin();
   const { showSuccess, showError } = useNotification();
 
@@ -46,7 +68,12 @@ const ApprovalManager: React.FC = () => {
   const [dateFrom, setDateFrom] = useState<Dayjs>(dayjs().subtract(1, 'month')); // Last month
   const [dateTo, setDateTo] = useState<Dayjs>(dayjs().add(1, 'month')); // Next month
   const [technicianFilter, setTechnicianFilter] = useState<number[]>([]);
-  const [projectRoleFilter, setProjectRoleFilter] = useState<string[]>([]); // Array for multi-select
+  const [searchTerm, setSearchTerm] = useState('');
+  const [minHours, setMinHours] = useState<number | ''>('');
+  const [maxHours, setMaxHours] = useState<number | ''>('');
+  const [sortBy, setSortBy] = useState<'date' | 'hours' | 'project' | 'technician'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
   const [allTechnicians, setAllTechnicians] = useState<Technician[]>([]); // Store all available technicians
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>([]);
   const [selectedRow, setSelectedRow] = useState<TimesheetManagerRow | null>(null);
@@ -96,6 +123,26 @@ const ApprovalManager: React.FC = () => {
     
     return Array.from(map.values());
   }, [managerRows, allTechnicians]);
+
+  // Contar filtros ativos
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (technicianFilter.length > 0) count++;
+    if (searchTerm) count++;
+    if (minHours !== '') count++;
+    if (maxHours !== '') count++;
+    return count;
+  }, [technicianFilter, searchTerm, minHours, maxHours]);
+
+  // Limpar todos os filtros
+  const clearAllFilters = () => {
+    setTechnicianFilter([]);
+    setSearchTerm('');
+    setMinHours('');
+    setMaxHours('');
+    setDateFrom(dayjs().subtract(1, 'month'));
+    setDateTo(dayjs().add(1, 'month'));
+  };
 
   // Load projects, tasks, and locations for edit mode
   useEffect(() => {
@@ -175,26 +222,26 @@ const ApprovalManager: React.FC = () => {
   const loadExpensePending = useCallback(async () => {
     setExpenseLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/expenses/pending', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      });
+      const response = await fetchWithAuth('http://localhost:8080/api/expenses/pending');
 
       if (response.ok) {
         const data = await response.json();
-        setExpenses(data);
+        setExpenses(Array.isArray(data) ? data : []);
       } else {
-        console.error('Failed to load pending expenses.');
+        console.error('Failed to load pending expenses - Status:', response.status);
+        setExpenses([]); // Set empty array on error
+        if (response.status !== 404) {
+          showError(`Failed to load pending expenses: ${response.statusText}`);
+        }
       }
     } catch (error) {
       console.error('Failed to load pending expenses:', error);
+      setExpenses([]); // Set empty array on error
+      showError('Failed to load pending expenses. Please try again.');
     } finally {
       setExpenseLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     if (tabValue === 'expenses') {
@@ -355,15 +402,10 @@ const ApprovalManager: React.FC = () => {
   const handleExpenseApprove = async (expenseIds: number[]) => {
     try {
       for (const id of expenseIds) {
-        const response = await fetch(`http://localhost:8080/api/expenses/${id}/approve`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
+        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}/approve`, {
+          method: 'PUT'
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to approve expense ${id}`);
         }
@@ -380,16 +422,12 @@ const ApprovalManager: React.FC = () => {
   const handleExpenseReject = async (expenseIds: number[], reason: string) => {
     try {
       for (const id of expenseIds) {
-        const response = await fetch(`http://localhost:8080/api/expenses/${id}/reject`, {
+        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}/reject`, {
           method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rejection_reason: reason })
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to reject expense ${id}`);
         }
@@ -406,16 +444,12 @@ const ApprovalManager: React.FC = () => {
   const handleExpenseMarkPaid = async (expenseIds: number[], paymentRef: string) => {
     try {
       for (const id of expenseIds) {
-        const response = await fetch(`http://localhost:8080/api/expenses/${id}/mark-paid`, {
+        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}/mark-paid`, {
           method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ payment_reference: paymentRef })
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to mark expense ${id} as paid`);
         }
@@ -640,8 +674,12 @@ const ApprovalManager: React.FC = () => {
   const renderTimesheetControls = () => (
     <Card sx={{ mb: 1.5 }}>
       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-        <Grid container spacing={1.5} alignItems="center">
-          <Grid item xs={12} md={3}>
+        {/* Filter Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: filtersExpanded ? 1.5 : 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Badge badgeContent={activeFiltersCount} color="primary">
+              <FilterList />
+            </Badge>
             <Box>
               <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
                 AI Alerts: {managerSummary?.flagged_count ?? 0}
@@ -650,143 +688,291 @@ const ApprovalManager: React.FC = () => {
                 Over 12h: {managerSummary?.over_cap_count ?? 0} · Overlaps: {managerSummary?.overlap_count ?? 0}
               </Typography>
             </Box>
-          </Grid>
-          <Grid item xs={12} md={9} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+            {activeFiltersCount > 0 && (
+              <Chip 
+                label={`${filteredRows.length} results`} 
+                size="small" 
+                color="primary" 
+                variant="outlined"
+              />
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
             <Button 
               variant="outlined" 
               onClick={fetchManagerData} 
               disabled={managerLoading}
               size="small"
-              sx={{ minWidth: 'auto', px: 2 }}
+              sx={{ textTransform: 'none' }}
             >
               Refresh
             </Button>
+            {activeFiltersCount > 0 && (
+              <Button
+                size="small"
+                startIcon={<Clear />}
+                onClick={clearAllFilters}
+                sx={{ textTransform: 'none' }}
+              >
+                Clear All
+              </Button>
+            )}
+            <IconButton size="small" onClick={() => setFiltersExpanded(!filtersExpanded)}>
+              {filtersExpanded ? <ExpandLess /> : <ExpandMore />}
+            </IconButton>
+          </Box>
+        </Box>
+
+        <Collapse in={filtersExpanded}>
+          <Grid container spacing={1.5}>
+            {/* Search */}
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Search technician, project, task, description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearchTerm('')}>
+                        <Clear fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
+            </Grid>
+
+            {/* Sort */}
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Sort By</InputLabel>
+                <Select
+                  value={sortBy}
+                  label="Sort By"
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                >
+                  <MenuItem value="date">Date</MenuItem>
+                  <MenuItem value="hours">Hours</MenuItem>
+                  <MenuItem value="project">Project</MenuItem>
+                  <MenuItem value="technician">Technician</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Sort Order */}
+            <Grid item xs={12} md={3}>
+              <ToggleButtonGroup
+                value={sortOrder}
+                exclusive
+                onChange={(_, val) => val && setSortOrder(val)}
+                size="small"
+                fullWidth
+              >
+                <ToggleButton value="asc">Ascending</ToggleButton>
+                <ToggleButton value="desc">Descending</ToggleButton>
+              </ToggleButtonGroup>
+            </Grid>
+
+            {/* Date Range */}
+            <Grid item xs={12} sm={6} md={3}>
+              <DatePicker
+                label="From Date"
+                value={dateFrom}
+                onChange={(newValue) => newValue && setDateFrom(newValue)}
+                format="DD/MM/YYYY"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    size: 'small'
+                  }
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <DatePicker
+                label="To Date"
+                value={dateTo}
+                onChange={(newValue) => newValue && setDateTo(newValue)}
+                format="DD/MM/YYYY"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    size: 'small'
+                  }
+                }}
+              />
+            </Grid>
+
+            {/* Hours Range */}
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Min Hours"
+                value={minHours}
+                onChange={(e) => setMinHours(e.target.value ? parseFloat(e.target.value) : '')}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><AccessTime fontSize="small" /></InputAdornment>
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Max Hours"
+                value={maxHours}
+                onChange={(e) => setMaxHours(e.target.value ? parseFloat(e.target.value) : '')}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><AccessTime fontSize="small" /></InputAdornment>
+                }}
+              />
+            </Grid>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <DatePicker
-              label="From Date"
-              value={dateFrom}
-              onChange={(newValue) => newValue && setDateFrom(newValue)}
-              format="DD/MM/YYYY"
-              slotProps={{
-                textField: {
-                  fullWidth: true,
-                  size: 'small'
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <DatePicker
-              label="To Date"
-              value={dateTo}
-              onChange={(newValue) => newValue && setDateTo(newValue)}
-              format="DD/MM/YYYY"
-              slotProps={{
-                textField: {
-                  fullWidth: true,
-                  size: 'small'
-                }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Autocomplete
-              multiple
-              options={technicianOptions}
-              getOptionLabel={(option) => option.name}
-              value={technicianOptions.filter((option) => technicianFilter.includes(option.id))}
-              onChange={(_, value) => setTechnicianFilter(value.map((opt) => opt.id))}
-              size="small"
-              renderInput={(params) => <TextField {...params} label="Technicians" placeholder="Filter" size="small" />}
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Autocomplete
-              multiple
-              options={['member', 'manager', 'none']}
-              getOptionLabel={(option) => option.charAt(0).toUpperCase() + option.slice(1)}
-              value={projectRoleFilter}
-              onChange={(_, value) => setProjectRoleFilter(value)}
-              size="small"
-              renderInput={(params) => <TextField {...params} label="Project Roles" placeholder="Filter" size="small" />}
-            />
-          </Grid>
-        </Grid>
+        </Collapse>
       </CardContent>
     </Card>
   );
 
-  // Filter rows by project role
+  // Filter rows by all criteria
   const filteredRows = useMemo(() => {
-    if (projectRoleFilter.length === 0) return managerRows;
-    return managerRows.filter(row => 
-      row.technician_project_role && projectRoleFilter.includes(row.technician_project_role)
-    );
-  }, [managerRows, projectRoleFilter]);
+    let result = managerRows.filter(row => {
+      // Search term (technician, project, task, description)
+      const searchMatch = !searchTerm || 
+        row.technician?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        row.project_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        row.task_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        row.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Hours range
+      const hours = parseFloat(String(row.total_hours)) || 0;
+      const minMatch = minHours === '' || hours >= minHours;
+      const maxMatch = maxHours === '' || hours <= maxHours;
+      
+      return searchMatch && minMatch && maxMatch;
+    });
 
-  const renderTimesheetTable = () => (
-    <Paper elevation={0} sx={{ p: 1.5 }}>
-      <Box sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Button
-          variant="contained"
-          color="success"
-          size="small"
-          startIcon={<Check />}
-          disabled={!selectionModel.length}
-          onClick={() => handleBulkAction('approve')}
-          sx={{ px: 2, fontSize: '0.875rem' }}
-        >
-          Approve {selectionModel.length > 0 && `(${selectionModel.length})`}
-        </Button>
-        <Button
-          variant="contained"
-          color="error"
-          size="small"
-          startIcon={<Close />}
-          disabled={!selectionModel.length}
-          onClick={() => handleBulkAction('reject')}
-          sx={{ px: 2, fontSize: '0.875rem' }}
-        >
-          Reject {selectionModel.length > 0 && `(${selectionModel.length})`}
-        </Button>
-        {selectionModel.length > 0 && (
-          <Typography variant="caption" color="text.secondary">
-            {selectionModel.length} {selectionModel.length === 1 ? 'entry' : 'entries'} selected
+    // Sorting
+    result.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'date':
+          comparison = dayjs(a.date).unix() - dayjs(b.date).unix();
+          break;
+        case 'hours':
+          comparison = (parseFloat(String(a.total_hours)) || 0) - (parseFloat(String(b.total_hours)) || 0);
+          break;
+        case 'project':
+          comparison = (a.project_name || '').localeCompare(b.project_name || '');
+          break;
+        case 'technician':
+          comparison = (a.technician?.name || '').localeCompare(b.technician?.name || '');
+          break;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [managerRows, searchTerm, minHours, maxHours, sortBy, sortOrder]);
+
+  const renderTimesheetTable = () => {
+    if (managerLoading) {
+      return (
+        <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
+          <Typography color="text.secondary">Loading timesheets...</Typography>
+        </Paper>
+      );
+    }
+
+    if (filteredRows.length === 0) {
+      return (
+        <Paper elevation={0} sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}>
+          <Check sx={{ fontSize: 64, color: 'success.light', mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No pending approvals
           </Typography>
-        )}
-      </Box>
-      <DataGrid
-        autoHeight
-        rows={filteredRows}
-        columns={columns}
-        checkboxSelection
-        disableRowSelectionOnClick
-        loading={managerLoading}
-        density="compact"
-        sx={{
-          '& .MuiDataGrid-row': {
-            minHeight: '36px !important',
-            maxHeight: '36px !important',
-          },
-          '& .MuiDataGrid-cell': {
-            py: 0.5,
-            fontSize: '0.875rem',
-            alignItems: 'center',
-          },
-          '& .MuiDataGrid-columnHeaders': {
-            minHeight: '40px !important',
-            fontSize: '0.875rem',
-          },
-        }}
-        onRowClick={handleRowClick}
-        onRowSelectionModelChange={(model) => setSelectionModel(model)}
-        rowSelectionModel={selectionModel}
-        filterMode="client"
-        disableColumnFilter={false}
-      />
-    </Paper>
-  );
+          <Typography variant="body2" color="text.secondary">
+            All timesheets have been reviewed or no submitted entries found
+          </Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <Paper elevation={0} sx={{ p: 1.5 }}>
+        <Box sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            color="success"
+            size="small"
+            startIcon={<Check />}
+            disabled={!selectionModel.length}
+            onClick={() => handleBulkAction('approve')}
+            sx={{ px: 2, fontSize: '0.875rem' }}
+          >
+            Approve {selectionModel.length > 0 && `(${selectionModel.length})`}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            size="small"
+            startIcon={<Close />}
+            disabled={!selectionModel.length}
+            onClick={() => handleBulkAction('reject')}
+            sx={{ px: 2, fontSize: '0.875rem' }}
+          >
+            Reject {selectionModel.length > 0 && `(${selectionModel.length})`}
+          </Button>
+          {selectionModel.length > 0 && (
+            <Typography variant="caption" color="text.secondary">
+              {selectionModel.length} {selectionModel.length === 1 ? 'entry' : 'entries'} selected
+            </Typography>
+          )}
+        </Box>
+        <DataGrid
+          autoHeight
+          rows={filteredRows}
+          columns={columns}
+          checkboxSelection
+          disableRowSelectionOnClick
+          loading={managerLoading}
+          density="compact"
+          sx={{
+            '& .MuiDataGrid-row': {
+              minHeight: '36px !important',
+              maxHeight: '36px !important',
+            },
+            '& .MuiDataGrid-cell': {
+              py: 0.5,
+              fontSize: '0.875rem',
+              alignItems: 'center',
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              minHeight: '40px !important',
+              fontSize: '0.875rem',
+            },
+          }}
+          onRowClick={handleRowClick}
+          onRowSelectionModelChange={(model) => setSelectionModel(model)}
+          rowSelectionModel={selectionModel}
+          filterMode="client"
+          disableColumnFilter={false}
+        />
+      </Paper>
+    );
+  };
 
   return (
     <Box sx={{ 
@@ -802,8 +988,6 @@ const ApprovalManager: React.FC = () => {
         title="Approvals"
         badges={
           <>
-            {isAdmin() && <Chip size="small" label="Admin" color="error" sx={{ ml: 0.5, height: 20 }} />}
-            {isManager() && <Chip size="small" label="Manager" color="warning" sx={{ ml: 0.5, height: 20 }} />}
             {counts.total > 0 && (
               <Chip 
                 size="small" 

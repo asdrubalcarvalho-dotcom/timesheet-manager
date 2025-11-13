@@ -1,17 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { fetchWithAuth } from '../../services/api';
 
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'Technician' | 'Manager' | 'Admin';
+  role: 'Technician' | 'Manager' | 'Admin' | 'Owner';
   roles: string[];
   permissions: string[];
+  is_owner: boolean;
   is_manager: boolean;
   is_technician: boolean;
   is_admin: boolean;
   managed_projects: number[];
+  tenant_id?: string; // ULID of tenant
   project_memberships?: Array<{
     project_id: number;
     project_role: 'member' | 'manager';
@@ -20,12 +23,23 @@ interface User {
   }>;
 }
 
+interface Tenant {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+  plan?: string;
+}
+
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  tenant: Tenant | null;
+  tenantSlug: string | null;
+  login: (email: string, password: string, tenantSlug: string) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
   // Utility functions for role checking
+  isOwner: () => boolean;
   isManager: () => boolean;
   isTechnician: () => boolean;
   isAdmin: () => boolean;
@@ -50,6 +64,8 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantSlug, setTenantSlugState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const normalizeUser = useCallback((userData: any): User => {
@@ -65,11 +81,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       role: (userData?.role ?? 'Technician') as User['role'],
       roles,
       permissions,
+      is_owner: Boolean(userData?.is_owner ?? roles.includes('Owner')),
       is_manager: Boolean(userData?.is_manager ?? roles.includes('Manager')),
       is_technician: Boolean(userData?.is_technician ?? roles.includes('Technician')),
-      is_admin: Boolean(userData?.is_admin ?? roles.includes('Admin')),
+      is_admin: Boolean(userData?.is_admin ?? roles.includes('Admin') ?? roles.includes('Owner')),
       managed_projects: managedProjectsRaw.map((projectId: any) => Number(projectId)).filter((id: number) => !Number.isNaN(id)),
       project_memberships: projectMemberships,
+      tenant_id: userData?.tenant_id,
     };
   }, []);
 
@@ -78,24 +96,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const checkAuth = async () => {
       try {
         const token = localStorage.getItem('auth_token');
-        if (token) {
-          const response = await fetch('http://localhost:8080/api/user', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'application/json'
-            }
-          });
+        const storedTenantSlug = localStorage.getItem('tenant_slug');
+        
+        if (token && storedTenantSlug) {
+          setTenantSlugState(storedTenantSlug);
+          
+          const response = await fetchWithAuth('http://localhost:8080/api/user');
           
           if (response.ok) {
             const userData = await response.json();
             setUser(normalizeUser(userData));
           } else {
             localStorage.removeItem('auth_token');
+            localStorage.removeItem('tenant_slug');
           }
         }
       } catch (error) {
         console.error('Auth check failed:', error);
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('tenant_slug');
       } finally {
         setLoading(false);
       }
@@ -104,26 +123,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth();
   }, [normalizeUser]);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string, tenantSlug: string): Promise<boolean> => {
     try {
-      console.log('Attempting login with:', { email, password: '***' });
-      
       const response = await fetch('http://localhost:8080/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ 
+          email, 
+          password,
+          tenant_slug: tenantSlug  // Send tenant slug in body (snake_case for Laravel)
+        })
       });
-
-      console.log('Login response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Login success:', data);
+        
+        // Store auth token and tenant slug
         localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('tenant_slug', tenantSlug);
+        
         setUser(normalizeUser(data.user));
+        setTenantSlugState(tenantSlug);
+        
+        // Set tenant info if available in response
+        if (data.tenant) {
+          setTenant(data.tenant);
+        }
+        
         return true;
       } else {
         const errorData = await response.json();
@@ -138,13 +167,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('tenant_slug');
     setUser(null);
+    setTenant(null);
+    setTenantSlugState(null);
   };
 
   // Role checking utility functions
+  const isOwner = (): boolean => user?.roles?.includes('Owner') || false;
   const isManager = (): boolean => user?.is_manager || user?.roles?.includes('Manager') || false;
   const isTechnician = (): boolean => user?.is_technician || user?.roles?.includes('Technician') || false;
-  const isAdmin = (): boolean => user?.is_admin || user?.roles?.includes('Admin') || false;
+  const isAdmin = (): boolean => user?.is_admin || user?.roles?.includes('Admin') || user?.roles?.includes('Owner') || false;
   
   const canValidateTimesheets = (): boolean => {
     return user?.permissions?.includes('approve-timesheets') || false;
@@ -160,10 +193,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ 
-      user, 
+      user,
+      tenant,
+      tenantSlug,
       login, 
       logout, 
       loading,
+      isOwner,
       isManager,
       isTechnician,
       isAdmin,

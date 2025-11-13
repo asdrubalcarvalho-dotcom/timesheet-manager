@@ -219,7 +219,18 @@ class TimesheetController extends Controller
         }
 
         try {
+            \Log::info('💾 Creating timesheet', [
+                'technician_id' => $validated['technician_id'],
+                'date' => $validated['date'],
+                'start_time' => $validated['start_time'],
+                'end_time' => $validated['end_time'],
+                'project_id' => $validated['project_id']
+            ]);
+            
             $timesheet = Timesheet::create($validated);
+            
+            \Log::info('✅ Timesheet created', ['id' => $timesheet->id]);
+            
             $timesheet->load(['technician', 'project', 'task', 'location']);
 
             $validation = $this->validationService->summarize($timesheet, $request->user());
@@ -237,6 +248,11 @@ class TimesheetController extends Controller
                 ]
             ], 201);
         } catch (\Exception $e) {
+            \Log::error('❌ Failed to create timesheet', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             // Check if it's a time overlap error from validation or database
             if (strpos($e->getMessage(), 'Time overlap') !== false || 
                 strpos($e->getMessage(), 'UNIQUE constraint') !== false) {

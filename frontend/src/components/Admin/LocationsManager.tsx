@@ -11,17 +11,19 @@ import {
   FormControlLabel,
   Switch,
   Chip,
-  Paper
+  Fab
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  LocationOn as LocationOnIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import AdminLayout from './AdminLayout';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
+import EmptyState from '../Common/EmptyState';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
 
@@ -134,7 +136,17 @@ const LocationsManager: React.FC = () => {
     setEditingLocation(null);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    // Frontend validation
+    if (!formData.name || !formData.country || !formData.city) {
+      showError('Name, Country, and City are required fields');
+      return;
+    }
+
     try {
       const payload = {
         name: formData.name,
@@ -142,8 +154,8 @@ const LocationsManager: React.FC = () => {
         city: formData.city,
         address: formData.address || null,
         postal_code: formData.postal_code || null,
-        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+        latitude: formData.latitude && formData.latitude.trim() !== '' ? parseFloat(formData.latitude) : null,
+        longitude: formData.longitude && formData.longitude.trim() !== '' ? parseFloat(formData.longitude) : null,
         is_active: formData.is_active
       };
 
@@ -156,8 +168,10 @@ const LocationsManager: React.FC = () => {
       }
       fetchLocations();
       handleCloseDialog();
-    } catch {
-      showError('Failed to save location');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Failed to save location';
+      showError(errorMessage);
+      console.error('Location save error:', error.response?.data);
     }
   };
 
@@ -217,7 +231,9 @@ const LocationsManager: React.FC = () => {
       field: 'postal_code',
       headerName: 'Postal Code',
       width: 140,
-      valueGetter: (params?: { row?: Location }) => params?.row?.postal_code || '-'
+      renderCell: ({ row }: GridRenderCellParams<Location>) => (
+        <span>{row?.postal_code || '-'}</span>
+      )
     },
     {
       field: 'coordinates',
@@ -287,33 +303,15 @@ const LocationsManager: React.FC = () => {
 
   return (
     <AdminLayout title="Locations Management">
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2, md: 3 },
-          borderRadius: 3,
-          boxShadow: '0px 25px 45px rgba(15, 23, 42, 0.08)',
-          bgcolor: '#fff'
-        }}
-      >
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            sx={{
-              bgcolor: '#ff9800',
-              textTransform: 'none',
-              fontWeight: 600,
-              '&:hover': {
-                bgcolor: '#f57c00'
-              }
-            }}
-          >
-            New Location
-          </Button>
-        </Box>
-
+      {!loading && locations.length === 0 ? (
+        <EmptyState
+          icon={LocationOnIcon}
+          title="No locations yet"
+          subtitle="Create your first location to track where work is performed"
+          actionLabel="New Location"
+          onAction={() => handleOpenDialog()}
+        />
+      ) : (
         <Box sx={{ width: '100%', overflowX: 'auto' }}>
           <DataGrid
             autoHeight
@@ -327,27 +325,54 @@ const LocationsManager: React.FC = () => {
             disableRowSelectionOnClick
             sx={{
               minWidth: 900,
+              border: 'none',
               '& .MuiDataGrid-cell:focus': {
                 outline: 'none'
               },
               '& .MuiDataGrid-row:hover': {
-                bgcolor: 'rgba(255, 152, 0, 0.04)'
+                bgcolor: 'rgba(102, 126, 234, 0.04)'
               },
               '& .MuiDataGrid-columnHeaders': {
-                bgcolor: '#f8fafc',
+                bgcolor: 'rgba(102, 126, 234, 0.08)',
+                borderRadius: '8px 8px 0 0',
                 fontWeight: 600
               }
             }}
           />
         </Box>
-      </Paper>
+      )}
 
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      {/* Floating Action Button */}
+      {locations.length > 0 && (
+        <Fab
+          color="primary"
+          onClick={() => handleOpenDialog()}
+          sx={{
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      )}
+
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>
           {editingLocation ? 'Edit Location' : 'New Location'}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box component="form" onSubmit={handleSave} id="location-form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
               label="Name"
               fullWidth
@@ -415,10 +440,10 @@ const LocationsManager: React.FC = () => {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button
-            onClick={handleSave}
+            type="submit"
+            form="location-form"
             variant="contained"
-            disabled={!formData.name || !formData.country || !formData.city}
-            sx={{ bgcolor: '#ff9800', '&:hover': { bgcolor: '#f57c00' } }}
+            color="primary"
           >
             {editingLocation ? 'Update' : 'Create'}
           </Button>

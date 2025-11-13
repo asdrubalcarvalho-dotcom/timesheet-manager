@@ -62,5 +62,10 @@ class Kernel extends HttpKernel
         'can.edit.timesheets' => \App\Http\Middleware\CanEditTimesheets::class,
         'can.edit.expenses' => \App\Http\Middleware\CanEditExpenses::class,
         'can.manage.project.members' => \App\Http\Middleware\CanManageProjectMembers::class,
+
+        // Tenancy middleware
+        'tenant.init.domain' => \App\Http\Middleware\InitializeTenancyByDomain::class,
+        'tenant.init.request' => \App\Http\Middleware\InitializeTenancyByRequestData::class,
+        'tenant.prevent.central' => \App\Http\Middleware\AllowCentralDomainFallback::class,
     ];
 }

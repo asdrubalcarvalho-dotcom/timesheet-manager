@@ -4,6 +4,134 @@ Complete timesheet and expense management system with granular authorization and
 
 ## 🚀 Recent Improvements & Bug Fixes
 
+### ✅ **Sanctum Multi-Tenant Authentication Fix** (2025-11-12)
+
+#### 🔐 **Critical Authentication Issue Resolved**
+- **Problem**: Sanctum queried central database for tokens, causing "Table doesn't exist" errors
+- **Root Cause**: `PersonalAccessToken::findToken()` executes before tenancy middleware initializes tenant context
+- **Impact**: All protected endpoints returned 401/500 errors despite valid credentials
+- **Result**: ✅ **Full authentication working** - tokens stored per-tenant with complete isolation
+
+**Technical Solution:**
+
+1. **Custom PersonalAccessToken Model**:
+   ```php
+   // backend/app/Models/PersonalAccessToken.php
+   - Extends Laravel\Sanctum\PersonalAccessToken
+   - Overrides static findToken() method
+   - Detects tenant from X-Tenant header
+   - Dynamically configures database connection
+   - Queries correct tenant database (timesheet_{tenant_id})
+   ```
+
+2. **Dynamic Connection Configuration**:
+   ```php
+   config(['database.connections.tenant_temp' => [
+       'driver' => 'mysql',
+       'database' => 'timesheet_' . $tenant->getTenantKey(),
+       // ... mysql connection params
+   ]]);
+   
+   static::on('tenant_temp')->where('token', ...)->first();
+   ```
+
+3. **Sanctum Registration**:
+   ```php
+   // backend/app/Providers/AppServiceProvider.php
+   Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+   ```
+
+**Frontend Integration:**
+- ✅ LoginForm sends `tenant_slug` in request body
+- ✅ Saves `tenant_slug` to localStorage after successful login
+- ✅ Axios interceptor adds `X-Tenant` header to all requests
+- ✅ Backend detects tenant before authentication middleware runs
+
+**Test Results:**
+```bash
+✅ POST /api/login → Token generated successfully
+✅ GET /api/user → User data returned with tenant context
+✅ GET /api/projects → Protected endpoint accessible
+✅ Tenant Isolation → Confirmed (tokens work only with correct tenant)
+```
+
+**Documentation:**
+- ✅ Created: `docs/SANCTUM_MULTI_TENANT_AUTH.md`
+- ✅ Includes: Architecture, implementation, testing, alternatives, future improvements
+
+**Why This Approach:**
+- ✅ Minimal code changes (single model override)
+- ✅ No breaking changes (fallback to central DB maintained)
+- ✅ Transparent to controllers (existing code unchanged)
+- ✅ Maintains all Sanctum features (abilities, expiration, etc.)
+- ✅ Complete tenant isolation (security)
+
+---
+
+### ✅ **Multi-Database Tenancy Fixes** (2025-11-11)
+
+#### 🔧 **Critical Architecture Corrections**
+- **Objective**: Fix multi-database tenancy implementation (isolated DB per tenant)
+- **Scope**: Configuration, models, controllers, seeders, tests, migrations
+- **Result**: ✅ **3/3 PHPUnit tests passing** (30 assertions)
+
+**Key Changes:**
+
+1. **Configuration Fixes**:
+   - ✅ `config/permission.php`: Changed `teams => false` (no FK to central tenants table)
+   - ✅ Prevents FK constraint errors in tenant databases
+
+2. **Model Corrections**:
+   - ✅ **User model**: Removed `BelongsToTenant` trait (single-DB pattern)
+   - ✅ Removed `tenant_id` from `$fillable` array
+   - ✅ Removed `tenant(): BelongsTo` relationship method
+   - ✅ **Reason**: Multi-DB tenancy uses implicit context via `$tenant->run()`
+
+3. **Controller Updates**:
+   - ✅ **TenantController**: Removed `tenant_id` from admin user creation
+   - ✅ Added `$baseDomain` definition (was undefined variable)
+   - ✅ Updated JSON response structure with nested objects
+
+4. **Seeder Refactoring**:
+   - ✅ **RolesAndPermissionsSeeder**: Removed `whereNotNull('tenant_id')` filter
+   - ✅ Removed `setPermissionsTeamId()` calls (not needed in multi-DB)
+   - ✅ Context is implicit when running inside `$tenant->run(closure)`
+
+5. **Essential Migrations Added to Tenant Folder**:
+   - ✅ Copied `create_cache_table.php` to `migrations/tenant/`
+   - ✅ Copied `create_personal_access_tokens_table.php` to `migrations/tenant/`
+   - ✅ **Reason**: Spatie Permission and Sanctum need these tables in each tenant DB
+
+6. **Test Updates**:
+   - ✅ **TenantOnboardingTest**: Updated JSON structure assertions
+   - ✅ Fixed tenant lookup to use `where('slug')` instead of `find($slug)`
+   - ✅ Database name verification uses ULID (`$tenant->id`) not slug
+
+**Documentation:**
+- ✅ Created comprehensive guide: `docs/MULTI_DATABASE_TENANCY_FIXES.md`
+- ✅ Includes problem analysis, solutions, validation, gotchas, and checklists
+
+**Test Results:**
+```
+PASS  Tests\Feature\TenantOnboardingTest
+✓ it registers a tenant and creates their database           13.51s  
+✓ it rejects reserved slugs                                   0.24s  
+✓ check slug endpoint returns availability                    0.23s  
+
+Tests:    3 passed (30 assertions)
+Duration: 14.50s
+```
+
+**Files Modified:**
+- `backend/config/permission.php`
+- `backend/app/Models/User.php`
+- `backend/app/Http/Controllers/Api/TenantController.php`
+- `backend/database/seeders/RolesAndPermissionsSeeder.php`
+- `backend/tests/Feature/TenantOnboardingTest.php`
+- `backend/database/migrations/tenant/` (added 2 migrations)
+
+---
+
 ### ✅ **Finance Role System - Phase 1** (2025-11-10)
 
 #### 🏦 **Triple-Role Architecture Implementation**
