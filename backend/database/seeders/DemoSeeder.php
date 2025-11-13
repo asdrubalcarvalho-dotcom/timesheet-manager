@@ -16,6 +16,8 @@ class DemoSeeder extends Seeder
      */
     public function run(): void
     {
+        $today = now()->startOfDay();
+
         // Create technicians
         $technicians = [
             [
@@ -48,7 +50,10 @@ class DemoSeeder extends Seeder
         ];
 
         foreach ($technicians as $technicianData) {
-            Technician::create($technicianData);
+            Technician::updateOrCreate(
+                ['email' => $technicianData['email']],
+                $technicianData
+            );
         }
 
         // Create projects
@@ -56,28 +61,31 @@ class DemoSeeder extends Seeder
             [
                 'name' => 'Website Redesign',
                 'description' => 'Complete redesign of company website',
-                'start_date' => Carbon::now()->subDays(30),
-                'end_date' => Carbon::now()->addDays(30),
+                'start_date' => $today->copy()->subDays(30),
+                'end_date' => $today->copy()->addDays(30),
                 'status' => 'active'
             ],
             [
                 'name' => 'Mobile App Development',
                 'description' => 'New mobile application for customers',
-                'start_date' => Carbon::now()->subDays(15),
-                'end_date' => Carbon::now()->addDays(60),
+                'start_date' => $today->copy()->subDays(15),
+                'end_date' => $today->copy()->addDays(60),
                 'status' => 'active'
             ],
             [
                 'name' => 'Database Migration',
                 'description' => 'Migrate legacy database to new system',
-                'start_date' => Carbon::now()->subDays(45),
-                'end_date' => Carbon::now()->subDays(5),
+                'start_date' => $today->copy()->subDays(45),
+                'end_date' => $today->copy()->subDays(5),
                 'status' => 'completed'
             ]
         ];
 
         foreach ($projects as $projectData) {
-            Project::create($projectData);
+            Project::updateOrCreate(
+                ['name' => $projectData['name']],
+                $projectData
+            );
         }
 
         // Create sample timesheets
@@ -112,7 +120,13 @@ class DemoSeeder extends Seeder
         ];
 
         foreach ($basicTasks as $taskData) {
-            \App\Models\Task::create($taskData);
+            \App\Models\Task::updateOrCreate(
+                [
+                    'project_id' => $taskData['project_id'],
+                    'name' => $taskData['name'],
+                ],
+                $taskData
+            );
         }
 
         // Get the created tasks and locations for the timesheets
@@ -128,7 +142,7 @@ class DemoSeeder extends Seeder
             [
                 'technician_id' => $technician1->id,
                 'project_id' => $project1->id,
-                'date' => Carbon::now()->subDays(5),
+                'date' => $today->copy()->subDays(5),
                 'hours_worked' => 8.0,
                 'description' => 'Frontend development',
                 'status' => 'approved',
@@ -138,7 +152,7 @@ class DemoSeeder extends Seeder
             [
                 'technician_id' => $technician1->id,
                 'project_id' => $project1->id,
-                'date' => Carbon::now()->subDays(4),
+                'date' => $today->copy()->subDays(4),
                 'hours_worked' => 7.5,
                 'description' => 'CSS styling',
                 'status' => 'approved',
@@ -148,7 +162,7 @@ class DemoSeeder extends Seeder
             [
                 'technician_id' => $technician2->id,
                 'project_id' => $project2->id,
-                'date' => Carbon::now()->subDays(3),
+                'date' => $today->copy()->subDays(3),
                 'hours_worked' => 8.0,
                 'description' => 'Backend API development',
                 'status' => 'submitted',
@@ -158,7 +172,7 @@ class DemoSeeder extends Seeder
             [
                 'technician_id' => $technician2->id,
                 'project_id' => $project2->id,
-                'date' => Carbon::now()->subDays(2),
+                'date' => $today->copy()->subDays(2),
                 'hours_worked' => 6.0,
                 'description' => 'Database design',
                 'status' => 'draft',
@@ -168,7 +182,14 @@ class DemoSeeder extends Seeder
         ];
 
         foreach ($timesheets as $timesheetData) {
-            Timesheet::create($timesheetData);
+            Timesheet::updateOrCreate(
+                [
+                    'technician_id' => $timesheetData['technician_id'],
+                    'project_id' => $timesheetData['project_id'],
+                    'date' => $timesheetData['date'],
+                ],
+                $timesheetData
+            );
         }
 
         // Create sample expenses
@@ -176,7 +197,7 @@ class DemoSeeder extends Seeder
             [
                 'technician_id' => $technician1->id,
                 'project_id' => $project1->id,
-                'date' => Carbon::now()->subDays(6),
+                'date' => $today->copy()->subDays(6),
                 'amount' => 25.50,
                 'category' => 'travel',
                 'description' => 'Uber to client meeting',
@@ -185,7 +206,7 @@ class DemoSeeder extends Seeder
             [
                 'technician_id' => $technician2->id,
                 'project_id' => $project2->id,
-                'date' => Carbon::now()->subDays(4),
+                'date' => $today->copy()->subDays(4),
                 'amount' => 15.75,
                 'category' => 'food',
                 'description' => 'Lunch during extended work session',
@@ -194,7 +215,7 @@ class DemoSeeder extends Seeder
             [
                 'technician_id' => $technician1->id,
                 'project_id' => $project1->id,
-                'date' => Carbon::now()->subDays(2),
+                'date' => $today->copy()->subDays(2),
                 'amount' => 89.99,
                 'category' => 'material',
                 'description' => 'Software license for development',
@@ -203,7 +224,15 @@ class DemoSeeder extends Seeder
         ];
 
         foreach ($expenses as $expenseData) {
-            Expense::create($expenseData);
+            Expense::updateOrCreate(
+                [
+                    'technician_id' => $expenseData['technician_id'],
+                    'project_id' => $expenseData['project_id'],
+                    'date' => $expenseData['date'],
+                    'category' => $expenseData['category'],
+                ],
+                $expenseData
+            );
         }
     }
 }

@@ -11,8 +11,20 @@ export default defineConfig({
       usePolling: true
     }
   },
+  preview: {
+    host: '0.0.0.0',
+    port: 4173,
+  },
   build: {
     chunkSizeWarningLimit: 750,
+    sourcemap: false, // Disable source maps in production (hides stack traces)
+    minify: 'terser', // Better minification
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.* in production
+        drop_debugger: true,
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {

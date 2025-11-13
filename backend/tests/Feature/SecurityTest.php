@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\Technician;
+use App\Models\Tenant;
 use App\Models\Timesheet;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -18,9 +19,40 @@ class SecurityTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected Tenant $tenant;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->tenant = Tenant::create([
+            'name' => 'Demo Tenant',
+            'slug' => 'demo',
+            'owner_email' => 'demo@example.com',
+            'status' => 'active',
+            'plan' => 'standard',
+            'timezone' => config('app.timezone', 'UTC'),
+        ]);
+
+        tenancy()->initialize($this->tenant);
+    }
+
+    protected function tearDown(): void
+    {
+        tenancy()->end();
+
+        parent::tearDown();
+    }
+
+    protected function tenantHeaders(): array
+    {
+        return ['X-Tenant' => $this->tenant->slug];
+    }
+
     public function test_planning_routes_require_authentication(): void
     {
-        $response = $this->getJson('/api/planning/projects');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/planning/projects');
 
         $response->assertUnauthorized();
     }
@@ -29,9 +61,13 @@ class SecurityTest extends TestCase
     {
         $this->seed(RolesAndPermissionsSeeder::class);
 
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'role' => 'Technician',
+        ]);
 
         $project = Project::create([
+            'tenant_id' => $this->tenant->id,
             'name' => 'Security Test Project',
             'description' => 'Test project',
             'start_date' => now()->subDay()->toDateString(),
@@ -40,6 +76,7 @@ class SecurityTest extends TestCase
         ]);
 
         $task = Task::create([
+            'tenant_id' => $this->tenant->id,
             'project_id' => $project->id,
             'name' => 'Initial Task',
             'task_type' => 'maintenance',
@@ -47,6 +84,7 @@ class SecurityTest extends TestCase
         ]);
 
         $location = Location::create([
+            'tenant_id' => $this->tenant->id,
             'name' => 'HQ',
             'country' => 'PRT',
             'city' => 'Lisbon',
@@ -56,6 +94,7 @@ class SecurityTest extends TestCase
         ]);
 
         $technician = Technician::create([
+            'tenant_id' => $this->tenant->id,
             'name' => $user->name,
             'email' => $user->email,
             'role' => 'technician',
@@ -64,6 +103,7 @@ class SecurityTest extends TestCase
         ]);
 
         ProjectMember::create([
+            'tenant_id' => $this->tenant->id,
             'project_id' => $project->id,
             'user_id' => $user->id,
             'project_role' => 'member',
@@ -71,6 +111,7 @@ class SecurityTest extends TestCase
         ]);
 
         $timesheet = Timesheet::create([
+            'tenant_id' => $this->tenant->id,
             'technician_id' => $technician->id,
             'project_id' => $project->id,
             'task_id' => $task->id,
@@ -84,9 +125,10 @@ class SecurityTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $response = $this->putJson("/api/timesheets/{$timesheet->id}", [
-            'status' => 'approved',
-        ]);
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->putJson("/api/timesheets/{$timesheet->id}", [
+                'status' => 'approved',
+            ]);
 
         $response->assertStatus(422);
         $this->assertSame('draft', $timesheet->fresh()->status);

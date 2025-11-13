@@ -147,7 +147,13 @@ const AccessManager: React.FC = () => {
         </Typography>
       )}
       {loading ? <CircularProgress /> : null}
-      <Dialog open={matrixOpen} onClose={handleMatrixClose} maxWidth="lg" fullWidth>
+      <Dialog 
+        open={matrixOpen} 
+        onClose={handleMatrixClose} 
+        maxWidth="lg" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>Roles × Permissions Matrix</DialogTitle>
         <DialogContent>
           {matrixLoading && (

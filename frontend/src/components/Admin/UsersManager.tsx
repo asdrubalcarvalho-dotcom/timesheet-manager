@@ -9,20 +9,24 @@ import {
   TextField,
   IconButton,
   MenuItem,
-  Chip
+  Chip,
+  Fab
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import AdminLayout from './AdminLayout';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
+import EmptyState from '../Common/EmptyState';
 import api from '../../services/api';
 import { Link } from 'react-router-dom';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useAuth } from '../Auth/AuthContext';
 
 interface UserRecord {
   id: number;
@@ -33,6 +37,7 @@ interface UserRecord {
   user_id?: number;
   worker_id?: string | null;
   worker_name?: string | null;
+  is_owner?: boolean;
 }
 
 const extractRows = (payload: any): UserRecord[] => {
@@ -49,6 +54,7 @@ const extractRows = (payload: any): UserRecord[] => {
 
 const UsersManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -88,6 +94,12 @@ const UsersManager: React.FC = () => {
   };
 
   const handleOpenDialog = (user?: UserRecord) => {
+    // Prevent editing Owner users (except by themselves)
+    if (user?.is_owner && user.user_id !== currentUser?.id) {
+      showError('Owner users can only be edited by themselves');
+      return;
+    }
+    
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -119,20 +131,35 @@ const UsersManager: React.FC = () => {
     setEditingUser(null);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
     try {
       const payload: any = {
         name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : null,
-        worker_id: formData.worker_id || null,
-        worker_name: formData.worker_name || null
       };
 
+      // Owner can only edit their name, hourly_rate, worker_id, worker_name, and password
+      if (!editingUser?.is_owner || editingUser.user_id === currentUser?.id) {
+        payload.email = formData.email;
+        payload.hourly_rate = formData.hourly_rate ? parseFloat(formData.hourly_rate) : null;
+        payload.worker_id = formData.worker_id || null;
+        payload.worker_name = formData.worker_name || null;
+        
+        // Normal users can have role changed (Owner role is protected)
+        if (!editingUser?.is_owner) {
+          payload.role = formData.role;
+        }
+        
+        // Allow password change for Owner (self-edit) and normal users
+        if (formData.password) {
+          payload.password = formData.password;
+        }
+      }
+
       if (!editingUser && formData.password) {
-        payload.password = formData.password;
-      } else if (editingUser && formData.password) {
         payload.password = formData.password;
       }
 
@@ -152,6 +179,12 @@ const UsersManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     const user = users.find(u => u.id === id);
+    
+    // Prevent deleting Owner users
+    if (user?.is_owner) {
+      showError('Owner users cannot be deleted');
+      return;
+    }
     setConfirmDialog({
       open: true,
       title: 'Delete User',
@@ -189,7 +222,28 @@ const UsersManager: React.FC = () => {
       field: 'name',
       headerName: 'Name',
       flex: 1,
-      minWidth: 180
+      minWidth: 180,
+      renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <span>{row.name}</span>
+          {row.role === 'Owner' && (
+            <Chip
+              label="Owner"
+              size="small"
+              sx={{
+                height: 18,
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                bgcolor: '#fbbf24',
+                color: '#78350f',
+                '& .MuiChip-label': {
+                  px: 1
+                }
+              }}
+            />
+          )}
+        </Box>
+      )
     },
     {
       field: 'email',
@@ -217,101 +271,159 @@ const UsersManager: React.FC = () => {
       field: 'hourly_rate',
       headerName: 'Hourly Rate',
       width: 130,
-      valueFormatter: ({ value }) => (value ? `$${value}/hr` : '-')
+      renderCell: ({ row }: GridRenderCellParams<UserRecord>) => {
+        const value = row?.hourly_rate;
+        return <span>{value ? `€${value}/hr` : '-'}</span>;
+      }
     },
     {
       field: 'worker_id',
       headerName: 'Worker ID',
       width: 150,
-      valueGetter: ({ row }) => {
-        const safeRow = row as Partial<UserRecord> | undefined;
-        return safeRow?.worker_id || '-';
-      }
+      renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
+        <span>{row?.worker_id || '-'}</span>
+      )
     },
     {
       field: 'worker_name',
       headerName: 'Worker Name',
       flex: 1,
       minWidth: 180,
-      valueGetter: ({ row }) => {
-        const safeRow = row as Partial<UserRecord> | undefined;
-        return safeRow?.worker_name || '-';
-      }
+      renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
+        <span>{row?.worker_name || '-'}</span>
+      )
     },
     {
       field: 'actions',
       headerName: 'Actions',
       width: 120,
       sortable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box>
-          <IconButton
-            size="small"
-            onClick={() => handleOpenDialog(params.row as UserRecord)}
-            sx={{ color: '#e91e63' }}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            onClick={() => handleDelete(params.row.id)}
-            sx={{ color: '#f44336' }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      )
+      renderCell: (params: GridRenderCellParams) => {
+        const user = params.row as UserRecord;
+        const isOwner = user.is_owner;
+        const isOwnUser = user.user_id === currentUser?.id;
+        const canEdit = !isOwner || isOwnUser; // Owner can only edit themselves
+        const canDelete = !isOwner; // Owner cannot be deleted
+        
+        return (
+          <Box>
+            <IconButton
+              size="small"
+              onClick={() => handleOpenDialog(user)}
+              disabled={!canEdit}
+              sx={{ 
+                color: canEdit ? '#667eea' : '#ccc',
+                '&:disabled': { color: '#ccc' }
+              }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => handleDelete(user.id)}
+              disabled={!canDelete}
+              sx={{ 
+                color: canDelete ? '#f44336' : '#ccc',
+                '&:disabled': { color: '#ccc' }
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        );
+      }
     }
   ];
 
   return (
     <AdminLayout title="Users Management">
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{ bgcolor: '#e91e63', '&:hover': { bgcolor: '#c2185b' } }}
-        >
-          New User
-        </Button>
-        <Button
-          component={Link}
-          to="/admin/access"
-          variant="outlined"
-          sx={{ color: '#1976d2', borderColor: '#1976d2' }}
-        >
-          Manage Access & Permissions
-        </Button>
-      </Box>
+      {!loading && users.length === 0 ? (
+        <EmptyState
+          icon={PeopleIcon}
+          title="No users yet"
+          subtitle="Create your first user to start managing your team"
+          actionLabel="New User"
+          onAction={() => handleOpenDialog()}
+        />
+      ) : (
+        <>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              component={Link}
+              to="/admin/access"
+              variant="outlined"
+              sx={{ 
+                borderColor: 'rgba(102, 126, 234, 0.5)',
+                color: '#667eea',
+                '&:hover': {
+                  borderColor: '#667eea',
+                  bgcolor: 'rgba(102, 126, 234, 0.04)'
+                }
+              }}
+            >
+              Manage Access & Permissions
+            </Button>
+          </Box>
 
-      <Box sx={{ height: 600, width: '100%' }}>
-        <DataGrid
-          rows={users}
-          columns={columns}
-          loading={loading}
-          pageSizeOptions={[10, 25, 50]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 10 } }
-          }}
-          disableRowSelectionOnClick
+          <Box sx={{ height: 600, width: '100%' }}>
+            <DataGrid
+              rows={users}
+              columns={columns}
+              loading={loading}
+              pageSizeOptions={[10, 25, 50]}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 10 } }
+              }}
+              disableRowSelectionOnClick
+              sx={{
+                border: 'none',
+                '& .MuiDataGrid-cell:focus': {
+                  outline: 'none'
+                },
+                '& .MuiDataGrid-row:hover': {
+                  bgcolor: 'rgba(102, 126, 234, 0.04)'
+                },
+                '& .MuiDataGrid-columnHeaders': {
+                  bgcolor: 'rgba(102, 126, 234, 0.08)',
+                  borderRadius: '8px 8px 0 0'
+                }
+              }}
+            />
+          </Box>
+        </>
+      )}
+
+      {/* Floating Action Button */}
+      {users.length > 0 && (
+        <Fab
+          color="primary"
+          onClick={() => handleOpenDialog()}
           sx={{
-            '& .MuiDataGrid-cell:focus': {
-              outline: 'none'
-            },
-            '& .MuiDataGrid-row:hover': {
-              bgcolor: 'rgba(233, 30, 99, 0.04)'
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
             }
           }}
-        />
-      </Box>
+        >
+          <AddIcon />
+        </Fab>
+      )}
 
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>
-          {editingUser ? 'Edit User' : 'New User'}
+          {editingUser?.is_owner ? 'Edit Owner Profile' : editingUser ? 'Edit User' : 'New User'}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box component="form" onSubmit={handleSave} id="user-form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
               label="Name"
               fullWidth
@@ -324,16 +436,20 @@ const UsersManager: React.FC = () => {
               type="email"
               fullWidth
               required
+              disabled={editingUser?.is_owner === true}
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              helperText={editingUser?.is_owner ? "Owner email cannot be changed" : ""}
             />
             <TextField
               label="Role"
               select
               fullWidth
               required
+              disabled={editingUser?.is_owner === true}
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              helperText={editingUser?.is_owner ? "Owner role cannot be changed" : ""}
             >
               <MenuItem value="technician">Technician</MenuItem>
               <MenuItem value="manager">Manager</MenuItem>
@@ -372,10 +488,10 @@ const UsersManager: React.FC = () => {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button
-            onClick={handleSave}
+            type="submit"
+            form="user-form"
             variant="contained"
-            disabled={!formData.name || !formData.email || (!editingUser && !formData.password)}
-            sx={{ bgcolor: '#e91e63', '&:hover': { bgcolor: '#c2185b' } }}
+            color="primary"
           >
             {editingUser ? 'Update' : 'Create'}
           </Button>

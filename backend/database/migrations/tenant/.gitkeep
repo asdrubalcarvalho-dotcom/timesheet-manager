@@ -1,0 +1,2 @@
+# Tenant migrations directory
+# Migrations here run only in tenant databases (not central)

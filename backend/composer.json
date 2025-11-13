@@ -11,11 +11,14 @@
         "laravel/sanctum": "^4.2",
         "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.9",
-        "spatie/laravel-permission": "^6.23"
+        "spatie/laravel-activitylog": "^4.0",
+        "spatie/laravel-permission": "^6.23",
+        "stancl/tenancy": "^3.9"
     },
     "require-dev": {
         "beyondcode/laravel-er-diagram-generator": "^5.0",
         "fakerphp/faker": "^1.23",
+        "laravel/breeze": "^2.3",
         "laravel/pail": "^1.1",
         "laravel/pint": "^1.13",
         "laravel/sail": "^1.26",

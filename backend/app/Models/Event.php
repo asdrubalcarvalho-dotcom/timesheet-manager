@@ -4,10 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+// Event model lives in tenant DB; no BelongsToTenant trait required
 
 class Event extends Model
 {
+    // BelongsToTenant removed
+
     protected $fillable = [
+        'tenant_id',
         'title',
         'start',
         'end',

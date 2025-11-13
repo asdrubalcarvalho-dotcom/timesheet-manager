@@ -14,7 +14,8 @@ import type {
   TopProject
 } from '../types';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+// API Configuration
+const API_BASE_URL = 'http://timeperk.localhost:8080/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -24,12 +25,95 @@ const api = axios.create({
   },
 });
 
-// Add authentication interceptor
+/**
+ * Extract tenant slug from subdomain or localStorage
+ * Order: subdomain > localStorage
+ */
+const getTenantSlug = (): string | null => {
+  // Try subdomain first (e.g., "acme" from "acme.app.timeperk.com")
+  const host = window.location.hostname;
+  const parts = host.split('.');
+  
+  // If subdomain exists and it's not "app" or "www", use it as tenant
+  if (parts.length > 2 && parts[0] !== 'app' && parts[0] !== 'www') {
+    return parts[0];
+  }
+  
+  // Fall back to localStorage (set during login)
+  return localStorage.getItem('tenant_slug');
+};
+
+/**
+ * Set tenant slug in localStorage (called after successful login/registration)
+ */
+export const setTenantSlug = (slug: string): void => {
+  localStorage.setItem('tenant_slug', slug);
+};
+
+/**
+ * Remove tenant slug from localStorage (called during logout)
+ */
+export const clearTenantSlug = (): void => {
+  localStorage.removeItem('tenant_slug');
+};
+
+/**
+ * Get headers for fetch requests (includes Authorization + X-Tenant)
+ * Use this helper when using native fetch() instead of axios api instance
+ */
+export const getAuthHeaders = (): HeadersInit => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const tenantSlug = getTenantSlug();
+  if (tenantSlug) {
+    headers['X-Tenant'] = tenantSlug;
+  }
+
+  return headers;
+};
+
+/**
+ * Use native fetch with the same auth + tenant headers as axios instance
+ */
+export const fetchWithAuth = async (input: RequestInfo, init: RequestInit = {}) => {
+  const headers = {
+    ...(init.headers || {}),
+    ...getAuthHeaders(),
+  } as HeadersInit;
+
+  const finalInit: RequestInit = {
+    ...init,
+    headers,
+    // DO NOT use credentials: 'include' - auth via Bearer token in header
+  };
+
+  return fetch(input, finalInit);
+};
+
+// Add authentication + tenant interceptor
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // Inject X-Tenant header for tenant-scoped requests
+  const tenantSlug = getTenantSlug();
+  if (tenantSlug) {
+    config.headers['X-Tenant'] = tenantSlug;
+    console.log('[API] X-Tenant header set to:', tenantSlug);
+  } else {
+    console.warn('[API] No tenant slug found! Checking localStorage:', localStorage.getItem('tenant_slug'));
+  }
+  
   return config;
 });
 
@@ -224,6 +308,64 @@ export const dashboardApi = {
     date_to?: string;
   }): Promise<TopProject[]> =>
     api.get('/dashboard/top-projects', { params }).then(res => res.data),
+};
+
+// Tenant API (Central - no tenant context required)
+export interface TenantRegistrationData {
+  company_name: string;
+  slug: string;
+  admin_name: string;
+  admin_email: string;
+  admin_password: string;
+  admin_password_confirmation: string;
+  industry?: string;
+  country?: string;
+  timezone?: string;
+  plan?: 'trial' | 'standard' | 'premium' | 'enterprise';
+}
+
+export interface TenantRegistrationResponse {
+  status: string;
+  message: string;
+  tenant: string; // tenant slug
+  database: string; // database name
+  tenant_info: {
+    id: string;
+    slug: string;
+    name: string;
+    domain: string;
+    status: string;
+    trial_ends_at: string;
+  };
+  admin: {
+    email: string;
+    token: string;
+  };
+  next_steps: {
+    login_url: string;
+    api_header: string;
+  };
+}
+
+export const tenantApi = {
+  /**
+   * Register a new tenant (company)
+   * This endpoint does NOT require X-Tenant header
+   */
+  register: (data: TenantRegistrationData): Promise<TenantRegistrationResponse> =>
+    api.post('/tenants/register', data).then(res => res.data),
+  
+  /**
+   * List all tenants (Admin only)
+   */
+  list: (): Promise<any[]> =>
+    api.get('/tenants').then(res => res.data.tenants),
+  
+  /**
+   * Get tenant details by slug
+   */
+  get: (slug: string): Promise<any> =>
+    api.get(`/tenants/${slug}`).then(res => res.data.tenant),
 };
 
 export default api;

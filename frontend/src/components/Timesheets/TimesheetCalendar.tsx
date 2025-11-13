@@ -181,10 +181,19 @@ const TimesheetCalendar: React.FC = () => {
   
   // Form state
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<number>(0);
-  const [projectId, setProjectId] = useState<number>(0);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | ''>('');
+  const [projectId, setProjectId] = useState<number | ''>('');
+    // Auto-select single project or clear if none
+    useEffect(() => {
+      if (projects.length === 1) {
+        setProjectId(projects[0].id);
+      } else if (projects.length === 0) {
+        setProjectId('');
+      }
+    }, [projects]);
   const [taskId, setTaskId] = useState<number>(0);
-  const [locationId, setLocationId] = useState<number>(0);
+  const [taskIdStr, setTaskIdStr] = useState<string>('');
+  const [locationId, setLocationId] = useState<string>('');
   const [hoursWorked, setHoursWorked] = useState<number>(0);
   const [description, setDescription] = useState('');
   const [startTimeObj, setStartTimeObj] = useState<Dayjs | null>(dayjs().hour(9).minute(0).second(0));
@@ -371,7 +380,7 @@ const TimesheetCalendar: React.FC = () => {
 
   // Auto-select technician when creating new entry
   useEffect(() => {
-    if (dialogOpen && !selectedEntry && availableTechnicians.length > 0 && selectedTechnicianId === 0) {
+    if (dialogOpen && !selectedEntry && availableTechnicians.length > 0 && selectedTechnicianId === '') {
       // Find the current user's technician record first (preferred)
       const currentUserTechnician = availableTechnicians.find(t => t.email === user?.email);
       
@@ -586,7 +595,7 @@ const TimesheetCalendar: React.FC = () => {
     if (dialogOpen && !selectedEntry && selectedDate && projectId && taskId && locationId) {
       const project = projects.find(p => p.id === projectId);
       const task = tasks.find(t => t.id === taskId);
-      const location = locations.find(l => l.id === locationId);
+      const location = locations.find(l => l.id === parseInt(locationId, 10));
       
       if (project && task && location) {
         const context = {
@@ -693,7 +702,7 @@ const TimesheetCalendar: React.FC = () => {
       setSelectedDate(dayjs(timesheet.date));
       setProjectId(timesheet.project_id);
       setTaskId(timesheet.task_id || 0);
-      setLocationId(timesheet.location_id || 0);
+      setLocationId(timesheet.location_id ? timesheet.location_id.toString() : '');
       
       // Debug: Log technician info
       console.log('Setting technician ID:', {
@@ -702,7 +711,7 @@ const TimesheetCalendar: React.FC = () => {
         available_technicians: availableTechnicians.map(t => ({ id: t.id, name: t.name }))
       });
       
-      setSelectedTechnicianId(timesheet.technician_id || 0);
+      setSelectedTechnicianId(timesheet.technician_id || '');
       setHoursWorked(decimalHours);
       setDescription(timesheet.description || '');
 
@@ -728,8 +737,8 @@ const TimesheetCalendar: React.FC = () => {
   const resetForm = () => {
     setProjectId(0);
     setTaskId(0);
-    setLocationId(0);
-    setSelectedTechnicianId(0);
+    setLocationId('');
+    setSelectedTechnicianId('');
     setHoursWorked(0);
     setDescription('');
     // Set default working hours (9:00 AM + 1 hour = 10:00 AM)
@@ -744,43 +753,46 @@ const TimesheetCalendar: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!selectedTechnicianId) {
-      showWarning('Please select a worker');
-      return;
-    }
-
+    // Sequential validation: focus first invalid field and show error
     if (!projectId) {
-      showWarning('Please select a project');
+      showError('Project is required');
+      document.getElementById('timesheet-project-field')?.focus();
       return;
     }
-    
     if (!taskId) {
-      showWarning('Please select a task');
+      showError('Task is required');
+      document.getElementById('timesheet-task-field')?.focus();
       return;
     }
-    
     if (!locationId) {
-      showWarning('Please select a location');
+      showError('Location is required');
+      document.getElementById('timesheet-location-field')?.focus();
       return;
     }
-    
+    if (!description.trim() || description.trim().length < 3) {
+      showError('Description is required (min 3 characters)');
+      document.getElementById('timesheet-description-field')?.focus();
+      return;
+    }
+    if (!selectedTechnicianId) {
+      showError('Worker is required');
+      document.getElementById('timesheet-worker-field')?.focus();
+      return;
+    }
     if (!selectedDate) {
-      showWarning('Please select a date');
+      showError('Date is required');
       return;
     }
-    
     if (!startTimeObj || !endTimeObj) {
-      showWarning('Please set start and end times');
+      showError('Start and end times are required');
       return;
     }
-    
     if (hoursWorked <= 0) {
-      showWarning('Hours worked must be greater than 0');
+      showError('Hours worked must be greater than 0');
       return;
     }
-    
     if (hoursWorked > 24) {
-      showWarning('Hours worked cannot exceed 24 hours');
+      showError('Hours worked cannot exceed 24 hours');
       return;
     }
 
@@ -804,7 +816,7 @@ const TimesheetCalendar: React.FC = () => {
         technician_id: selectedTechnicianId, // Use selected technician ID
         project_id: projectId,
         task_id: taskId,
-        location_id: locationId,
+        location_id: parseInt(locationId, 10), // Convert string to number
         date: formatDate(selectedDate),
         hours_worked: hoursWorked,
         description: description.trim(),
@@ -839,15 +851,35 @@ const TimesheetCalendar: React.FC = () => {
     } catch (err) {
       console.error('Error saving timesheet:', err);
       const error = err as any; // Type assertion for axios error
+      let shouldRefresh = false;
       
-      // Extract validation errors from response
-      if (error.response?.data?.errors) {
-        const validationErrors = Object.entries(error.response.data.errors)
-          .map(([field, messages]: [string, any]) => `${field}: ${messages.join(', ')}`)
-          .join('\n');
-        console.error('Validation errors:', validationErrors);
-        const errorMsg = `Validation failed: ${validationErrors}`;
-        showError(errorMsg);
+      // Handle time overlap errors (422/409)
+      if (error.response?.status === 422 || error.response?.status === 409) {
+        const message = error.response?.data?.message || error.response?.data?.error || '';
+        const isOverlapError = message.toLowerCase().includes('overlap') || 
+                               message.toLowerCase().includes('sobreposição') ||
+                               error.response?.data?.errors?.time_overlap;
+        
+        if (isOverlapError) {
+          const timeRange = `${timeToString(startTimeObj)} - ${timeToString(endTimeObj)}`;
+          showError(
+            `⚠️ Time conflict detected for ${timeRange}. ` +
+            `There is already an entry in this time period. ` +
+            `Please choose a different time slot or check existing entries.`
+          );
+          shouldRefresh = true; // Refresh to show latest data
+        } else {
+          // Other validation errors
+          if (error.response?.data?.errors) {
+            const validationErrors = Object.entries(error.response.data.errors)
+              .map(([field, messages]: [string, any]) => `${field}: ${messages.join(', ')}`)
+              .join('\n');
+            console.error('Validation errors:', validationErrors);
+            showError(`Validation failed: ${validationErrors}`);
+          } else {
+            showError(message);
+          }
+        }
       } else if (error.response?.data?.message) {
         // Check if message is about status immutability (should be warning, not error)
         const message = error.response.data.message;
@@ -856,10 +888,20 @@ const TimesheetCalendar: React.FC = () => {
           showWarning(message);
         } else {
           showError(message);
+          // Refresh on 500 errors to ensure data consistency
+          if (error.response?.status === 500) {
+            shouldRefresh = true;
+          }
         }
       } else {
         const errorMsg = error instanceof Error ? error.message : 'Failed to save timesheet';
         showError(errorMsg);
+      }
+      
+      // Auto-refresh after validation/overlap errors to show current state
+      if (shouldRefresh) {
+        console.log('Auto-refreshing data after error...');
+        await loadTimesheets();
       }
       
       // Provide negative feedback to AI if suggestion was used
@@ -1354,14 +1396,6 @@ const TimesheetCalendar: React.FC = () => {
               }}
             >
               Timesheet
-              {userIsAdmin && (
-                <Chip 
-                  size="small" 
-                  label="Admin" 
-                  color="error" 
-                  sx={{ ml: 0.5, height: 20 }} 
-                />
-              )}
             </Typography>
             
             <Box
@@ -1946,7 +1980,7 @@ const TimesheetCalendar: React.FC = () => {
 
           <DialogContent sx={{ p: 1.5, backgroundColor: '#fafafa' }}>
             <Fade in={dialogOpen}>
-              <Box>
+              <Box component="form" id="timesheet-form" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
                 {/* AI Suggestion Component - Collapsible */}
                 {!selectedEntry && showAISuggestions && (
                   <Collapse in={aiSuggestionExpanded || aiSuggestion.suggestion !== null || aiSuggestion.isLoading}>
@@ -1977,15 +2011,16 @@ const TimesheetCalendar: React.FC = () => {
                         fullWidth
                         size="small"
                         label="Worker"
-                        value={selectedTechnicianId || 0}
+                        value={selectedTechnicianId || ''}
                         onChange={(e) => {
-                          const newTechId = parseInt(e.target.value);
+                          const newTechId = e.target.value === '' ? '' : parseInt(e.target.value);
                           console.log('Technician manually changed to:', newTechId);
                           setSelectedTechnicianId(newTechId);
                         }}
                         disabled={!userIsManager && !userIsAdmin && availableTechnicians.length === 1}
+                        id="timesheet-worker-field"
                       >
-                        <MenuItem value={0} disabled>
+                        <MenuItem value="" disabled>
                           Select Worker
                         </MenuItem>
                         {/* Show current timesheet owner even if not in availableTechnicians */}
@@ -2096,23 +2131,26 @@ const TimesheetCalendar: React.FC = () => {
                           <TextField
                             select
                             fullWidth
+                            required
                             size="small"
                             label="Project"
                             value={projectId}
                             onChange={(e) => {
-                              const newProjectId = Number(e.target.value);
-                              setProjectId(newProjectId);
-                              setTaskId(0); // Reset task when project changes
+                              const value = e.target.value;
+                              setProjectId(value === '' ? '' : Number(value));
+                              setTaskIdStr(''); // Reset task when project changes
                             }}
                             variant="outlined"
+                            id="timesheet-project-field"
                             SelectProps={{
                               renderValue: (value) => {
+                                if (!value || value === '') return 'Select a project';
                                 const selectedProject = projects.find(p => p.id === value);
                                 return selectedProject ? selectedProject.name : 'Select a project';
                               }
                             }}
                           >
-                            <MenuItem value={0}>Select a project</MenuItem>
+                            <MenuItem value="">Select a project</MenuItem>
                             {(projects || []).map((project) => (
                               <MenuItem key={project.id} value={project.id}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 2 }}>
@@ -2157,12 +2195,21 @@ const TimesheetCalendar: React.FC = () => {
                           <TextField
                             select
                             fullWidth
+                            required
                             size="small"
                             label="Task"
-                            value={taskId}
+                            value={taskId || 0}
                             onChange={(e) => setTaskId(Number(e.target.value))}
                             variant="outlined"
                             disabled={!projectId}
+                            id="timesheet-task-field"
+                            SelectProps={{
+                              renderValue: (value) => {
+                                if (!value || value === 0) return 'Select a task';
+                                const selectedTask = filteredTasks.find(t => t.id === value);
+                                return selectedTask ? selectedTask.name : 'Select a task';
+                              }
+                            }}
                           >
                             <MenuItem value={0}>Select a task</MenuItem>
                             {(filteredTasks || []).map((task) => (
@@ -2177,23 +2224,26 @@ const TimesheetCalendar: React.FC = () => {
                           <TextField
                             select
                             fullWidth
+                            required
                             size="small"
                             label="Location"
                             value={locationId}
-                            onChange={(e) => setLocationId(Number(e.target.value))}
+                            onChange={(e) => setLocationId(e.target.value)}
                             variant="outlined"
+                            required
+                            id="timesheet-location-field"
                             InputProps={{
                               startAdornment: <LocationIcon color="action" sx={{ mr: 1 }} />
                             }}
                           >
-                            <MenuItem value={0}>Select a location</MenuItem>
+                            <MenuItem value="">Select a location</MenuItem>
                             {(locations || []).map((location) => {
                               const latitude = Number(location.latitude);
                               const longitude = Number(location.longitude);
                               const hasCoordinates = !Number.isNaN(latitude) && !Number.isNaN(longitude);
 
                               return (
-                                <MenuItem key={location.id} value={location.id}>
+                                <MenuItem key={location.id} value={location.id.toString()}>
                                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                                     <Typography variant="body2" component="span">
                                       {location.name}
@@ -2225,6 +2275,7 @@ const TimesheetCalendar: React.FC = () => {
                       <TextField
                         fullWidth
                         multiline
+                        required
                         size="small"
                         minRows={1}
                         maxRows={4}
@@ -2233,6 +2284,9 @@ const TimesheetCalendar: React.FC = () => {
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Describe the work performed..."
                         variant="outlined"
+                        required
+                        helperText={description.length ? `${description.length} characters` : ''}
+                        id="timesheet-description-field"
                         sx={{
                           '& .MuiInputBase-root': {
                             resize: 'vertical',
@@ -2257,7 +2311,6 @@ const TimesheetCalendar: React.FC = () => {
             >
               Cancel
             </Button>
-            
             {selectedEntry && (
               <Button
                 onClick={handleDelete}
@@ -2270,9 +2323,9 @@ const TimesheetCalendar: React.FC = () => {
                 Delete
               </Button>
             )}
-            
             <Button
-              onClick={handleSave}
+              type="submit"
+              form="timesheet-form"
               variant="contained"
               size="small"
               disabled={loading}
@@ -2282,6 +2335,10 @@ const TimesheetCalendar: React.FC = () => {
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 '&:hover': {
                   background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                },
+                '&:disabled': {
+                  background: '#ccc',
+                  color: '#888'
                 }
               }}
             >

@@ -36,9 +36,7 @@ class Timesheet extends Model
 
     protected $casts = [
         'date' => 'date',
-        'start_time' => 'datetime:H:i',
-        'end_time' => 'datetime:H:i',
-        'check_out_time' => 'datetime:H:i',
+        // TIME fields should not be cast to datetime - they are simple time strings
         'hours_worked' => 'decimal:2',
         'lunch_break' => 'integer',
         'ai_flagged' => 'boolean',

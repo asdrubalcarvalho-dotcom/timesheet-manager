@@ -167,8 +167,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
     }
   };
 
+  // Determine user display role badge
+  const isOwner = user?.roles?.includes('Owner');
   const isSuperAdmin = user?.roles?.includes('Admin');
-  const displayName = isSuperAdmin ? 'Super Admin' : (user?.name || 'User');
+  const displayRole = isOwner ? 'Owner' : (isSuperAdmin ? 'Admin' : null);
+  const displayName = user?.name || 'User';
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
   const drawerContent = (
@@ -237,28 +240,31 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
               {avatarLetter}
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="body2" sx={{ color: 'white', fontWeight: 600 }} noWrap>
-                {displayName}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" sx={{ color: 'white', fontWeight: 600 }} noWrap>
+                  {displayName}
+                </Typography>
+                {displayRole && (
+                  <Chip
+                    label={displayRole}
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      bgcolor: displayRole === 'Owner' ? '#fbbf24' : '#8b5cf6',
+                      color: displayRole === 'Owner' ? '#78350f' : 'white',
+                      '& .MuiChip-label': {
+                        px: 1
+                      }
+                    }}
+                  />
+                )}
+              </Box>
               <Typography variant="caption" sx={{ color: 'grey.400' }} noWrap>
                 {user?.email}
               </Typography>
             </Box>
-          </Box>
-          
-          <Box sx={{ mt: 1, display: 'flex', gap: 0.5 }}>
-            {user?.roles?.map((role: string) => (
-              <Chip
-                key={role}
-                label={role}
-                size="small"
-                sx={{ 
-                  bgcolor: alpha(theme.palette.primary.main, 0.2),
-                  color: 'primary.light',
-                  fontSize: '0.7rem'
-                }}
-              />
-            ))}
           </Box>
         </Box>
       )}

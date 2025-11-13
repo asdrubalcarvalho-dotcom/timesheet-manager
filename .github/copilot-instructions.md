@@ -1,19 +1,88 @@
+# 🧭 TimePerk Cortex - AI Agent Instructions
+
+> **Multi-tenant Timesheet & Expense Management System**  
+> Laravel 11 API + React 18 SPA + Docker Compose + Stancl Tenancy
+
+## Core Development Principles
+
+1. **Analyze before modifying** - Check existing implementations in `backend/app/`, `frontend/src/` before adding new code
+2. **Reuse Laravel patterns** - Use Artisan commands, existing middleware, FormRequests, Policies
+3. **Respect multi-tenancy** - Every API call needs `X-Tenant` header (local) or subdomain (production)
+4. **Follow authorization layers** - Permission middleware → Custom middleware → Policy checks (see Authorization section)
+5. **Maintain consistency** - Match patterns in existing controllers/components (see Templates section)
+
+## Quick Start Commands
+
+```bash
+# Container operations
+docker-compose up --build              # Rebuild after code changes
+docker exec -it timesheet_app bash     # Enter backend container
+
+# Backend operations (inside container)
+php artisan migrate                    # Run migrations
+php artisan test                       # Run test suite
+php artisan db:seed --class=AdminUserSeeder  # Seed admin user
+
+# Access points
+# Frontend:  http://localhost:3000
+# Backend:   http://localhost:8080/api
+# MySQL:     localhost:3307 (user: timesheet, pass: secret)
+# Database:  timesheet (central), timesheet_{tenant_slug} (tenant DBs)
+```
+
+**Demo Credentials:** `acarvalho@upg2ai.com` / `upg-to-ai` (tenant) / `password`
+
 # TimePerk Cortex - AI Coding Agent Guide
 
 ## Architecture & Stack
 **Full-stack timesheet/expense management system with Docker Compose orchestration:**
 - **Backend**: Laravel 11 + PHP 8.3 (REST API with Sanctum auth)
 - **Frontend**: React 18 + TypeScript + Vite + MUI (SPA)
-- **Database**: MySQL 8.0 with foreign key constraints
+- **Database**: MySQL 8.0 with foreign key constraints + Multi-tenant architecture (Stancl Tenancy)
 - **Cache**: Redis (sessions + rate limiting)
 - **Web Server**: Nginx (reverse proxy to PHP-FPM)
 
 **Key Design Patterns:**
-- **RBAC**: Spatie Laravel Permission (3 roles: Technician, Manager, Admin + 17 granular permissions)
-- **Triple-Role System**: Separate `project_role`, `expense_role`, and `finance_role` per user per project (via `project_members` pivot table)
+- **Multi-Tenancy**: Stancl Tenancy with hybrid mode (subdomain in production + X-Tenant header for local/dev)
+- **RBAC (System Level)**: Spatie Laravel Permission with 5 system roles + granular permissions:
+  - **Owner**: Super admin of tenant (created during tenant registration), has ALL 21 permissions, CANNOT be deleted, can only be edited by themselves (name only)
+  - **Admin**: Full access with all 21 permissions (same as Owner but can be managed)
+  - **Manager**: System-level role (rarely used, project roles are more important)
+  - **Technician**: Base user role
+  - **Viewer**: Read-only access
+  - **IMPORTANT**: System roles are GLOBAL to the tenant (Spatie package). There are NO "finance" permissions at system level.
+- **Triple-Role System (Project Level)**: Separate `project_role`, `expense_role`, and `finance_role` per user per project (via `project_members` pivot table):
+  - `project_role`: `'member'` | `'manager'` - Controls timesheet approval workflow
+  - `expense_role`: `'member'` | `'manager'` - Controls expense manager approval
+  - `finance_role`: `'none'` | `'member'` | `'manager'` - Controls finance approval (THIS is where finance permissions live - per project!)
+  - **IMPORTANT**: Project roles are PER-PROJECT assignments stored in `project_members` table. A user can be 'manager' for timesheets in Project A but 'member' in Project B.
 - **Policy-Based Authorization**: Laravel Policies enforce ownership + status + project membership rules
 - **Middleware Chaining**: Permission gates → Custom middleware → Policy checks
 - **Form Request Validation**: Business rules (e.g., time overlap) in dedicated FormRequest classes
+- **Granular Rate Limiting**: Separate limits for read (200/min), create (30/min), edit (20/min), critical (10/min)
+
+## Multi-Tenancy Configuration
+**Hybrid Tenant Resolution** (production = subdomain, dev/local = header):
+```env
+# backend/.env
+TENANCY_ALLOW_CENTRAL_FALLBACK=true
+TENANCY_FALLBACK_ENVIRONMENTS=local,development,testing
+CENTRAL_DOMAINS=127.0.0.1,localhost,app.timeperk.localhost
+TENANCY_HEADER=X-Tenant
+```
+
+**Middleware**: `AllowCentralDomainFallback` allows localhost API testing without subdomain
+**Active Tenants**: `slugcheck` (testing), `upg-to-ai` (demo with Owner user)
+**Database Pattern**: Each tenant has isolated database `timesheet_{ulid}`
+
+## Demo Credentials
+**UPG to AI Tenant (Owner):**
+- Email: `acarvalho@upg2ai.com`
+- Tenant: `upg-to-ai`
+- Password: `password`
+- Access: Full admin permissions, can create projects/users/expenses
+
+**Frontend Login:** Available via "Owner (UPG to AI)" demo button on login page
 
 ## Critical Developer Commands
 ```bash
@@ -29,7 +98,21 @@ docker exec -it timesheet_app php artisan db:seed --class=AdminUserSeeder
 # Access services
 # Frontend: http://localhost:3000
 # Backend API: http://localhost:8080/api
-# MySQL: localhost:3307 (user: timesheet, pass: secret, db: timesheet)
+# MySQL: localhost:3307 (user: timesheet, pass: secret)
+# - Central DB: timesheet (tenant records + migrations)
+# - Tenant DBs: timesheet_slugcheck, timesheet_{ulid}
+
+# Test tenant access
+# Demo credentials: acarvalho@upg2ai.com / upg-to-ai / password
+```
+
+## Multi-Tenant Testing
+```bash
+# Using X-Tenant header (local/dev)
+curl -H "X-Tenant: upg-to-ai" http://localhost:8080/api/projects
+
+# Using subdomain (production)
+curl http://upg-to-ai.timeperk.app/api/projects
 ```
 
 ## Audit Fields (MANDATORY FOR ALL TABLES)
@@ -188,8 +271,108 @@ Schema::create('project_members', function (Blueprint $table) {
 });
 ```
 
-**Rate Limits:** `login:5/min`, `create:30/min`, `edit:20/min`, `delete:10/min`, `critical:10/min` (approve/reject)
-**Defined in:** `backend/app/Providers/RouteServiceProvider.php::configureRateLimiting()`
+**Rate Limits (Optimized for Intensive Navigation):**
+- `api`: 120 requests/min (general API limit)
+- `read`: 200 requests/min (GET requests - very permissive)
+- `login`: 5 requests/min (security)
+- `create`: 30 requests/min (POST operations)
+- `edit`: 20 requests/min (PUT/PATCH operations)
+- `delete`: 10 requests/min (DELETE operations)
+- `critical`: 10 requests/min (approve/reject workflows)
+
+**All routes have granular throttle applied:**
+- GET routes → `throttle:read` (200/min)
+- POST routes → `throttle:create` (30/min)
+- PUT/PATCH routes → `throttle:edit` (20/min)
+- DELETE routes → `throttle:delete` (10/min)
+- Approve/Reject → `throttle:critical` (10/min)
+
+**Defined in:** 
+- Rate limiters: `backend/app/Providers/RouteServiceProvider.php::configureRateLimiting()`
+- Route application: `backend/routes/api.php` (all endpoints have specific throttle middleware)
+
+## Owner Protection System (CRITICAL)
+**Owner is the supreme tenant administrator created during tenant registration:**
+
+### Core Rules
+1. **ONE Owner per tenant** - Created automatically during `/api/tenants/register`
+2. **Cannot be deleted** - 403 error on delete attempts (`TechnicianController::destroy()`)
+3. **Self-edit only** - Only Owner can edit themselves, and **only the name field**
+4. **Hidden from others** - Owners only visible to themselves in user lists
+5. **All 21 permissions** - Owner has every system permission by default
+
+### Backend Implementation
+**Location:** `backend/app/Http/Controllers/Api/TechnicianController.php`
+
+```php
+// index() - Visibility filtering
+if ($user->hasRole('Owner')) {
+    // Owner sees ALL users including other Owners
+    $technicians = Technician::with(['user.roles'])->get();
+} else {
+    // Non-Owners see everyone EXCEPT Owners
+    $technicians = Technician::whereDoesntHave('user.roles', function($q) {
+        $q->where('name', 'Owner');
+    })->get();
+}
+
+// update() - Self-edit protection
+if ($technician->user && $technician->user->hasRole('Owner')) {
+    if ($currentUser->id !== $technician->user_id) {
+        return response()->json(['message' => 'Owner users cannot be edited by others.'], 403);
+    }
+    // Owner can only update name
+    $validated = $request->validate(['name' => 'string|max:255']);
+    $technician->update(['name' => $validated['name']]);
+}
+
+// destroy() - Delete protection
+if ($technician->user && $technician->user->hasRole('Owner')) {
+    return response()->json(['message' => 'Owner users cannot be deleted.'], 403);
+}
+```
+
+### Frontend Implementation
+**Location:** `frontend/src/components/Admin/UsersManager.tsx`
+
+```tsx
+// Edit button disabled for Owners (except self)
+disabled={user?.is_owner && user.user_id !== currentUser?.id}
+
+// Delete button disabled for ALL Owners
+disabled={user?.is_owner}
+
+// Dialog fields disabled except name when editing Owner
+<TextField
+  disabled={editingUser?.is_owner && field !== 'name'}
+  // Password field hidden for Owners
+  type={field === 'password' && !editingUser?.is_owner ? 'password' : 'text'}
+/>
+
+// Owner badge in DataGrid
+{user.is_owner && (
+  <Chip label="Owner" size="small"
+    sx={{ ml: 1, bgcolor: '#fbbf24', color: '#78350f' }} />
+)}
+```
+
+**Location:** `frontend/src/components/Layout/SideMenu.tsx`
+
+```tsx
+// Single badge next to user name (NO duplicates)
+const isOwner = user?.roles?.includes('Owner');
+const displayRole = isOwner ? 'Owner' : (isSuperAdmin ? 'Admin' : null);
+
+{displayRole && (
+  <Chip label={displayRole} size="small"
+    sx={{ bgcolor: displayRole === 'Owner' ? '#fbbf24' : '#8b5cf6' }} />
+)}
+```
+
+### UI Badges
+- **Owner badge**: Gold background `#fbbf24`, brown text `#78350f`
+- **Admin badge**: Purple background `#8b5cf6`, white text
+- **Location**: Single badge in SideMenu header (not duplicated), DataGrid name column
 
 ## Critical Business Rules (DO NOT VIOLATE)
 ### Time Overlap Prevention
@@ -617,6 +800,12 @@ const expenseUserRole = isAdmin()
 18. **Finance Role detection**: Finance managers are identified by `project_memberships[].finance_role === 'manager'`, NOT by global permissions or roles
 19. **Sidebar collapsed state**: Management/Administration sections use conditional rendering `{collapsed ? icons : <Collapse>}` - DO NOT rely solely on Collapse component with `in={!collapsed}`
 20. **User object extensions**: Always check `project_memberships` availability before accessing - it's optional and populated on login/auth check
+21. **Tenant header requirement**: All API calls MUST include `X-Tenant` header in local/dev environments - use `api` service from `services/api.ts` which auto-includes it
+22. **Rate limiting**: GET requests limited to 200/min, POST to 30/min, PUT/PATCH to 20/min, DELETE/approve to 10/min - avoid rapid sequential calls, use debouncing for search/filters
+23. **Multi-tenant database**: Each tenant has separate database `timesheet_{slug}` - never hardcode database names, always use tenant context
+24. **System vs Project Roles**: System roles (Owner, Admin, Manager, Technician, Viewer) are GLOBAL tenant-wide via Spatie. Project roles (project_role, expense_role, finance_role) are PER-PROJECT via `project_members` table. NO "finance permissions" at system level!
+25. **Owner Protection**: Owner users CANNOT be deleted or edited by others. Only Owner can edit themselves (name only). Owners are hidden from non-Owner users in lists.
+26. **SideMenu badges**: Only ONE role badge should appear next to user name (Owner or Admin). Remove any duplicate role badge rendering in user info section.
 
 ## Additional Documentation
 
@@ -654,3 +843,210 @@ docker exec -it timesheet_app php artisan migrate:fresh --seed
 - **Development Guide**: `docs/DEVELOPMENT_GUIDELINES.md`
 - **Travel Timesheets**: `docs/TRAVEL_TIMESHEETS_FEATURE.md`
 - **Database Analysis**: `docs/DATABASE_ANALYSIS_AND_GANTT_PROPOSAL.md`
+
+
+## Frontend hardening tasks (multi-tenant)
+
+Goal: make all API calls tenant-aware and improve UX safety, without refactoring auth or login.
+
+### 1) API helper (must use everywhere except login)
+Create `src/lib/apiClient.ts`:
+
+export type ApiOptions = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: any;
+  json?: boolean; // default true
+};
+
+export async function api(path: string, opts: ApiOptions = {}) {
+  const base = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+  const token = localStorage.getItem("token") ?? "";
+  const tenant = localStorage.getItem("tenant_slug") ?? "";
+  const url = `${base}${path}`;
+
+  const headers: Record<string, string> = {
+    ...(opts.json !== false ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(tenant ? { "X-Tenant": tenant } : {}),
+    ...opts.headers,
+  };
+
+  let body: BodyInit | undefined = undefined;
+  if (opts.json !== false && opts.body && !(opts.body instanceof FormData)) {
+    // For JSON endpoints that require tenant in body, callers pass it explicitly.
+    body = JSON.stringify(opts.body);
+  } else if (opts.body instanceof FormData) {
+    body = opts.body; // Let browser set multipart boundary
+    delete headers["Content-Type"];
+  }
+
+  const res = await fetch(url, { method: opts.method ?? "GET", headers, body });
+  if (!res.ok) {
+    // Bubble up structured error
+    let detail: any = null;
+    try { detail = await res.json(); } catch {}
+    const err = new Error(`HTTP ${res.status} on ${path}`);
+    (err as any).status = res.status;
+    (err as any).detail = detail;
+    throw err;
+  }
+  const ct = res.headers.get("content-type") || "";
+  return ct.includes("application/json") ? res.json() : res.text();
+}
+
+### 2) Replace native fetch calls
+- Replace all `fetch('/api/...')` usages with `api('/api/...', { method, body })`.
+- Keep login using the existing call so it can put `tenant_slug` in the body.
+
+### 3) Expenses & Approvals empty-states
+- Add friendly “No expenses yet” / “No approvals pending” states.
+- Show inline error banners for 4xx/5xx with action hints (“Retry”, “Back to list”).
+
+### 4) Tenant guard
+- On protected pages, if `localStorage.tenant_slug` is missing, redirect to `/login?reason=missing-tenant`.
+
+### 5) Quick E2E
+- Add a Cypress spec: login → create expense (POST /api/expenses) → list → approve/reject (PATCH /api/approvals/:id).
+- Fail the test if any request lacks `X-Tenant`.
+
+Constraints:
+- Do NOT modify the login POST payload.
+- Do NOT change backend routes or controllers.
+- Keep FormData uploads using getAuthHeaders().
+
+
+Quick smoke checklist:
+# Frontend
+cd frontend && npm run dev
+
+# Backend up (Docker already running), API at http://localhost:8080
+
+# UI flow
+# 1) Login as demo admin (ensure tenant_slug persisted)
+# 2) Expenses: create → list → edit → delete
+# 3) Approvals: approve/reject
+# 4) Check DevTools console and network for any request missing X-Tenant
+# 5) Tail backend logs for 4xx/5xx
+
+
+
+Perfeito 👏 — entendi exatamente o que queres:
+Há um ecrã onde não aplicaram a validação obrigatória (required) no frontend, nem a validação no backend.
+Queres dar instruções claras ao Copilot para ele seguir o padrão existente (como nos teus outros formulários — por exemplo, Timesheets e Expenses).
+
+Aqui tens o texto ideal para colocares no .copilot-instructions.md (ou colar no topo do ficheiro do componente em causa).
+Ele faz o Copilot detetar e aplicar o padrão de validação correto, tanto no frontend como no backend, sem inventar ou mudar o comportamento global.
+
+⸻
+
+
+# 🧭 Validation Standard Instructions (Frontend + Backend)
+
+## Goal
+Apply **consistent validation rules** to all data-entry forms (Timesheets, Expenses, etc.), both **client-side (required fields)** and **server-side (Laravel FormRequest validation)**.
+
+The missing screen must **follow the exact same pattern** already used in:
+- `/frontend/src/components/Timesheets/TimesheetCalendar.tsx`
+- `/frontend/src/components/Expenses/ExpenseManager.tsx`
+- `/backend/app/Http/Requests/StoreTimesheetRequest.php`
+
+---
+
+## ✅ Frontend Rules
+Perfeito 👏 — sim, as imagens que mostraste (do formulário Timesheet) estão exatamente corretas e são o comportamento que as instruções deviam garantir.
+Ou seja, o botão “Save” sempre ativo, e os campos obrigatórios só mostram erro quando o utilizador tenta guardar ou sai do campo — tal como na captura que mostraste.
+
+⸻
+
+✅ Confirmação: o padrão certo é este
+	•	Botão ativo desde o início (não desativado preventivamente)
+	•	Campos obrigatórios com required e tooltip "Preencha este campo."
+	•	A validação só aparece depois de tentar submeter ou perder o foco
+	•	A experiência é idêntica nas telas de Timesheets e Expenses
+
+Exatamente como se vê na tua primeira imagem:
+
+o botão azul ativo, o tooltip laranja a dizer “Preencha este campo.”, e o campo com borda destacada.
+
+⸻
+
+⚙️ O que aconteceu com o Copilot
+
+O Copilot interpretou mal o trecho onde dizíamos “disable save until required fields are valid” — ele aplicou literalmente, deixando o botão desativado de início (o que não é o comportamento do projeto).
+
+⸻
+
+🧠 A correção — coloca isto nas tuas instruções (Copilot/Docs)
+
+Substitui o bloco anterior de validação no .copilot-instructions.md por este: 👇
+
+⸻
+
+
+# 🧭 Validation UX Standard (Timesheet / Expense Forms)
+
+## Goal
+Ensure the same validation behavior across all forms:
+✅ Save button is **enabled by default**  
+⚠️ Validation errors appear **only after user interaction (blur or submit)**  
+
+---
+
+## Rules
+
+1. **Do NOT disable the Save button at form load.**
+   - The button must remain active from the start.
+   - Validation occurs only on submit or when a required field loses focus.
+
+2. **Show validation messages dynamically:**
+   - On empty required field → show `"Preencha este campo."` (PT) or `"This field is required."` (EN)
+   - Use MUI `error` and `helperText` properties only when the user has interacted.
+
+3. **Frontend code example (MUI + React):**
+```tsx
+const [submitted, setSubmitted] = useState(false);
+
+const handleSave = (e: React.FormEvent) => {
+  e.preventDefault();
+  setSubmitted(true);
+
+  if (!project || !task || !description) {
+    // stop if required fields missing
+    return;
+  }
+
+  // proceed with API call
+};
+
+<TextField
+  required
+  label="Description"
+  value={description}
+  onChange={(e) => setDescription(e.target.value)}
+  error={submitted && !description}
+  helperText={submitted && !description ? "Preencha este campo." : ""}
+/>
+
+<Button
+  variant="contained"
+  color="primary"
+  onClick={handleSave}
+>
+  SAVE
+</Button>
+
+	4.	Backend validation must still exist in Laravel FormRequest (as fallback for API calls).
+	5.	Visual pattern must match the Timesheet modal:
+	•	Blue “SAVE” button always visible and enabled
+	•	Tooltip or inline red text only after failed validation
+	•	Input borders highlighted in red for invalid required fields
+
+⸻
+
+Summary for Copilot
+	•	Always keep the Save button enabled.
+	•	Use error and helperText logic — never disable submit.
+	•	Use the same UX as the Timesheet “New Entry” modal shown in design references.
+	•	Backend FormRequest must continue validating the same fields.
+

@@ -116,6 +116,7 @@ class PlanningController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'progress' => 'integer|min:0|max:100',
             'dependencies' => 'nullable|string',
+            'is_active' => 'sometimes|boolean',
         ]);
         return Task::create($data);
     }
@@ -127,6 +128,7 @@ class PlanningController extends Controller
             'end_date' => 'sometimes|date|after_or_equal:start_date',
             'progress' => 'sometimes|integer|min:0|max:100',
             'dependencies' => 'nullable|string',
+            'is_active' => 'sometimes|boolean',
         ]);
         $task->update($data);
         return $task;
