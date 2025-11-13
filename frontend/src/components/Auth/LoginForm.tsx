@@ -16,6 +16,7 @@ import { useAuth } from './AuthContext';
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [tenantSlug, setTenantSlug] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -27,17 +28,16 @@ export const LoginForm: React.FC = () => {
     setError('');
 
     // Basic validation
-    if (!email || !password) {
-      setError('Please enter both email and password');
+    if (!email || !password || !tenantSlug) {
+      setError('Please enter email, password, and tenant');
       setLoading(false);
       return;
     }
 
-    console.log('Form submitting with:', { email, password: '***' });
-    const success = await login(email, password);
+    const success = await login(email, password, tenantSlug);
     
     if (!success) {
-      setError('Invalid email or password');
+      setError('Invalid credentials or tenant not found');
     }
     // Note: Navigation is handled automatically by App.tsx when user state changes
     
@@ -145,6 +145,19 @@ export const LoginForm: React.FC = () => {
                 required
                 fullWidth
                 size="small"
+                id="tenant"
+                label="Tenant"
+                name="tenant"
+                placeholder="e.g., demo"
+                helperText="Your organization's unique identifier"
+                value={tenantSlug}
+                onChange={(e) => setTenantSlug(e.target.value)}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                size="small"
                 name="password"
                 label="Password"
                 type="password"
@@ -201,49 +214,46 @@ export const LoginForm: React.FC = () => {
                 </Box>
               </Box>
 
-              {/* Demo Accounts */}
+              {/* Demo Account */}
               <Box sx={{ mt: 2, display: 'flex', gap: 1, flexDirection: 'column' }}>
                 <Typography variant="caption" color="text.secondary" align="center">
-                  Demo Accounts:
+                  Demo Account:
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => {
+                    setEmail('acarvalho@upg2ai.com');
+                    setTenantSlug('upg-to-ai');
+                    setPassword('password');
+                  }}
+                  disabled={loading}
+                  sx={{ 
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    fontWeight: 'bold',
+                    py: 1
+                  }}
+                >
+                  Owner (UPG to AI)
+                </Button>
+              </Box>
+
+              {/* Sign up link */}
+              <Box sx={{ mt: 3, textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Don't have a workspace?{' '}
                   <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setEmail('joao.silva@example.com');
-                      setPassword('password');
+                    onClick={() => window.location.href = '/register'}
+                    sx={{ 
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      p: 0,
+                      minWidth: 'auto'
                     }}
-                    disabled={loading}
-                    sx={{ flex: 1, minWidth: 0 }}
                   >
-                    Tech
+                    Create one
                   </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setEmail('carlos.manager@example.com');
-                      setPassword('password');
-                    }}
-                    disabled={loading}
-                    sx={{ flex: 1, minWidth: 0 }}
-                  >
-                    Manag
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setEmail('admin@timeperk.com');
-                      setPassword('admin123');
-                    }}
-                    disabled={loading}
-                    sx={{ flex: 1, minWidth: 0 }}
-                  >
-                    Admin
-                  </Button>
-                </Box>
+                </Typography>
               </Box>
             </Box>
           </CardContent>

@@ -92,16 +92,16 @@ class StoreTimesheetRequest extends FormRequest
             ->get();
             
         foreach ($existingTimesheets as $existing) {
-            // Extract time part only from datetime fields for comparison
-            // Handle both string and DateTime formats
+            // Extract time part only - now comes as string "HH:MM:SS" from database
             $existingStart = $existing->start_time;
-            if ($existingStart instanceof \Carbon\Carbon || $existingStart instanceof \DateTime) {
-                $existingStart = $existingStart->format('H:i');
-            }
-            
             $existingEnd = $existing->end_time;
-            if ($existingEnd instanceof \Carbon\Carbon || $existingEnd instanceof \DateTime) {
-                $existingEnd = $existingEnd->format('H:i');
+            
+            // Normalize to HH:MM format for comparison (remove seconds if present)
+            if (is_string($existingStart) && strlen($existingStart) > 5) {
+                $existingStart = substr($existingStart, 0, 5); // "09:00:00" -> "09:00"
+            }
+            if (is_string($existingEnd) && strlen($existingEnd) > 5) {
+                $existingEnd = substr($existingEnd, 0, 5); // "10:00:00" -> "10:00"
             }
             
             if (!$existingStart || !$existingEnd) {

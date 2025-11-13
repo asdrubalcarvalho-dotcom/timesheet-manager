@@ -18,7 +18,20 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: 'Technician' | 'Manager' | 'Admin';
+  role: 'Technician' | 'Manager' | 'Admin' | 'Owner';
+  roles?: string[];
+  permissions?: string[];
+  is_owner?: boolean;
+  is_manager?: boolean;
+  is_technician?: boolean;
+  is_admin?: boolean;
+  managed_projects?: number[];
+  project_memberships?: Array<{
+    project_id: number;
+    project_role: 'member' | 'manager';
+    expense_role: 'member' | 'manager';
+    finance_role: 'none' | 'member' | 'manager';
+  }>;
   created_at: string;
   updated_at: string;
 }

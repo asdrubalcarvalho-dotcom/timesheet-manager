@@ -53,10 +53,15 @@ class ProjectController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'start_date' => 'required|date',
-            'end_date' => 'nullable|date|after:start_date',
-            'status' => ['string', Rule::in(['active', 'completed', 'on_hold'])],
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'status' => ['nullable', 'string', Rule::in(['active', 'completed', 'on_hold'])],
             'manager_id' => 'nullable|exists:users,id'
         ]);
+
+        // Set default status if not provided
+        if (!isset($validated['status'])) {
+            $validated['status'] = 'active';
+        }
 
         $project = Project::create($validated);
         return response()->json($project, 201);

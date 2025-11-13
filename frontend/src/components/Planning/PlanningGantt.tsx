@@ -12,6 +12,7 @@ import {
 import type { SelectChangeEvent } from '@mui/material';
 import dayjs from 'dayjs';
 import api from '../../services/api';
+import { useTenantGuard } from '../../hooks/useTenantGuard';
 
 type Project = {
   id: number;
@@ -82,6 +83,7 @@ const ensureFrappeAssets = (): Promise<void> => {
 };
 
 const PlanningGantt: React.FC = () => {
+  useTenantGuard(); // Ensure tenant_slug exists
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<number | ''>('');
   const [loadingProjects, setLoadingProjects] = useState<boolean>(true);

@@ -203,6 +203,37 @@ class ExpenseController extends Controller
     }
 
     /**
+     * Download expense attachment
+     * Supports both Authorization header and ?token query parameter
+     */
+    public function downloadAttachment(Request $request, Expense $expense)
+    {
+        // Manual authentication check (avoid redirect to login route)
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        // Verify user has permission to view this expense
+        $this->authorize('view', $expense);
+
+        if (!$expense->attachment_path || !Storage::disk('public')->exists($expense->attachment_path)) {
+            return response()->json(['error' => 'Attachment not found'], 404);
+        }
+
+        // Get file contents and metadata from public disk
+        $contents = Storage::disk('public')->get($expense->attachment_path);
+        $mimeType = Storage::disk('public')->mimeType($expense->attachment_path);
+        $filename = basename($expense->attachment_path);
+
+        // Return file response with inline display (not download)
+        return response($contents)
+            ->header('Content-Type', $mimeType)
+            ->header('Content-Disposition', 'inline; filename="' . $filename . '"')
+            ->header('Cache-Control', 'public, max-age=3600');
+    }
+
+    /**
      * Get pending expenses for approval (managers only)
      */
     public function pending(Request $request): JsonResponse

@@ -22,9 +22,14 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting(): void
     {
-        // API geral
+        // API geral - aumentado para uso intensivo de navegação
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
+            return Limit::perMinute(120)->by(optional($request->user())->id ?: $request->ip());
+        });
+
+        // Leitura de dados (GET requests) - muito permissivo
+        RateLimiter::for('read', function (Request $request) {
+            return Limit::perMinute(200)->by(optional($request->user())->id ?: $request->ip());
         });
 
         // Login mais restritivo

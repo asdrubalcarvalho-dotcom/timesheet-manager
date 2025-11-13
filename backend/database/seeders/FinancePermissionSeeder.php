@@ -36,11 +36,18 @@ class FinancePermissionSeeder extends Seeder
         // Assign all finance permissions to Finance role
         $financeRole->givePermissionTo(array_keys($permissions));
 
-        // Admin should have all finance permissions too
-        $adminRole = Role::where('name', 'Admin')->first();
-        if ($adminRole) {
-            $adminRole->givePermissionTo(array_keys($permissions));
+        // Owner should have ALL permissions (including finance)
+        $ownerRole = Role::where('name', 'Owner')->first();
+        if ($ownerRole) {
+            $ownerRole->givePermissionTo(array_keys($permissions));
         }
+
+        // Admin should NOT have finance permissions by default (must be assigned manually)
+        // Commented out to enforce explicit assignment
+        // $adminRole = Role::where('name', 'Admin')->first();
+        // if ($adminRole) {
+        //     $adminRole->givePermissionTo(array_keys($permissions));
+        // }
 
         $this->command->info('Finance permissions created successfully!');
         $this->command->info('Permissions: ' . implode(', ', array_keys($permissions)));

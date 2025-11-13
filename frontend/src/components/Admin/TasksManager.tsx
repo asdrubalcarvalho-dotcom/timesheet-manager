@@ -9,12 +9,13 @@ import {
   TextField,
   IconButton,
   MenuItem,
-  Paper
+  Fab
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -22,6 +23,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
 import AdminLayout from './AdminLayout';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
+import EmptyState from '../Common/EmptyState';
 import api from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 
@@ -45,11 +47,18 @@ interface Project {
 }
 
 const normalizeApiResponse = <T,>(payload: any): T[] => {
+  // If payload is already an array, return it
   if (Array.isArray(payload)) {
     return payload;
   }
 
-  if (Array.isArray(payload?.data)) {
+  // If payload has a data property that's an array, return it
+  if (payload && Array.isArray(payload.data)) {
+    return payload.data;
+  }
+
+  // If payload is wrapped in success/data structure
+  if (payload && payload.success && Array.isArray(payload.data)) {
     return payload.data;
   }
 
@@ -92,7 +101,7 @@ const TasksManager: React.FC = () => {
     end_date: '',
     progress: '0',
     dependencies: '',
-    is_active: true
+    is_active: true as boolean
   });
 
   useEffect(() => {
@@ -104,7 +113,13 @@ const TasksManager: React.FC = () => {
     try {
       setLoading(true);
       const response = await api.get('/tasks');
-      setTasks(normalizeApiResponse<Task>(response.data));
+      // Normalize is_active to boolean for all tasks
+      setTasks(
+        normalizeApiResponse<Task>(response.data).map(t => ({
+          ...t,
+          is_active: t.is_active === true,
+        }))
+      );
     } catch (error) {
       showError('Failed to load tasks');
     } finally {
@@ -134,7 +149,7 @@ const TasksManager: React.FC = () => {
         end_date: task.end_date ?? '',
         progress: (task.progress ?? 0).toString(),
         dependencies: (task.dependencies ?? []).join(', '),
-        is_active: task.is_active ?? true
+        is_active: !!task.is_active
       });
     } else {
       setEditingTask(null);
@@ -159,7 +174,11 @@ const TasksManager: React.FC = () => {
     setEditingTask(null);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
     try {
       const payload = {
         name: formData.name,
@@ -173,7 +192,7 @@ const TasksManager: React.FC = () => {
         dependencies: formData.dependencies
           ? formData.dependencies.split(',').map(dep => dep.trim()).filter(Boolean)
           : [],
-        is_active: formData.is_active
+        is_active: formData.is_active === true,
       };
 
       if (editingTask) {
@@ -221,16 +240,16 @@ const TasksManager: React.FC = () => {
       width: 80
     },
     {
-      field: 'description',
-      headerName: 'Description',
-      flex: 1.2,
-      minWidth: 220
-    },
-    {
       field: 'name',
       headerName: 'Name',
       flex: 1,
       minWidth: 200
+    },
+    {
+      field: 'description',
+      headerName: 'Description',
+      flex: 1.2,
+      minWidth: 220
     },
     {
       field: 'task_type',
@@ -277,7 +296,25 @@ const TasksManager: React.FC = () => {
       field: 'is_active',
       headerName: 'Status',
       width: 120,
-      valueFormatter: (params?: { value?: boolean }) => (params?.value ? 'Active' : 'Inactive')
+      renderCell: (params: GridRenderCellParams) => {
+        const isActive = params.row.is_active === true || params.row.is_active === 1 || params.row.is_active === '1';
+        return (
+          <Box
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 1,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              bgcolor: isActive ? '#4caf5015' : '#ff980015',
+              color: isActive ? '#4caf50' : '#ff9800'
+            }}
+          >
+            {isActive ? 'Active' : 'Inactive'}
+          </Box>
+        );
+      }
     },
     {
       field: 'actions',
@@ -307,33 +344,15 @@ const TasksManager: React.FC = () => {
 
   return (
     <AdminLayout title="Tasks Management">
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2, md: 3 },
-          borderRadius: 3,
-          boxShadow: '0px 25px 45px rgba(15, 23, 42, 0.08)',
-          bgcolor: '#fff'
-        }}
-      >
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            sx={{
-              bgcolor: '#43a047',
-              textTransform: 'none',
-              fontWeight: 600,
-              '&:hover': {
-                bgcolor: '#357a38'
-              }
-            }}
-          >
-            New Task
-          </Button>
-        </Box>
-
+      {!loading && tasks.length === 0 ? (
+        <EmptyState
+          icon={AssignmentIcon}
+          title="No tasks yet"
+          subtitle="Create your first task to start tracking project activities"
+          actionLabel="New Task"
+          onAction={() => handleOpenDialog()}
+        />
+      ) : (
         <Box sx={{ width: '100%', overflowX: 'auto' }}>
           <DataGrid
             autoHeight
@@ -347,27 +366,54 @@ const TasksManager: React.FC = () => {
             disableRowSelectionOnClick
             sx={{
               minWidth: 900,
+              border: 'none',
               '& .MuiDataGrid-cell:focus': {
                 outline: 'none'
               },
               '& .MuiDataGrid-row:hover': {
-                bgcolor: 'rgba(67, 160, 71, 0.04)'
+                bgcolor: 'rgba(102, 126, 234, 0.04)'
               },
               '& .MuiDataGrid-columnHeaders': {
-                bgcolor: '#f8fafc',
+                bgcolor: 'rgba(102, 126, 234, 0.08)',
+                borderRadius: '8px 8px 0 0',
                 fontWeight: 600
               }
             }}
           />
         </Box>
-      </Paper>
+      )}
 
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      {/* Floating Action Button */}
+      {tasks.length > 0 && (
+        <Fab
+          color="primary"
+          onClick={() => handleOpenDialog()}
+          sx={{
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      )}
+
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>
           {editingTask ? 'Edit Task' : 'New Task'}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box component="form" onSubmit={handleSave} id="task-form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
               label="Name"
               fullWidth
@@ -386,6 +432,7 @@ const TasksManager: React.FC = () => {
             <TextField
               select
               label="Project"
+              fullWidth
               required
               value={formData.project_id}
               onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
@@ -454,29 +501,15 @@ const TasksManager: React.FC = () => {
                 <MenuItem value="inactive">Inactive</MenuItem>
               </TextField>
             </Box>
-            <TextField
-              label="Project"
-              select
-              fullWidth
-              value={formData.project_id}
-              onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-            >
-              <MenuItem value="">None</MenuItem>
-              {projects.map((project) => (
-                <MenuItem key={project.id} value={project.id.toString()}>
-                  {project.name}
-                </MenuItem>
-              ))}
-            </TextField>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button
-            onClick={handleSave}
+            type="submit"
+            form="task-form"
             variant="contained"
-            disabled={!formData.name}
-            sx={{ bgcolor: '#43a047', '&:hover': { bgcolor: '#357a38' } }}
+            color="primary"
           >
             {editingTask ? 'Update' : 'Create'}
           </Button>

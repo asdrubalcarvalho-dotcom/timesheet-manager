@@ -238,13 +238,15 @@ const Dashboard: React.FC = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Hours by Project */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '400px' }}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
               <TrendingUp sx={{ mr: 1 }} />
               Hours by Project
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
-              <BarChart data={stats.hours_by_project}>
+            {stats.hours_by_project.length > 0 ? (
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.hours_by_project}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="project_name" 
@@ -276,18 +278,26 @@ const Dashboard: React.FC = () => {
                 <Bar dataKey="total_hours" fill={COLORS.primary} name="Hours" />
               </BarChart>
             </ResponsiveContainer>
+            </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">No data available</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
 
         {/* Expenses by Project */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '400px' }}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
               <AttachMoney sx={{ mr: 1 }} />
               Expenses by Project
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
-              <BarChart data={stats.expenses_by_project}>
+            {stats.expenses_by_project.length > 0 ? (
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.expenses_by_project}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="project_name" 
@@ -319,6 +329,12 @@ const Dashboard: React.FC = () => {
                 <Bar dataKey="total_amount" fill={COLORS.success} name="Amount (€)" />
               </BarChart>
             </ResponsiveContainer>
+            </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">No data available</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -327,12 +343,14 @@ const Dashboard: React.FC = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Hours by Status - Pie Chart */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '400px' }}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Timesheets by Status
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
-              <PieChart>
+            {stats.hours_by_status.length > 0 ? (
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
                 <Pie
                   data={stats.hours_by_status as any}
                   dataKey="count"
@@ -350,17 +368,25 @@ const Dashboard: React.FC = () => {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
+            </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">No data available</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
 
         {/* Expenses by Status - Pie Chart */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '400px' }}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Expenses by Status
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
-              <PieChart>
+            {stats.expenses_by_status.length > 0 ? (
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
                 <Pie
                   data={stats.expenses_by_status as any}
                   dataKey="count"
@@ -378,6 +404,12 @@ const Dashboard: React.FC = () => {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
+            </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">No data available</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -386,12 +418,14 @@ const Dashboard: React.FC = () => {
       <Grid container spacing={3}>
         {/* Daily Hours Trend */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '400px' }}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Daily Hours Trend
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
-              <LineChart data={stats.daily_hours}>
+            {stats.daily_hours.length > 0 ? (
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={stats.daily_hours}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
@@ -416,17 +450,25 @@ const Dashboard: React.FC = () => {
                 />
               </LineChart>
             </ResponsiveContainer>
+            </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">No data available</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
 
         {/* Daily Expenses Trend */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '400px' }}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Daily Expenses Trend
             </Typography>
-            <ResponsiveContainer width="100%" height="90%">
-              <LineChart data={stats.daily_expenses}>
+            {stats.daily_expenses.length > 0 ? (
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={stats.daily_expenses}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
@@ -451,6 +493,12 @@ const Dashboard: React.FC = () => {
                 />
               </LineChart>
             </ResponsiveContainer>
+            </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">No data available</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
       </Grid>

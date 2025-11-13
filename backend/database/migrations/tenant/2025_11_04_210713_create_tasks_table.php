@@ -23,7 +23,7 @@ return new class extends Migration {
                 'training'
             ])->default('maintenance');
             $table->boolean('is_active')->default(true);
-            $table->decimal('estimated_hours', 5, 2)->nullable();
+            $table->decimal('estimated_hours', 8, 2)->nullable(); // Changed from 5,2 to 8,2 (up to 999,999.99 hours)
             $table->date('start_date')->nullable();
             $table->date('end_date')->nullable();
             $table->unsignedTinyInteger('progress')->default(0);

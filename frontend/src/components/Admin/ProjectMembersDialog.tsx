@@ -194,7 +194,13 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      fullWidth 
+      maxWidth="md"
+      disableRestoreFocus
+    >
       <DialogTitle>Manage members — {project.name}</DialogTitle>
       <DialogContent dividers>
         {loadingMembers ? (

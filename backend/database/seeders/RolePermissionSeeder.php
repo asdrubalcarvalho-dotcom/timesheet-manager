@@ -11,12 +11,13 @@ class RolePermissionSeeder extends Seeder
 {
     public function run(): void
     {
-        // Define roles
+        // Define roles (Owner is the super admin of the tenant)
         $roles = [
-            'Admin',
-            'Manager',
-            'Technician',
-            'Viewer'
+            'Owner',      // Super Admin - created during tenant registration, has ALL permissions
+            'Admin',      // Full access except finance (configurable)
+            'Manager',    // Project/team management
+            'Technician', // Base user
+            'Viewer'      // Read-only
         ];
 
         // Define permissions
@@ -43,8 +44,16 @@ class RolePermissionSeeder extends Seeder
         // Create roles and assign permissions
         foreach ($roles as $role) {
             $roleModel = Role::firstOrCreate(['name' => $role]);
-            if ($role === 'Admin') {
+            
+            if ($role === 'Owner') {
+                // Owner has ALL permissions (including future ones)
                 $roleModel->givePermissionTo($permissions);
+            } elseif ($role === 'Admin') {
+                // Admin has all permissions EXCEPT finance-related (must be assigned manually)
+                $nonFinancePermissions = array_filter($permissions, function($perm) {
+                    return !str_contains($perm, 'finance');
+                });
+                $roleModel->givePermissionTo($nonFinancePermissions);
             } elseif ($role === 'Manager') {
                 $roleModel->givePermissionTo([
                     'view timesheets', 'approve timesheets', 'edit timesheets',
@@ -61,10 +70,6 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
-        // Optionally assign Admin role to first user
-        $user = User::first();
-        if ($user) {
-            $user->assignRole('Admin');
-        }
+        // DO NOT assign role to first user - Owner is created during tenant registration
     }
 }

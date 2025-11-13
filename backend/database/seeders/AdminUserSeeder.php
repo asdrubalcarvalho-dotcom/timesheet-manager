@@ -2,10 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\User;
 use App\Models\Technician;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\PermissionRegistrar;
 
 class AdminUserSeeder extends Seeder
 {
@@ -24,9 +26,21 @@ class AdminUserSeeder extends Seeder
             ]
         );
 
+        $tenant = Tenant::where('slug', 'demo')->first();
+
+        if ($tenant && $adminUser->tenant_id !== $tenant->id) {
+            $adminUser->tenant_id = $tenant->id;
+            $adminUser->save();
+        }
+
         // Assign Admin role if using Spatie
-        if (!$adminUser->hasRole('Admin')) {
+        if ($tenant && !$adminUser->hasRole('Admin')) {
+            $registrar = app(PermissionRegistrar::class);
+            $registrar->setPermissionsTeamId($tenant->id);
+
             $adminUser->assignRole('Admin');
+
+            $registrar->setPermissionsTeamId(null);
         }
 
         // Create corresponding technician record
@@ -38,6 +52,7 @@ class AdminUserSeeder extends Seeder
                 'hourly_rate' => 100.00,
                 'is_active' => true,
                 'user_id' => $adminUser->id,
+                'tenant_id' => $tenant?->id,
                 'worker_id' => sprintf('SYS-%04d', $adminUser->id),
                 'worker_name' => 'System Administrator',
             ]

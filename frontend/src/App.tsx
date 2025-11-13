@@ -5,12 +5,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import 'dayjs/locale/pt';
+import dayjs from 'dayjs';
+
+// Set dayjs locale to Portuguese (Portugal) for DD/MM/YYYY format
+dayjs.locale('pt');
 
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SideMenu from './components/Layout/SideMenu';
 import { LoginForm } from './components/Auth/LoginForm';
+import TenantRegistration from './components/Auth/TenantRegistration';
 const TimesheetCalendar = React.lazy(() => import('./components/Timesheets/TimesheetCalendar'));
 const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
 const PlanningGantt = React.lazy(() => import('./components/Planning/PlanningGantt'));
@@ -108,11 +114,17 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const currentPage = pathToPage(location.pathname);
 
+  // ✅ ALWAYS call hooks before any conditional returns (Rules of Hooks)
   useEffect(() => {
     if (location.pathname === '/' || location.pathname === '') {
       navigate(pageToPath[DEFAULT_PAGE], { replace: true });
     }
   }, [location.pathname, navigate]);
+
+  // Public routes that don't require authentication
+  if (location.pathname === '/register') {
+    return <TenantRegistration />;
+  }
 
   if (!user) {
     return <LoginForm />;
@@ -195,7 +207,7 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt">
           <CssBaseline />
           <AuthProvider>
             <NotificationProvider>

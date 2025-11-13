@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
-            $table->enum('role', ['technician', 'manager']);
+            $table->enum('role', ['technician', 'manager', 'owner']);
             $table->decimal('hourly_rate', 8, 2)->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();

@@ -21,10 +21,13 @@ import {
   TablePagination,
   Typography
 } from '@mui/material';
-import { Edit, Delete, Add, AttachFile, ErrorOutline } from '@mui/icons-material';
+import { Edit, Delete, Add, AttachFile, Receipt as ReceiptIcon, Visibility, Close, ErrorOutline } from '@mui/icons-material';
 import PageHeader from '../Common/PageHeader';
+import EmptyState from '../Common/EmptyState';
 import InputDialog from '../Common/InputDialog';
 import { useNotification } from '../../contexts/NotificationContext';
+import { getAuthHeaders, fetchWithAuth } from '../../services/api';
+import { useTenantGuard } from '../../hooks/useTenantGuard';
 
 interface Project {
   id: number;
@@ -50,6 +53,7 @@ interface ExpenseEntry {
 
 export const ExpenseManager: React.FC = () => {
   const { showSuccess, showError, showWarning } = useNotification();
+  useTenantGuard(); // Ensure tenant_slug exists
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -74,7 +78,10 @@ export const ExpenseManager: React.FC = () => {
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [ratePerKm, setRatePerKm] = useState<number>(0.36); // Default rate
   const [vehicleType, setVehicleType] = useState('car');
+  const [submitted, setSubmitted] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentPreviewOpen, setAttachmentPreviewOpen] = useState(false);
+  const [previewAttachmentUrl, setPreviewAttachmentUrl] = useState<string>('');
 
   // Load data on mount
   useEffect(() => {
@@ -82,28 +89,25 @@ export const ExpenseManager: React.FC = () => {
     loadProjects();
   }, []);
 
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  });
-
   const loadExpenses = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8080/api/expenses', {
-        headers: getAuthHeaders()
-      });
+      const response = await fetchWithAuth('http://localhost:8080/api/expenses');
       
       if (response.ok) {
         const data = await response.json();
-        setExpenses(data);
+        setExpenses(Array.isArray(data) ? data : []);
       } else {
-        const errorText = await response.text();
-        console.error('Failed to load expenses - Status:', response.status, 'Error:', errorText);
+        console.error('Failed to load expenses - Status:', response.status);
+        setExpenses([]); // Set empty array on error
+        if (response.status !== 404) {
+          showError(`Failed to load expenses: ${response.statusText}`);
+        }
       }
     } catch (error) {
       console.error('Failed to load expenses:', error);
+      setExpenses([]); // Set empty array on error
+      showError('Failed to load expenses. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -113,20 +117,18 @@ export const ExpenseManager: React.FC = () => {
     try {
       // Get only projects where user is member or manager (same as timesheets)
       const url = 'http://localhost:8080/api/projects?my_projects=true';
-      console.log('Loading projects from:', url);
-      const response = await fetch(url, {
-        headers: getAuthHeaders()
-      });
+      const response = await fetchWithAuth(url);
       
       if (response.ok) {
         const result = await response.json();
-        console.log('Projects response:', result);
-        console.log('Projects count:', result.length);
-        // API returns array directly
-        setProjects(result);
+        setProjects(Array.isArray(result) ? result : []);
+      } else {
+        console.error('Failed to load projects - Status:', response.status);
+        setProjects([]); // Set empty array on error
       }
     } catch (error) {
       console.error('Failed to load projects:', error);
+      setProjects([]); // Set empty array on error
     }
   };
 
@@ -166,9 +168,11 @@ export const ExpenseManager: React.FC = () => {
     setAttachmentFile(null);
   };
 
-  const handleSave = async () => {
-    if (!projectId || !date) {
-      showWarning('Please fill in all required fields');
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSubmitted(true);
+    if (!projectId || !date || !description) {
+      showWarning('Preencha este campo.');
       return;
     }
 
@@ -196,22 +200,20 @@ export const ExpenseManager: React.FC = () => {
       if (selectedExpense?.id) {
         // Update existing expense - Laravel requires _method field for file uploads
         formData.append('_method', 'PUT');
+        const headers = getAuthHeaders();
+        delete (headers as any)['Content-Type']; // Let browser set it for multipart/form-data
         response = await fetch(`http://localhost:8080/api/expenses/${selectedExpense.id}`, {
           method: 'POST', // POST with _method=PUT for FormData file uploads
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Accept': 'application/json'
-          },
+          headers,
           body: formData
         });
       } else {
         // Create new expense
+        const headers = getAuthHeaders();
+        delete (headers as any)['Content-Type']; // Let browser set it for multipart/form-data
         response = await fetch('http://localhost:8080/api/expenses', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Accept': 'application/json'
-          },
+          headers,
           body: formData
         });
       }
@@ -221,11 +223,10 @@ export const ExpenseManager: React.FC = () => {
         loadExpenses();
         setDialogOpen(false);
         resetForm();
+        setSubmitted(false);
       } else {
         const errorData = await response.json();
         console.error('Validation errors:', errorData);
-        
-        // Extract validation errors
         if (errorData.errors) {
           const errorMessages = Object.entries(errorData.errors)
             .map(([field, messages]: [string, any]) => `${field}: ${messages.join(', ')}`)
@@ -245,9 +246,8 @@ export const ExpenseManager: React.FC = () => {
 
   const handleDelete = async (expenseId: number) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/expenses/${expenseId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
+      const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${expenseId}`, {
+        method: 'DELETE'
       });
 
       if (response.ok) {
@@ -267,9 +267,8 @@ export const ExpenseManager: React.FC = () => {
     if (!selectedExpense?.id) return;
     
     try {
-      const response = await fetch(`http://localhost:8080/api/expenses/${selectedExpense.id}/submit`, {
-        method: 'PUT',
-        headers: getAuthHeaders()
+      const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${selectedExpense.id}/submit`, {
+        method: 'PUT'
       });
 
       if (response.ok) {
@@ -287,9 +286,8 @@ export const ExpenseManager: React.FC = () => {
     if (!selectedExpense?.id) return;
     
     try {
-      const response = await fetch(`http://localhost:8080/api/expenses/${selectedExpense.id}/approve`, {
-        method: 'PUT',
-        headers: getAuthHeaders()
+      const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${selectedExpense.id}/approve`, {
+        method: 'PUT'
       });
 
       if (response.ok) {
@@ -312,10 +310,9 @@ export const ExpenseManager: React.FC = () => {
       message: 'Please provide a reason for rejecting this expense:',
       action: async (reason: string) => {
         try {
-          const response = await fetch(`http://localhost:8080/api/expenses/${selectedExpense.id}/reject`, {
+          const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${selectedExpense.id}/reject`, {
             method: 'PUT',
             headers: {
-              ...getAuthHeaders(),
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({ reason })
@@ -375,21 +372,6 @@ export const ExpenseManager: React.FC = () => {
       <PageHeader
         title="Expenses"
         subtitle="Submit expenses with receipts for project-related costs"
-        actions={
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={handleAddNew}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.2)',
-              '&:hover': {
-                bgcolor: 'rgba(255,255,255,0.3)'
-              }
-            }}
-          >
-            Add Expense
-          </Button>
-        }
       />
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
@@ -399,24 +381,35 @@ export const ExpenseManager: React.FC = () => {
           </Typography>
         )}
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Date</TableCell>
-              <TableCell>Project</TableCell>
-              <TableCell>Amount</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Attachment</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {expenses
-              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-              .map((expense) => (
+        {!loading && expenses.length === 0 && (
+          <EmptyState
+            icon={ReceiptIcon}
+            title="No expenses yet"
+            subtitle="Click the + button to submit your first expense entry"
+            actionLabel="Add Expense"
+            onAction={handleAddNew}
+          />
+        )}
+
+      {!loading && expenses.length > 0 && (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Date</TableCell>
+                <TableCell>Project</TableCell>
+                <TableCell>Amount</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Attachment</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {expenses
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map((expense) => (
                 <TableRow key={expense.id}>
                   <TableCell>{expense.id}</TableCell>
                   <TableCell>
@@ -430,7 +423,21 @@ export const ExpenseManager: React.FC = () => {
                   </TableCell>
                   <TableCell>{expense.description}</TableCell>
                   <TableCell>
-                    {expense.attachment_path && <AttachFile color="primary" />}
+                    {expense.attachment_path ? (
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => {
+                          setPreviewAttachmentUrl(`http://localhost:8080/storage/${expense.attachment_path}`);
+                          setAttachmentPreviewOpen(true);
+                        }}
+                        title="View Attachment"
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">—</Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Box>
@@ -475,19 +482,36 @@ export const ExpenseManager: React.FC = () => {
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
       </TableContainer>
+      )}
 
-      {/* Floating Action Button for mobile */}
-      <Fab
-        color="primary"
-        aria-label="add expense"
-        sx={{ position: 'fixed', bottom: 80, right: 16, display: { md: 'none' } }}
-        onClick={handleAddNew}
-      >
-        <Add />
-      </Fab>
+      {/* Floating Action Button - always visible when there are expenses */}
+      {expenses.length > 0 && (
+        <Fab
+          color="primary"
+          aria-label="add expense"
+          onClick={handleAddNew}
+          sx={{ 
+            position: 'fixed', 
+            bottom: 32, 
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
+          }}
+        >
+          <Add />
+        </Fab>
+      )}
 
       {/* Expense Entry Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={dialogOpen} 
+        onClose={() => setDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        disableRestoreFocus
+      >
         <DialogTitle>
           <Box>
             <Typography variant="h6" component="span">
@@ -562,6 +586,9 @@ export const ExpenseManager: React.FC = () => {
             onChange={(e) => setProjectId(Number(e.target.value))}
             margin="normal"
             required
+            error={submitted && !projectId}
+            helperText={submitted && !projectId ? "Preencha este campo." : ""}
+            onBlur={() => setSubmitted(true)}
           >
             <MenuItem value={0}>Select a project</MenuItem>
             {projects.map((project) => (
@@ -579,7 +606,10 @@ export const ExpenseManager: React.FC = () => {
             onChange={(e) => setDate(e.target.value)}
             margin="normal"
             required
+            error={submitted && !date}
+            helperText={submitted && !date ? "Preencha este campo." : ""}
             InputLabelProps={{ shrink: true }}
+            onBlur={() => setSubmitted(true)}
           />
 
           <TextField
@@ -666,6 +696,10 @@ export const ExpenseManager: React.FC = () => {
             margin="normal"
             multiline
             rows={3}
+            required
+            error={submitted && !description}
+            helperText={submitted && !description ? "Preencha este campo." : `${description.length} characters`}
+            onBlur={() => setSubmitted(true)}
           />
 
           <Button
@@ -692,7 +726,11 @@ export const ExpenseManager: React.FC = () => {
           
           {/* Save/Update button (only for draft/rejected or new) */}
           {(!selectedExpense || selectedExpense.status === 'draft' || selectedExpense.status === 'rejected') && (
-            <Button onClick={handleSave} variant="contained">
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              color="primary"
+            >
               {selectedExpense ? 'Update' : 'Save as Draft'}
             </Button>
           )}
@@ -733,6 +771,56 @@ export const ExpenseManager: React.FC = () => {
         onConfirm={inputDialog.action}
         onCancel={() => setInputDialog({ ...inputDialog, open: false })}
       />
+
+      {/* Attachment Preview Dialog */}
+      <Dialog
+        open={attachmentPreviewOpen}
+        onClose={() => setAttachmentPreviewOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Attachment Preview
+          <IconButton onClick={() => setAttachmentPreviewOpen(false)} size="small">
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {previewAttachmentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+            <Box
+              component="img"
+              src={previewAttachmentUrl}
+              alt="Expense attachment"
+              sx={{
+                width: '100%',
+                height: 'auto',
+                maxHeight: '70vh',
+                objectFit: 'contain'
+              }}
+            />
+          ) : previewAttachmentUrl.endsWith('.pdf') ? (
+            <iframe
+              src={previewAttachmentUrl}
+              title="PDF Preview"
+              style={{ width: '100%', height: '70vh', border: 'none' }}
+            />
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography color="text.secondary">
+                Preview not available for this file type
+              </Typography>
+              <Button
+                variant="outlined"
+                href={previewAttachmentUrl}
+                target="_blank"
+                sx={{ mt: 2 }}
+              >
+                Download File
+              </Button>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
       </Box>
     </Box>
   );

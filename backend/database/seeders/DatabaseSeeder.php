@@ -16,34 +16,41 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         // Create demo users for authentication testing
-        User::factory()->create([
-            'name' => 'João Silva',
-            'email' => 'joao.silva@example.com',
-            'role' => 'Technician',
-            'password' => bcrypt('password'),
-        ]);
+        User::query()->updateOrCreate(
+            ['email' => 'joao.silva@example.com'],
+            [
+                'name' => 'João Silva',
+                'role' => 'Technician',
+                'password' => bcrypt('password'),
+            ]
+        );
 
-        User::factory()->create([
-            'name' => 'Carlos Manager',
-            'email' => 'carlos.manager@example.com',
-            'role' => 'Manager',
-            'password' => bcrypt('password'),
-        ]);
+        User::query()->updateOrCreate(
+            ['email' => 'carlos.manager@example.com'],
+            [
+                'name' => 'Carlos Manager',
+                'role' => 'Manager',
+                'password' => bcrypt('password'),
+            ]
+        );
 
-        User::factory()->create([
-            'name' => 'System Administrator',
-            'email' => 'admin@timeperk.com',
-            'role' => 'Admin',
-            'password' => bcrypt('admin123'),
-        ]);
+        User::query()->updateOrCreate(
+            ['email' => 'admin@timeperk.com'],
+            [
+                'name' => 'System Administrator',
+                'role' => 'Admin',
+                'password' => bcrypt('admin123'),
+            ]
+        );
 
         $this->call([
-            RolesAndPermissionsSeeder::class,
             LocationSeeder::class,
             DemoSeeder::class,
             TaskSeeder::class,
             ProjectMemberSeeder::class,
             TechnicianUserLinkerSeeder::class,
+            DemoTenantSeeder::class,
+            RolesAndPermissionsSeeder::class,
             AdminUserSeeder::class,
         ]);
     }
