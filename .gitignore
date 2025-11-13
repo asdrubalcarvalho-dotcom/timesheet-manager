@@ -1,26 +1,29 @@
 # Laravel Backend
 backend/vendor/
+backend/node_modules/
 backend/.env
-backend/.env.backup
-backend/.env.production
+backend/.env.*
 backend/Homestead.json
 backend/Homestead.yaml
 backend/auth.json
 backend/npm-debug.log
 backend/yarn-error.log
+
+# Ignore ALL backend storage + tenants
+backend/storage
+backend/storage/*
 backend/storage/app/*
+backend/storage/app/public/*
+backend/storage/app/private/*
+backend/storage/framework/*
 backend/storage/framework/cache/*
+backend/storage/framework/cache/data/*
 backend/storage/framework/sessions/*
 backend/storage/framework/testing/*
 backend/storage/framework/views/*
 backend/storage/logs/*
-!backend/storage/app/.gitkeep
-!backend/storage/framework/.gitkeep
-!backend/storage/framework/cache/.gitkeep
-!backend/storage/framework/sessions/.gitkeep
-!backend/storage/framework/testing/.gitkeep
-!backend/storage/framework/views/.gitkeep
-!backend/storage/logs/.gitkeep
+backend/storage/tenant*
+
 
 # React Frontend
 frontend/node_modules/
