@@ -120,6 +120,7 @@ class TechnicianController extends Controller
             'is_active' => 'boolean',
             'worker_id' => 'nullable|string|max:64|unique:technicians,worker_id',
             'worker_name' => 'nullable|string|max:255',
+            'worker_contract_country' => 'nullable|string|max:255',
         ]);
 
         $technician = Technician::create($validated);
@@ -128,10 +129,48 @@ class TechnicianController extends Controller
 
     /**
      * Display the specified resource.
+     * Follows same visibility rules as index() - Owner sees all, Admin sees non-owners, Managers see team members, Users see self.
      */
     public function show(Technician $technician): JsonResponse
     {
-        return response()->json($technician);
+        $user = Auth::user();
+        
+        // Owner can see all
+        if ($user->hasRole('Owner')) {
+            return response()->json($technician);
+        }
+        
+        // Admin can see all except Owners
+        if ($user->hasRole('Admin')) {
+            if ($technician->user && $technician->user->hasRole('Owner')) {
+                return response()->json(['message' => 'Resource not found.'], 404);
+            }
+            return response()->json($technician);
+        }
+        
+        // Project Managers can see team members + self
+        if ($user->isProjectManager()) {
+            $managedProjectIds = $user->getManagedProjectIds();
+            $memberUserIds = \App\Models\ProjectMember::whereIn('project_id', $managedProjectIds)
+                ->where('project_role', 'member')
+                ->pluck('user_id')
+                ->unique()
+                ->filter()
+                ->toArray();
+            
+            if ($technician->user_id === $user->id || in_array($technician->user_id, $memberUserIds)) {
+                return response()->json($technician);
+            }
+            
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+        
+        // Regular users can only see themselves
+        if ($technician->user_id === $user->id || $technician->email === $user->email) {
+            return response()->json($technician);
+        }
+        
+        return response()->json(['message' => 'Unauthorized.'], 403);
     }
 
     /**
@@ -151,12 +190,13 @@ class TechnicianController extends Controller
                 ], 403);
             }
             
-            // Owner can update: name, hourly_rate, worker_id, worker_name, password
+            // Owner can update: name, hourly_rate, worker_id, worker_name, worker_contract_country, password
             $validated = $request->validate([
                 'name' => 'string|max:255',
                 'hourly_rate' => 'nullable|numeric|min:0',
                 'worker_id' => ['nullable','string','max:64', Rule::unique('technicians','worker_id')->ignore($technician->id)],
                 'worker_name' => 'nullable|string|max:255',
+                'worker_contract_country' => 'nullable|string|max:255',
                 'password' => 'nullable|string|min:6',
             ]);
             
@@ -182,6 +222,7 @@ class TechnicianController extends Controller
             'is_active' => 'boolean',
             'worker_id' => ['nullable','string','max:64', Rule::unique('technicians','worker_id')->ignore($technician->id)],
             'worker_name' => 'nullable|string|max:255',
+            'worker_contract_country' => 'nullable|string|max:255',
             'password' => 'nullable|string|min:6',
         ]);
 

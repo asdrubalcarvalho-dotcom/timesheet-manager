@@ -20,6 +20,7 @@ class Technician extends Model
         'user_id',
         'worker_id',
         'worker_name',
+        'worker_contract_country',
         'created_by',
         'updated_by'
     ];

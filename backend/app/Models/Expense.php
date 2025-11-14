@@ -15,6 +15,7 @@ class Expense extends Model
         'technician_id',
         'project_id',
         'date',
+        'expense_datetime',
         'amount',
         'category',
         'description',
@@ -45,6 +46,16 @@ class Expense extends Model
         'paid_at' => 'datetime',
         'transaction_date' => 'datetime',
     ];
+
+    protected static function booted()
+    {
+        static::saving(function (Expense $expense) {
+            // Auto-calculate date from expense_datetime if provided
+            if ($expense->expense_datetime) {
+                $expense->date = $expense->expense_datetime->toDateString();
+            }
+        });
+    }
 
     public function technician(): BelongsTo
     {

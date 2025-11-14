@@ -21,7 +21,12 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Badge,
-  IconButton
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { 
@@ -33,12 +38,13 @@ import {
   Clear,
   ExpandMore,
   ExpandLess,
-  AccessTime
+  AccessTime,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid';
 import dayjs, { Dayjs } from 'dayjs';
-import type { TimesheetManagerRow, TimesheetManagerSummary, Technician, Expense, Project, Task, Location, Timesheet } from '../../types';
+import type { TimesheetManagerRow, TimesheetManagerSummary, Technician, Expense, Project, Task, Location, Timesheet, TravelSegment } from '../../types';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth } from '../../services/api';
@@ -78,6 +84,9 @@ const ApprovalManager: React.FC = () => {
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>([]);
   const [selectedRow, setSelectedRow] = useState<TimesheetManagerRow | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [travelDetailsOpen, setTravelDetailsOpen] = useState(false);
+  const [selectedTravels, setSelectedTravels] = useState<TravelSegment[]>([]);
+  const [loadingTravels, setLoadingTravels] = useState(false);
 
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState({
@@ -490,6 +499,45 @@ const ApprovalManager: React.FC = () => {
     setDetailsOpen(false);
   };
 
+  // Section 14.2 - Travel cell click handler
+  const handleTravelCellClick = async (e: React.MouseEvent, row: TimesheetManagerRow) => {
+    e.stopPropagation(); // Prevent row click event from firing
+    
+    if (!row.travels || row.travels.count === 0) return;
+    
+    setLoadingTravels(true);
+    setTravelDetailsOpen(true);
+    
+    try {
+      // Fetch full travel segment details using the segment_ids
+      const travelPromises = row.travels.segment_ids.map(async (id) => {
+        const response = await fetchWithAuth(`http://localhost:8080/api/travels/${id}`);
+        if (response.ok) {
+          return response.json();
+        }
+        return null;
+      });
+      
+      const travels = await Promise.all(travelPromises);
+      setSelectedTravels(travels.filter(Boolean));
+    } catch (error) {
+      console.error('Error loading travel details:', error);
+      showError('Failed to load travel details');
+    } finally {
+      setLoadingTravels(false);
+    }
+  };
+
+  // Section 14.3 - Flag translation helper
+  const getFlagLabel = (flag: string): string => {
+    const labels: Record<string, string> = {
+      'travels_without_work': 'Travel without work hours',
+      'excessive_travel_time': 'Travel time > 2x work hours',
+      'expenses_without_work': 'Expenses without work hours',
+    };
+    return labels[flag] || flag;
+  };
+
   const statusChip = (status: string) => {
     const colors: Record<string, 'success' | 'warning' | 'default' | 'error'> = {
       draft: 'default',
@@ -638,6 +686,81 @@ const ApprovalManager: React.FC = () => {
       filterable: true,
     },
     {
+      field: 'travels',
+      headerName: 'Travels',
+      width: 90,
+      renderCell: ({ row }) => {
+        if (!row.travels || row.travels.count === 0) {
+          return <Typography variant="body2" color="text.secondary">—</Typography>;
+        }
+        return (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              cursor: 'pointer',
+              '&:hover': { opacity: 0.7 },
+            }}
+            onClick={(e) => handleTravelCellClick(e, row)}
+          >
+            <Typography variant="body2" color="primary" fontWeight={600}>
+              ✈ {row.travels.count}
+            </Typography>
+          </Box>
+        );
+      },
+      filterable: false,
+    },
+    {
+      field: 'travel_time',
+      headerName: 'Travel Time',
+      width: 110,
+      valueGetter: (_value: any, row: any) => row?.travels?.duration_formatted ?? '—',
+      renderCell: ({ row }) => {
+        if (!row.travels || row.travels.count === 0) {
+          return <Typography variant="body2" color="text.secondary">—</Typography>;
+        }
+        return (
+          <Typography variant="body2" fontWeight={500}>
+            {row.travels.duration_formatted}
+          </Typography>
+        );
+      },
+      filterable: false,
+    },
+    {
+      field: 'consistency_flags',
+      headerName: 'Flags',
+      width: 90,
+      renderCell: ({ row }) => {
+        const flags = row.consistency_flags || [];
+        if (flags.length === 0) {
+          return <Chip label="OK" size="small" color="success" sx={{ fontSize: '0.7rem', height: 20 }} />;
+        }
+        const hasWarning = flags.some((f: string) => f.includes('travel') || f.includes('expense'));
+        const tooltipText = flags.map((f: string) => getFlagLabel(f)).join('\n');
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <WarningIcon 
+              sx={{ 
+                fontSize: 16, 
+                color: hasWarning ? 'warning.main' : 'error.main' 
+              }} 
+            />
+            <Chip
+              label={flags.length}
+              size="small"
+              color={hasWarning ? 'warning' : 'error'}
+              sx={{ fontSize: '0.7rem', height: 20, fontWeight: 600 }}
+              title={tooltipText}
+            />
+          </Box>
+        );
+      },
+      filterable: false,
+    },
+    {
       field: 'ai_score',
       headerName: 'AI Score',
       width: 90,
@@ -672,10 +795,10 @@ const ApprovalManager: React.FC = () => {
   }
 
   const renderTimesheetControls = () => (
-    <Card sx={{ mb: 1.5 }}>
-      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+    <Card sx={{ mb: 1 }}>
+      <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
         {/* Filter Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: filtersExpanded ? 1.5 : 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: filtersExpanded ? 1 : 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Badge badgeContent={activeFiltersCount} color="primary">
               <FilterList />
@@ -724,7 +847,7 @@ const ApprovalManager: React.FC = () => {
         </Box>
 
         <Collapse in={filtersExpanded}>
-          <Grid container spacing={1.5}>
+          <Grid container spacing={1}>
             {/* Search */}
             <Grid item xs={12} md={6}>
               <TextField
@@ -1000,11 +1123,11 @@ const ApprovalManager: React.FC = () => {
         }
       />
       
-      <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 1 }}>
         <Tabs
           value={tabValue}
           onChange={(_, value) => setTabValue(value)}
-          sx={{ mb: 1.5, minHeight: '40px', '& .MuiTab-root': { minHeight: '40px', py: 1 } }}
+          sx={{ mb: 1, minHeight: '36px', '& .MuiTab-root': { minHeight: '36px', py: 0.5, fontSize: '0.875rem' } }}
         >
           <Tab 
             label={
@@ -1090,6 +1213,128 @@ const ApprovalManager: React.FC = () => {
         onConfirm={inputDialog.action}
         onCancel={() => setInputDialog({ ...inputDialog, open: false })}
       />
+
+      {/* Section 14.2 - Travel Details Dialog */}
+      <Dialog
+        open={travelDetailsOpen}
+        onClose={() => setTravelDetailsOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Travel Details</DialogTitle>
+        <DialogContent>
+          {loadingTravels ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : selectedTravels.length === 0 ? (
+            <Typography>No travel details found.</Typography>
+          ) : (
+            <Box sx={{ mt: 2 }}>
+              {selectedTravels.map((travel) => (
+                <Box
+                  key={travel.id}
+                  sx={{
+                    mb: 2,
+                    p: 2,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                    bgcolor: '#f9f9f9'
+                  }}
+                >
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Technician
+                      </Typography>
+                      <Typography variant="body1">
+                        {travel.technician?.name || 'Unknown'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Project
+                      </Typography>
+                      <Typography variant="body1">
+                        {travel.project?.name || 'Unknown'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Departure
+                      </Typography>
+                      <Typography variant="body1">
+                        {travel.start_at 
+                          ? dayjs(travel.start_at).format('DD/MM/YYYY HH:mm')
+                          : 'N/A'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {travel.origin_city}, {travel.origin_country}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Arrival
+                      </Typography>
+                      <Typography variant="body1">
+                        {travel.end_at 
+                          ? dayjs(travel.end_at).format('DD/MM/YYYY HH:mm')
+                          : 'N/A'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {travel.destination_city}, {travel.destination_country}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Direction
+                      </Typography>
+                      <Typography variant="body1">
+                        {travel.direction?.replace('_', ' ').toUpperCase()}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Duration
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600}>
+                        {travel.duration_minutes 
+                          ? `${Math.floor(travel.duration_minutes / 60)}h ${travel.duration_minutes % 60}m`
+                          : 'N/A'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Status
+                      </Typography>
+                      <Chip
+                        label={travel.status?.toUpperCase()}
+                        size="small"
+                        color={travel.status === 'completed' ? 'success' : 'default'}
+                      />
+                    </Grid>
+                    {travel.classification_reason && (
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Classification Reason
+                        </Typography>
+                        <Typography variant="body2">
+                          {travel.classification_reason}
+                        </Typography>
+                      </Grid>
+                    )}
+                  </Grid>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTravelDetailsOpen(false)} variant="outlined">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

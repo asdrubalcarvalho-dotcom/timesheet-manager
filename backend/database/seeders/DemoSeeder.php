@@ -175,7 +175,7 @@ class DemoSeeder extends Seeder
                 'date' => $today->copy()->subDays(2),
                 'hours_worked' => 6.0,
                 'description' => 'Database design',
-                'status' => 'draft',
+                'status' => 'submitted',
                 'task_id' => $databaseTask->id,
                 'location_id' => $officeLocation->id
             ]
@@ -219,7 +219,7 @@ class DemoSeeder extends Seeder
                 'amount' => 89.99,
                 'category' => 'material',
                 'description' => 'Software license for development',
-                'status' => 'draft'
+                'status' => 'submitted'
             ]
         ];
 

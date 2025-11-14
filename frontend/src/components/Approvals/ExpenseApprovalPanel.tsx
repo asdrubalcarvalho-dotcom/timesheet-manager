@@ -669,11 +669,11 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       flexDirection: 'column',
       overflow: 'hidden',
       p: 2,
-      pt: 1
+      pt: 0.5
     }}>
       {/* Top Stats Bar */}
-      <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', flexShrink: 0 }}>
-        <CardContent sx={{ py: 1.5 }}>
+      <Card sx={{ mb: 1, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', flexShrink: 0 }}>
+        <CardContent sx={{ py: 1.25 }}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={3}>
               <Stack spacing={0.3}>
@@ -759,10 +759,10 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       </Card>
 
       {/* Advanced Filters */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent sx={{ py: 2 }}>
+      <Card sx={{ mb: 1 }}>
+        <CardContent sx={{ py: 1.25 }}>
           {/* Filter Header */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: filtersExpanded ? 2 : 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: filtersExpanded ? 1 : 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Badge badgeContent={activeFiltersCount} color="primary">
                 <FilterList />
@@ -797,7 +797,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
           </Box>
 
           <Collapse in={filtersExpanded}>
-            <Grid container spacing={2}>
+            <Grid container spacing={1}>
               {/* Search */}
               <Grid item xs={12} md={6}>
                 <TextField
