@@ -17,10 +17,17 @@ class ProjectController extends Controller
     {
         $query = Project::with(['timesheets', 'expenses', 'manager']);
         
-        // Filter to only user's projects if requested (like timesheets)
-        if ($request->boolean('my_projects')) {
-            \Log::info('Filtering projects for user: ' . $request->user()->id);
-            $user = $request->user();
+        $user = $request->user();
+        
+        // Filter to only MANAGED projects (for Travel Segments - user must be manager)
+        if ($request->boolean('managed_only')) {
+            \Log::info('Filtering MANAGED projects for user: ' . $user->id);
+            $managedProjectIds = $user->getManagedProjectIds();
+            $query->whereIn('id', $managedProjectIds);
+        }
+        // Filter to only user's projects (manager OR member - for general use)
+        elseif ($request->boolean('my_projects')) {
+            \Log::info('Filtering projects for user: ' . $user->id);
             $query->where(function ($q) use ($user) {
                 // Projects where user is manager
                 $q->where('manager_id', $user->id)

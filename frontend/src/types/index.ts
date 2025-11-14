@@ -240,6 +240,13 @@ export interface TimesheetManagerRow {
   validation?: TimesheetValidationResult;
   technician_project_role?: 'member' | 'manager' | 'none' | null;
   technician_expense_role?: 'member' | 'manager' | 'none' | null;
+  travels?: {
+    count: number;
+    duration_minutes: number;
+    duration_formatted: string;
+    segment_ids: number[];
+  } | null;
+  consistency_flags?: string[];
 }
 
 export interface TimesheetManagerSummary {

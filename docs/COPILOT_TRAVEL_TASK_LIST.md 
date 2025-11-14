@@ -1,0 +1,192 @@
+
+
+# 🚀 Copilot Travel Module — Full Implementation Task List
+
+This file defines the **complete, mandatory, sequential implementation flow** for the Travel Segments module.  
+Copilot MUST follow these tasks **top-to-bottom**, without skipping or stopping, until **all steps are completed**.
+
+All implementation MUST follow:
+- `docs/TRAVEL_SEGMENTS_IMPLEMENTATION_GUIDE.md`
+- `docs/TRAVEL_TASKS_COPILOT_INSTRUCTIONS.md`
+
+---
+
+## ✅ Global Rules (Copilot MUST follow)
+
+- **Do NOT stop** until all checklist items are completed.
+- **Do NOT skip** any step.
+- If output is long, continue automatically in a new response.
+- Follow project coding conventions for Laravel, React, TypeScript, and Multi-Tenancy.
+- NEVER change existing functioning code unless explicitly instructed.
+- ALWAYS use tenant-scoped logic.
+- DO NOT access central DB for travel.
+- DO NOT invent extra features.
+- Ask only if a contradiction exists in documentation.
+
+---
+
+# 📌 Implementation Checklist — DO NOT STOP UNTIL EVERYTHING IS DONE
+
+Below is the **mandatory pipeline**.  
+Copilot must implement **every section**.
+
+---
+
+## 1️⃣ Migration (Laravel / Tenant DB)
+- [ ] Create `create_travel_segments_table.php` migration using tenant database conventions.
+- [ ] Include all required fields:
+  - `tenant_id`
+  - `technician_id` FK
+  - `project_id` FK
+  - `travel_date`
+  - `origin_country`, `origin_city`
+  - `destination_country`, `destination_city`
+  - `direction` enum
+  - `classification_reason`
+  - `status` enum
+  - `linked_timesheet_entry_id`
+  - audit fields
+  - timestamps
+- [ ] Add proper indexes for tenant + technician + date.
+
+---
+
+## 2️⃣ Eloquent Model
+- [ ] Create `TravelSegment` model.
+- [ ] Use traits: `BelongsToTenant`, `HasAuditFields`.
+- [ ] Add fillable + casts.
+- [ ] Add relationships to Technician, Project, Timesheet.
+- [ ] Add static `classifyDirection()` helper.
+
+---
+
+## 3️⃣ Form Requests
+- [ ] Create `StoreTravelSegmentRequest`.
+- [ ] Create `UpdateTravelSegmentRequest`.
+- [ ] Add validation rules exactly as defined in guide.
+- [ ] Validate tenant ownership of Technician & Project.
+
+---
+
+## 4️⃣ Policy
+- [ ] Create `TravelSegmentPolicy`.
+- [ ] Enforce tenant isolation.
+- [ ] Use Spatie permissions (`view travels`, `manage travels`).
+- [ ] Register policy in `AuthServiceProvider`.
+
+---
+
+## 5️⃣ Controller
+- [ ] Create `TravelSegmentController` with:
+  - `index`
+  - `store`
+  - `show`
+  - `update`
+  - `destroy`
+  - `suggest` (AI-lite suggestions)
+- [ ] Direction must always be computed server-side.
+- [ ] Use FormRequests.
+- [ ] Return JSON API responses.
+
+---
+
+## 6️⃣ Suggestion Service (AI-lite)
+- [ ] Create `TravelSuggestionService`.
+- [ ] Implement heuristics:
+  - default origin = technician contract country
+  - destination = project location (if any)
+  - fallback to last travel
+- [ ] MUST NOT use external AI APIs.
+
+---
+
+## 7️⃣ Routes
+- [ ] Add tenant-scoped routes in `routes/tenant.php`:
+  - `GET /api/travels`
+  - `POST /api/travels`
+  - `GET /api/travels/{id}`
+  - `PUT /api/travels/{id}`
+  - `DELETE /api/travels/{id}`
+  - `GET /api/travels/suggestions`
+- [ ] Ensure routes use `auth:sanctum` + tenancy middleware.
+
+---
+
+# 🖥️ FRONTEND IMPLEMENTATION
+
+## 8️⃣ API Client (TypeScript)
+- [ ] Create `frontend/src/api/travels.ts`.
+- [ ] Implement:
+  - `listTravels()`
+  - `getTravel(id)`
+  - `createTravel(payload)`
+  - `updateTravel(id, payload)`
+  - `deleteTravel(id)`
+  - `getTravelSuggestions(technicianId, projectId)`
+- [ ] Use shared `apiClient` with tenant + auth headers.
+
+---
+
+## 9️⃣ UI Components (React + TS)
+Create all inside:  
+`frontend/src/components/Travels/`
+
+- [ ] `TravelsList.tsx` (table + filters)
+- [ ] `TravelForm.tsx` (create/edit form)
+- [ ] Country selectors (autocomplete)
+- [ ] Direction read-only label
+- [ ] Integrate suggestion endpoint
+- [ ] Success/error toasts
+
+UX rules:
+- Mandatory fields highlighted like rest of app.
+- Save button enabled only when valid.
+- Origin/Destination autofill via suggestions.
+- Consistent with MUI / project UI guidelines.
+
+---
+
+## 🔟 Navigation & Routes (Frontend)
+- [ ] Add new page to router: `/travels`.
+- [ ] Add sidebar entry **Travels**.
+- [ ] Ensure tenant context is applied.
+
+---
+
+# 🧪 TESTING
+
+## 1️⃣1️⃣ Backend Feature Tests
+- [ ] Creation test
+- [ ] Update test
+- [ ] Delete test
+- [ ] Listing & filters
+- [ ] Tenant isolation
+
+## 1️⃣2️⃣ Direction Classifier Unit Tests
+- [ ] All 5 classification rules
+
+## 1️⃣3️⃣ (Optional) Cypress Tests
+- [ ] Create travel
+- [ ] Edit travel
+- [ ] Delete travel
+
+---
+
+# 📄 DOCUMENTATION
+
+## 1️⃣4️⃣ Update Docs
+- [ ] Update `README.md` with Travel module summary.
+- [ ] Link to `TRAVEL_SEGMENTS_IMPLEMENTATION_GUIDE.md`.
+- [ ] Add developer instructions.
+
+---
+
+# 🏁 Final Step
+- [ ] Ensure the entire module respects multi-tenancy standards.
+- [ ] Ensure no central DB reads/writes exist.
+- [ ] Ensure consistent naming and structure with the rest of the project.
+- [ ] Confirm no deprecated Travel Timesheet logic exists.
+
+---
+
+# 🔥 END OF TASK LIST — DO NOT STOP UNTIL EVERYTHING ABOVE IS COMPLETED

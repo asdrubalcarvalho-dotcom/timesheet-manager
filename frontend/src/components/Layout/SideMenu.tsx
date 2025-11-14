@@ -25,6 +25,7 @@ import {
   Receipt as ExpenseIcon,
   Assignment as ApprovalIcon,
   Assignment as PlanningIcon,
+  Flight as TravelsIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -71,6 +72,13 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       icon: <TimesheetIcon />,
       path: 'timesheets', 
       show: hasPermission('view-timesheets')
+    },
+    {
+      id: 'travels',
+      label: 'Travels',
+      icon: <TravelsIcon />,
+      path: 'travels',
+      show: hasPermission('view-timesheets') || isAdmin()
     },
     {
       id: 'expenses',

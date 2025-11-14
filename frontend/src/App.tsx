@@ -29,6 +29,7 @@ const TasksManager = React.lazy(() => import('./components/Admin/TasksManager'))
 const LocationsManager = React.lazy(() => import('./components/Admin/LocationsManager'));
 const UsersManager = React.lazy(() => import('./components/Admin/UsersManager'));
 const AdminAccessManagerPage = React.lazy(() => import('./pages/AdminAccessManager'));
+const TravelsList = React.lazy(() => import('./components/Travels/TravelsList'));
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -61,7 +62,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-users' | 'planning' | 'admin-access';
+type Page = 'timesheets' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-users' | 'planning' | 'admin-access' | 'travels';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -73,6 +74,7 @@ const pageToPath: Record<Page, string> = {
   'ai-insights': '/ai-insights',
   team: '/team',
   planning: '/planning',
+  travels: '/travels',
   admin: '/admin',
   'admin-projects': '/admin/projects',
   'admin-tasks': '/admin/tasks',
@@ -151,6 +153,8 @@ const AppContent: React.FC = () => {
         );
       case 'planning':
         return <PlanningGantt />;
+      case 'travels':
+        return <TravelsList />;
       case 'admin':
         return <AdminDashboard />;
       case 'admin-projects':

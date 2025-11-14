@@ -570,6 +570,52 @@ class TimesheetController extends Controller
                 }
             }
 
+            // Section 14.1 - Get travel data for this technician/date/project
+            $travelsSummary = null;
+            if ($timesheet->technician_id && $date) {
+                $travels = \App\Models\TravelSegment::where('technician_id', $timesheet->technician_id)
+                    ->where('travel_date', $date->toDateString())
+                    ->where('project_id', $timesheet->project_id)
+                    ->get();
+                
+                if ($travels->isNotEmpty()) {
+                    $totalDurationMinutes = $travels->sum('duration_minutes') ?? 0;
+                    $travelsSummary = [
+                        'count' => $travels->count(),
+                        'duration_minutes' => $totalDurationMinutes,
+                        'duration_formatted' => $this->formatDuration($totalDurationMinutes),
+                        'segment_ids' => $travels->pluck('id')->toArray(),
+                    ];
+                }
+            }
+
+            // Section 14.3 - Consistency flags (basic checks)
+            $flags = [];
+            $hoursWorked = (float) $timesheet->hours_worked;
+            
+            // Check: Travel segments but zero timesheet hours
+            if ($travelsSummary && $travelsSummary['count'] > 0 && $hoursWorked == 0) {
+                $flags[] = 'travels_without_work';
+            }
+            
+            // Check: Travel duration very high compared to work hours (>2x)
+            if ($travelsSummary && $hoursWorked > 0) {
+                $travelHours = $travelsSummary['duration_minutes'] / 60;
+                if ($travelHours > ($hoursWorked * 2)) {
+                    $flags[] = 'excessive_travel_time';
+                }
+            }
+            
+            // Check: Expenses without timesheet hours (query expenses for this tech/date/project)
+            $expensesCount = \App\Models\Expense::where('technician_id', $timesheet->technician_id)
+                ->where('date', $date->toDateString())
+                ->where('project_id', $timesheet->project_id)
+                ->count();
+            
+            if ($expensesCount > 0 && $hoursWorked == 0) {
+                $flags[] = 'expenses_without_work';
+            }
+
             return [
                 'id' => $timesheet->id,
                 'date' => $date?->toDateString(),
@@ -600,6 +646,8 @@ class TimesheetController extends Controller
                 ] : null,
                 'technician_project_role' => $technicianProjectRole,
                 'technician_expense_role' => $technicianExpenseRole,
+                'travels' => $travelsSummary, // NEW: Travel data integration
+                'consistency_flags' => $flags, // NEW: Section 14.3 - Consistency flags
                 'ai_flagged' => $snapshot->aiFlagged,
                 'ai_score' => $snapshot->aiScore,
                 'ai_feedback' => $snapshot->aiFeedback,
@@ -744,5 +792,29 @@ class TimesheetController extends Controller
             'expenses' => $expensesCount,
             'total' => $timesheetsCount + $expensesCount
         ]);
+    }
+
+    /**
+     * Format duration from minutes to human-readable string (e.g., "7h 30m").
+     * Section 14.1 - Helper method for travel duration formatting.
+     */
+    private function formatDuration(int $minutes): string
+    {
+        if ($minutes === 0) {
+            return '0m';
+        }
+
+        $hours = intdiv($minutes, 60);
+        $remainingMinutes = $minutes % 60;
+
+        $parts = [];
+        if ($hours > 0) {
+            $parts[] = $hours . 'h';
+        }
+        if ($remainingMinutes > 0) {
+            $parts[] = $remainingMinutes . 'm';
+        }
+
+        return implode(' ', $parts);
     }
 }

@@ -385,17 +385,13 @@ const TasksManager: React.FC = () => {
 
       {/* Floating Action Button */}
       {tasks.length > 0 && (
-        <Fab
+      <Fab
           color="primary"
-          onClick={() => handleOpenDialog()}
+          onClick={() => setOpenDialog(true)}
           sx={{
             position: 'fixed',
             bottom: 32,
-            right: 32,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
-            }
+            right: 32
           }}
         >
           <AddIcon />

@@ -74,6 +74,7 @@ const UsersManager: React.FC = () => {
     hourly_rate: '',
     worker_id: '',
     worker_name: '',
+    worker_contract_country: '',
     password: ''
   });
 
@@ -109,6 +110,7 @@ const UsersManager: React.FC = () => {
         hourly_rate: user.hourly_rate?.toString() || '',
         worker_id: user.worker_id || '',
         worker_name: user.worker_name || '',
+        worker_contract_country: (user as any).worker_contract_country || '',
         password: ''
       });
     } else {
@@ -141,12 +143,13 @@ const UsersManager: React.FC = () => {
         name: formData.name,
       };
 
-      // Owner can only edit their name, hourly_rate, worker_id, worker_name, and password
+      // Owner can only edit their name, hourly_rate, worker_id, worker_name, worker_contract_country, and password
       if (!editingUser?.is_owner || editingUser.user_id === currentUser?.id) {
         payload.email = formData.email;
         payload.hourly_rate = formData.hourly_rate ? parseFloat(formData.hourly_rate) : null;
         payload.worker_id = formData.worker_id || null;
         payload.worker_name = formData.worker_name || null;
+        payload.worker_contract_country = formData.worker_contract_country || null;
         
         // Normal users can have role changed (Owner role is protected)
         if (!editingUser?.is_owner) {
@@ -255,17 +258,35 @@ const UsersManager: React.FC = () => {
       field: 'role',
       headerName: 'Role',
       width: 140,
-      renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
-        <Chip
-          label={formatRole(row.role)}
-          size="small"
-          sx={{
-            bgcolor: row.role === 'admin' ? '#e91e6315' : row.role === 'manager' ? '#2196f315' : '#43a04715',
-            color: row.role === 'admin' ? '#e91e63' : row.role === 'manager' ? '#2196f3' : '#43a047',
-            fontWeight: 600
-          }}
-        />
-      )
+      renderCell: ({ row }: GridRenderCellParams<UserRecord>) => {
+        const isOwner = row.is_owner || row.role?.toLowerCase() === 'owner';
+        const bgcolor = isOwner 
+          ? '#fbbf2415' 
+          : row.role === 'admin' 
+          ? '#e91e6315' 
+          : row.role === 'manager' 
+          ? '#2196f315' 
+          : '#43a04715';
+        const color = isOwner
+          ? '#fbbf24'
+          : row.role === 'admin'
+          ? '#e91e63'
+          : row.role === 'manager'
+          ? '#2196f3'
+          : '#43a047';
+        
+        return (
+          <Chip
+            label={formatRole(isOwner ? 'Owner' : row.role)}
+            size="small"
+            sx={{
+              bgcolor,
+              color,
+              fontWeight: 600
+            }}
+          />
+        );
+      }
     },
     {
       field: 'hourly_rate',
@@ -291,6 +312,14 @@ const UsersManager: React.FC = () => {
       minWidth: 180,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
         <span>{row?.worker_name || '-'}</span>
+      )
+    },
+    {
+      field: 'worker_contract_country',
+      headerName: 'Contract Country',
+      width: 160,
+      renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
+        <span>{(row as any)?.worker_contract_country || '-'}</span>
       )
     },
     {
@@ -401,11 +430,7 @@ const UsersManager: React.FC = () => {
           sx={{
             position: 'fixed',
             bottom: 32,
-            right: 32,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
-            }
+            right: 32
           }}
         >
           <AddIcon />
@@ -474,6 +499,13 @@ const UsersManager: React.FC = () => {
               value={formData.worker_name}
               onChange={(e) => setFormData({ ...formData, worker_name: e.target.value })}
               helperText="Optional legal name for payroll if different from display name"
+            />
+            <TextField
+              label="Worker Contract Country"
+              fullWidth
+              value={formData.worker_contract_country}
+              onChange={(e) => setFormData({ ...formData, worker_contract_country: e.target.value })}
+              helperText="Country where the worker's contract is registered (e.g., Portugal, Spain)"
             />
             <TextField
               label={editingUser ? 'New Password (leave blank to keep current)' : 'Password'}

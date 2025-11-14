@@ -19,8 +19,13 @@ import {
   TableRow,
   Paper,
   TablePagination,
-  Typography
+  Typography,
+  Grid
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs, { Dayjs } from 'dayjs';
 import { Edit, Delete, Add, AttachFile, Receipt as ReceiptIcon, Visibility, Close, ErrorOutline } from '@mui/icons-material';
 import PageHeader from '../Common/PageHeader';
 import EmptyState from '../Common/EmptyState';
@@ -38,6 +43,7 @@ interface ExpenseEntry {
   id?: number;
   project_id: number;
   date: string;
+  expense_datetime?: string; // New datetime field
   amount: number | string;
   category: string;
   description: string;
@@ -70,7 +76,7 @@ export const ExpenseManager: React.FC = () => {
 
   // Form states
   const [projectId, setProjectId] = useState<number>(0);
-  const [date, setDate] = useState('');
+  const [expenseDate, setExpenseDate] = useState<Dayjs | null>(null);
   const [amount, setAmount] = useState<number>(0);
   const [category, setCategory] = useState('General');
   const [description, setDescription] = useState('');
@@ -141,9 +147,14 @@ export const ExpenseManager: React.FC = () => {
   const handleEdit = (expense: ExpenseEntry) => {
     setSelectedExpense(expense);
     setProjectId(expense.project_id);
-    // Convert ISO date to YYYY-MM-DD format for input type="date"
-    const dateOnly = expense.date.split('T')[0];
-    setDate(dateOnly);
+    // Parse expense_datetime or fallback to date (date only, no time)
+    if (expense.expense_datetime) {
+      setExpenseDate(dayjs(expense.expense_datetime).startOf('day'));
+    } else if (expense.date) {
+      setExpenseDate(dayjs(expense.date).startOf('day'));
+    } else {
+      setExpenseDate(null);
+    }
     setAmount(Number(expense.amount));
     setCategory(expense.category || 'General');
     setDescription(expense.description || '');
@@ -157,7 +168,7 @@ export const ExpenseManager: React.FC = () => {
 
   const resetForm = () => {
     setProjectId(0);
-    setDate(new Date().toISOString().split('T')[0]);
+    setExpenseDate(dayjs().startOf('day'));
     setAmount(0);
     setCategory('General');
     setDescription('');
@@ -169,16 +180,18 @@ export const ExpenseManager: React.FC = () => {
   };
 
   const handleSave = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setSubmitted(true);
-    if (!projectId || !date || !description) {
-      showWarning('Preencha este campo.');
-      return;
+    if (e) {
+      e.preventDefault();
     }
 
     const formData = new FormData();
     formData.append('project_id', projectId.toString());
-    formData.append('date', date);
+    
+    // Send date-only string to backend (YYYY-MM-DD)
+    if (expenseDate) {
+      formData.append('date', expenseDate.format('YYYY-MM-DD'));
+    }
+    
     formData.append('category', category);
     formData.append('description', description);
     formData.append('expense_type', expenseType);
@@ -219,47 +232,37 @@ export const ExpenseManager: React.FC = () => {
       }
 
       if (response.ok) {
-        showSuccess(selectedExpense ? 'Expense updated successfully' : 'Expense created successfully');
+        showSuccess(`Expense ${selectedExpense ? 'updated' : 'created'} successfully`);
         loadExpenses();
         setDialogOpen(false);
         resetForm();
         setSubmitted(false);
       } else {
         const errorData = await response.json();
-        console.error('Validation errors:', errorData);
-        if (errorData.errors) {
-          const errorMessages = Object.entries(errorData.errors)
-            .map(([field, messages]: [string, any]) => `${field}: ${messages.join(', ')}`)
-            .join('\n');
-          showError(`Validation failed:\n${errorMessages}`);
-        } else if (errorData.message) {
-          showError(errorData.message);
-        } else {
-          showError('Failed to save expense');
-        }
+        showError(errorData.message || `Failed to ${selectedExpense ? 'update' : 'create'} expense`);
       }
-    } catch (error) {
-      console.error('Save error:', error);
-      showError('Network error: Failed to save expense');
+    } catch (error: any) {
+      showError(error.response?.data?.message || `Failed to ${selectedExpense ? 'update' : 'create'} expense`);
     }
   };
 
-  const handleDelete = async (expenseId: number) => {
-    try {
-      const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${expenseId}`, {
-        method: 'DELETE'
-      });
+  const handleDelete = async (id: number) => {
+    if (window.confirm('Are you sure you want to delete this expense?')) {
+      try {
+        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+        });
 
-      if (response.ok) {
-        showSuccess('Expense deleted successfully');
-        loadExpenses();
-      } else {
-        const errorData = await response.json();
-        showError(errorData.message || 'Failed to delete expense');
+        if (response.ok) {
+          showSuccess('Expense deleted successfully');
+          loadExpenses();
+        } else {
+          showError('Failed to delete expense');
+        }
+      } catch {
+        showError('Failed to delete expense');
       }
-    } catch (error) {
-      console.error('Failed to delete expense:', error);
-      showError('Network error: Failed to delete expense');
     }
   };
 
@@ -413,7 +416,7 @@ export const ExpenseManager: React.FC = () => {
                 <TableRow key={expense.id}>
                   <TableCell>{expense.id}</TableCell>
                   <TableCell>
-                    {new Date(expense.date).toLocaleDateString()}
+                    {dayjs(expense.date).format('DD/MM/YYYY')}
                   </TableCell>
                   <TableCell>
                     {expense.project?.name || 'Unknown'}
@@ -427,9 +430,20 @@ export const ExpenseManager: React.FC = () => {
                       <IconButton
                         size="small"
                         color="primary"
-                        onClick={() => {
-                          setPreviewAttachmentUrl(`http://localhost:8080/storage/${expense.attachment_path}`);
-                          setAttachmentPreviewOpen(true);
+                        onClick={async () => {
+                          try {
+                            const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${expense.id}/attachment`);
+                            if (response.ok) {
+                              const blob = await response.blob();
+                              const url = URL.createObjectURL(blob);
+                              setPreviewAttachmentUrl(url);
+                              setAttachmentPreviewOpen(true);
+                            } else {
+                              showError('Failed to load attachment');
+                            }
+                          } catch (error) {
+                            showError('Failed to load attachment');
+                          }
                         }}
                         title="View Attachment"
                       >
@@ -505,13 +519,14 @@ export const ExpenseManager: React.FC = () => {
       )}
 
       {/* Expense Entry Dialog */}
-      <Dialog 
-        open={dialogOpen} 
-        onClose={() => setDialogOpen(false)} 
-        maxWidth="sm" 
-        fullWidth
-        disableRestoreFocus
-      >
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <Dialog 
+          open={dialogOpen} 
+          onClose={() => setDialogOpen(false)} 
+          maxWidth="sm" 
+          fullWidth
+          disableRestoreFocus
+        >
         <DialogTitle>
           <Box>
             <Typography variant="h6" component="span">
@@ -578,148 +593,147 @@ export const ExpenseManager: React.FC = () => {
             </Box>
           )}
           
-          <TextField
-            select
-            fullWidth
-            label="Project"
-            value={projectId}
-            onChange={(e) => setProjectId(Number(e.target.value))}
-            margin="normal"
-            required
-            error={submitted && !projectId}
-            helperText={submitted && !projectId ? "Preencha este campo." : ""}
-            onBlur={() => setSubmitted(true)}
+          <Box 
+            component="form" 
+            onSubmit={handleSave}
+            id="expense-form"
+            sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}
           >
-            <MenuItem value={0}>Select a project</MenuItem>
-            {projects.map((project) => (
-              <MenuItem key={project.id} value={project.id}>
-                {project.name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            type="date"
-            fullWidth
-            label="Date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            margin="normal"
-            required
-            error={submitted && !date}
-            helperText={submitted && !date ? "Preencha este campo." : ""}
-            InputLabelProps={{ shrink: true }}
-            onBlur={() => setSubmitted(true)}
-          />
-
-          <TextField
-            select
-            fullWidth
-            label="Expense Type"
-            value={expenseType}
-            onChange={(e) => setExpenseType(e.target.value as any)}
-            margin="normal"
-            required
-          >
-            <MenuItem value="reimbursement">Reimbursement (Receipt Required)</MenuItem>
-            <MenuItem value="mileage">Mileage/Kilometers</MenuItem>
-            <MenuItem value="company_card">Company Card</MenuItem>
-          </TextField>
-
-          <TextField
-            fullWidth
-            label="Category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            margin="normal"
-            required
-          />
-
-          {/* Conditional fields based on expense_type */}
-          {expenseType === 'mileage' ? (
-            <>
-              <TextField
-                type="number"
-                fullWidth
-                label="Distance (km)"
-                value={distanceKm}
-                onChange={(e) => setDistanceKm(Number(e.target.value))}
-                margin="normal"
-                required
-                inputProps={{ min: 0, step: 0.01 }}
-              />
-              <TextField
-                type="number"
-                fullWidth
-                label="Rate per km (€)"
-                value={ratePerKm}
-                onChange={(e) => setRatePerKm(Number(e.target.value))}
-                margin="normal"
-                required
-                inputProps={{ min: 0, step: 0.01 }}
-              />
-              <TextField
-                select
-                fullWidth
-                label="Vehicle Type"
-                value={vehicleType}
-                onChange={(e) => setVehicleType(e.target.value)}
-                margin="normal"
-                required
-              >
-                <MenuItem value="car">Car</MenuItem>
-                <MenuItem value="motorcycle">Motorcycle</MenuItem>
-                <MenuItem value="bicycle">Bicycle</MenuItem>
-              </TextField>
-              <Typography color="info.main" sx={{ mt: 2 }}>
-                Calculated amount: €{(distanceKm * ratePerKm).toFixed(2)}
-              </Typography>
-            </>
-          ) : (
             <TextField
-              type="number"
+              select
               fullWidth
-              label="Amount (€)"
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              margin="normal"
+              label="Project"
+              value={projectId}
+              onChange={(e) => setProjectId(Number(e.target.value))}
               required
-              inputProps={{ min: 0, step: 0.01 }}
-            />
-          )}
+            >
+              <MenuItem value={0}>Select a project</MenuItem>
+              {projects.map((project) => (
+                <MenuItem key={project.id} value={project.id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </TextField>
 
-          <TextField
-            fullWidth
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            margin="normal"
-            multiline
-            rows={3}
-            required
-            error={submitted && !description}
-            helperText={submitted && !description ? "Preencha este campo." : `${description.length} characters`}
-            onBlur={() => setSubmitted(true)}
-          />
-
-          <Button
-            component="label"
-            variant="outlined"
-            startIcon={<AttachFile />}
-            sx={{ mt: 2, mb: 1 }}
-            fullWidth
-          >
-            {attachmentFile ? attachmentFile.name : `Upload Receipt ${expenseType === 'reimbursement' ? '(Recommended)' : '(Optional)'}`}
-            <input
-              type="file"
-              hidden
-              accept="image/*,.pdf"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) setAttachmentFile(file);
+            <DatePicker
+              label="Expense Date"
+              value={expenseDate}
+              onChange={(newValue) => setExpenseDate(newValue)}
+              format="DD/MM/YYYY"
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  required: true
+                }
               }}
             />
-          </Button>
+
+            <TextField
+              select
+              fullWidth
+              label="Expense Type"
+              value={expenseType}
+              onChange={(e) => setExpenseType(e.target.value as any)}
+              required
+            >
+              <MenuItem value="reimbursement">Reimbursement (Receipt Required)</MenuItem>
+              <MenuItem value="mileage">Mileage/Kilometers</MenuItem>
+              <MenuItem value="company_card">Company Card</MenuItem>
+            </TextField>
+
+            <TextField
+              fullWidth
+              label="Category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              required
+            />
+
+            <TextField
+              fullWidth
+              label="Category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              required
+            />
+
+            {/* Conditional fields based on expense_type */}
+            {expenseType === 'mileage' ? (
+              <>
+                <TextField
+                  type="number"
+                  fullWidth
+                  label="Distance (km)"
+                  value={distanceKm}
+                  onChange={(e) => setDistanceKm(Number(e.target.value))}
+                  required
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
+                <TextField
+                  type="number"
+                  fullWidth
+                  label="Rate per km (€)"
+                  value={ratePerKm}
+                  onChange={(e) => setRatePerKm(Number(e.target.value))}
+                  required
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
+                <TextField
+                  select
+                  fullWidth
+                  label="Vehicle Type"
+                  value={vehicleType}
+                  onChange={(e) => setVehicleType(e.target.value)}
+                  required
+                >
+                  <MenuItem value="car">Car</MenuItem>
+                  <MenuItem value="motorcycle">Motorcycle</MenuItem>
+                  <MenuItem value="bicycle">Bicycle</MenuItem>
+                </TextField>
+                <Typography color="info.main">
+                  Calculated amount: €{(distanceKm * ratePerKm).toFixed(2)}
+                </Typography>
+              </>
+            ) : (
+              <TextField
+                type="number"
+                fullWidth
+                label="Amount (€)"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+              />
+            )}
+
+            <TextField
+              fullWidth
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              multiline
+              rows={3}
+              required
+            />
+
+            <Button
+              component="label"
+              variant="outlined"
+              startIcon={<AttachFile />}
+              fullWidth
+            >
+              {attachmentFile ? attachmentFile.name : `Upload Receipt ${expenseType === 'reimbursement' ? '(Recommended)' : '(Optional)'}`}
+              <input
+                type="file"
+                hidden
+                accept="image/*,.pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setAttachmentFile(file);
+                }}
+              />
+            </Button>
+          </Box>
         </DialogContent>
         <DialogActions sx={{ flexWrap: 'wrap', gap: 1, p: 2 }}>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -727,7 +741,8 @@ export const ExpenseManager: React.FC = () => {
           {/* Save/Update button (only for draft/rejected or new) */}
           {(!selectedExpense || selectedExpense.status === 'draft' || selectedExpense.status === 'rejected') && (
             <Button
-              onClick={handleSave}
+              type="submit"
+              form="expense-form"
               variant="contained"
               color="primary"
             >
@@ -757,6 +772,7 @@ export const ExpenseManager: React.FC = () => {
           )}
         </DialogActions>
       </Dialog>
+      </LocalizationProvider>
 
       {/* Input Dialog for Rejection Reason */}
       <InputDialog

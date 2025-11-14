@@ -15,6 +15,7 @@ use App\Http\Controllers\SuggestionController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\AccessManagerController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\TravelSegmentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -216,6 +217,17 @@ Route::middleware(['tenant.initialize'])->group(function () {
 
     // Events - CRUD for planning events
     Route::apiResource('events', EventController::class);
+
+    // Travel Segments - Travel management with permissions
+    Route::prefix('travels')->group(function () {
+        Route::get('/', [TravelSegmentController::class, 'index'])->middleware('throttle:read');
+        Route::post('/', [TravelSegmentController::class, 'store'])->middleware(['permission:create-timesheets', 'throttle:create']);
+        Route::get('/by-date', [TravelSegmentController::class, 'getTravelsByDate'])->middleware('throttle:read'); // Timesheet integration
+        Route::get('/suggestions', [TravelSegmentController::class, 'suggest'])->middleware('throttle:read');
+        Route::get('/{travelSegment}', [TravelSegmentController::class, 'show'])->middleware('throttle:read');
+        Route::put('/{travelSegment}', [TravelSegmentController::class, 'update'])->middleware(['permission:edit-own-timesheets', 'throttle:edit']);
+        Route::delete('/{travelSegment}', [TravelSegmentController::class, 'destroy'])->middleware(['permission:edit-own-timesheets', 'throttle:delete']);
+    });
 
     Route::prefix('planning')->group(function () {
         Route::get('projects', [\App\Http\Controllers\PlanningController::class, 'indexProjects'])->middleware('throttle:read');
