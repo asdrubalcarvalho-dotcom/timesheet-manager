@@ -1,0 +1,173 @@
+# 🔧 Copilot Instruction — Fix Frontend TypeScript Build
+
+You are working on the **TimePerk / Timesheet** monorepo.
+
+Your goal is:
+
+> **Make `npm run build` pass with 0 TypeScript errors, without changing business behavior or backend API contracts.**
+
+---
+
+## ✅ Global rules
+
+- Do **not** add new features.
+- Do **not** change backend routes or payloads.
+- Prefer **minimal, type-safe fixes** over big refactors.
+- Keep the existing UX and component structure.
+- Respect multi-tenant logic and domain concepts (Travels, Timesheets, Approvals, Expenses).
+- Do **not** remove important fields just to silence TypeScript.
+- Do **not** disable TypeScript checking or modify the build script.
+
+---
+
+## 1) Fix core shared types first
+
+1. Update `frontend/src/types/index.ts` and `frontend/src/services/travels.ts` so that:
+
+   - `TravelSegment` is defined once, consistently, and exported from a central place.
+   - Required fields:
+     - `id`
+     - `technician_id`
+     - `project_id`
+     - `travel_date`
+     - `origin_country`, `origin_city?`
+     - `destination_country`, `destination_city?`
+     - `direction` union
+     - `status` union (`'planned' | 'completed' | 'cancelled'`)
+     - any additional fields already used in components
+
+   - Optional string fields must follow the convention: `string | null` or `string | undefined`, depending on actual usage.
+
+2. Update `TimesheetManagerRow` to include properties used by components:
+   - `project_name`
+   - `task_name`
+   - `total_hours`
+   - and any others referenced in UI logic.
+
+3. Re-run:
+
+```
+npm run build
+```
+
+and continue until no type errors originate from shared types.
+
+---
+
+## 2) UsersManager fixes
+
+File: `frontend/src/components/Admin/UsersManager.tsx`
+
+- Ensure the form state includes `worker_contract_country`.
+- Update `setFormState` calls to always include this field.
+- Provide a default value (e.g., empty string) when creating or resetting a user.
+
+---
+
+## 3) ApprovalManager fixes (travels integration)
+
+File: `frontend/src/components/Approvals/ApprovalManager.tsx`
+
+- Correct the import of `TravelSegment`.
+- Align all references to `TimesheetManagerRow` with the updated interface.
+- Remove unused variables/imports only if they are truly unused.
+- Fix properties accessed on rows (e.g., `project_name`, `task_name`, `total_hours`) by aligning the interface, not by casting to `any`.
+
+---
+
+## 4) Expense-related fixes
+
+Files:
+- `frontend/src/components/Approvals/ExpenseApprovalPanel.tsx`
+- `frontend/src/components/Expenses/ExpenseManager.tsx`
+
+- Remove unused imports (`OutlinedInput`, `AttachMoney`, etc.) if unused.
+- Handle optional string values safely:
+  - replace direct usage of optional props with a safe fallback:
+    ```ts
+    const safeValue = value ?? '';
+    ```
+- Avoid `any` or unsafe casts unless absolutely required.
+
+---
+
+## 5) TimesheetCalendar cleanup
+
+File: `frontend/src/components/Timesheets/TimesheetCalendar.tsx`
+
+- Ensure the component uses the updated `TravelSegment` type.
+- Guard optional fields (`origin_city`, `destination_city`) with fallbacks.
+- Fix duplicate JSX attributes:
+  ```tsx
+  // wrong
+  <Button disabled={x} disabled={y} />
+
+  // correct
+  <Button disabled={x || y} />
+  ```
+- Remove or use unused variables flagged by TypeScript.
+
+Re-run:
+
+```
+npm run build
+```
+
+until this file produces no errors.
+
+---
+
+## 6) Cypress tsconfig fix
+
+If Cypress is not used yet:
+
+### Option A (recommended)
+Add a simple `cypress/tsconfig.json`:
+
+```json
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"]
+}
+```
+
+### Option B  
+Exclude the Cypress folder in the root `tsconfig.json`.
+
+---
+
+## 7) Final verification
+
+When all files compile:
+
+1. Run:
+
+```
+npm run build
+```
+
+2. Run:
+
+```
+npm run dev
+```
+
+3. Confirm there are no TypeScript or runtime errors in:
+   - Timesheets calendar
+   - Travels
+   - Approvals
+   - Expenses
+   - User management
+
+---
+
+## 🎯 Final expectation
+
+- Strict TypeScript build must pass with **zero errors**.
+- No business logic changes.
+- No API changes.
+- Only minimal, focused, type-safe fixes.
+
