@@ -1,58 +1,7 @@
 import api from './api';
+import type { TravelSegment, TravelSegmentFilters, TravelSuggestion } from '../types';
 
-export interface TravelSegment {
-  id: number;
-  technician_id: number;
-  project_id: number;
-  travel_date?: string;
-  start_at?: string | null;
-  end_at?: string | null;
-  duration_minutes?: number | null;
-  origin_country: string;
-  origin_location_id?: number | null;
-  destination_country: string;
-  destination_location_id?: number | null;
-  direction: 'departure' | 'arrival' | 'project_to_project' | 'internal' | 'other';
-  classification_reason?: string;
-  status: 'planned' | 'completed' | 'cancelled';
-  linked_timesheet_entry_id?: number;
-  created_by?: number;
-  updated_by?: number;
-  created_at?: string;
-  updated_at?: string;
-  technician?: {
-    id: number;
-    name: string;
-    email: string;
-  };
-  project?: {
-    id: number;
-    name: string;
-  };
-  origin_location?: {
-    id: number;
-    name: string;
-  };
-  destination_location?: {
-    id: number;
-    name: string;
-  };
-}
-
-export interface TravelSegmentFilters {
-  technician_id?: number;
-  project_id?: number;
-  status?: string;
-  start_date?: string;
-  end_date?: string;
-}
-
-export interface TravelSuggestion {
-  origin_country: string;
-  origin_location_id?: number;
-  destination_country?: string;
-  destination_location_id?: number;
-}
+export type { TravelSegment, TravelSegmentFilters, TravelSuggestion };
 
 export const travelsApi = {
   getAll: (filters?: TravelSegmentFilters) => {

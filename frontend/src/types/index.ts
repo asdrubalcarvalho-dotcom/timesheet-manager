@@ -228,8 +228,11 @@ export interface TimesheetManagerRow {
   start_time?: string | null;
   end_time?: string | null;
   hours_worked: number;
+  total_hours?: number;
   status: Timesheet['status'];
   description?: string;
+  project_name?: string;
+  task_name?: string;
   technician?: Pick<Technician, 'id' | 'name' | 'email'> | null;
   project?: Pick<Project, 'id' | 'name'> | null;
   task?: Pick<Task, 'id' | 'name'> | null;
@@ -341,4 +344,61 @@ export interface TopProject {
   project_name: string;
   value: number;
   metric: 'hours' | 'expenses';
+}
+
+// Travel Segments
+export interface TravelSegment {
+  id: number;
+  technician_id: number;
+  project_id: number;
+  travel_date: string;
+  start_at: string | null;
+  end_at: string | null;
+  duration_minutes: number | null;
+  origin_country: string;
+  origin_city?: string | null;
+  origin_location_id?: number | null;
+  destination_country: string;
+  destination_city?: string | null;
+  destination_location_id?: number | null;
+  direction: 'departure' | 'arrival' | 'project_to_project' | 'internal' | 'other';
+  classification_reason?: string | null;
+  status: 'planned' | 'completed' | 'cancelled';
+  linked_timesheet_entry_id?: number | null;
+  created_by?: number;
+  updated_by?: number;
+  created_at?: string;
+  updated_at?: string;
+  technician?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  project?: {
+    id: number;
+    name: string;
+  };
+  origin_location?: {
+    id: number;
+    name: string;
+  };
+  destination_location?: {
+    id: number;
+    name: string;
+  };
+}
+
+export interface TravelSegmentFilters {
+  technician_id?: number;
+  project_id?: number;
+  status?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface TravelSuggestion {
+  origin_country: string;
+  origin_location_id?: number;
+  destination_country?: string;
+  destination_location_id?: number;
 }

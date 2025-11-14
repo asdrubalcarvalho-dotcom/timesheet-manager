@@ -25,7 +25,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  OutlinedInput,
   InputAdornment,
   ToggleButtonGroup,
   ToggleButton,
@@ -55,9 +54,7 @@ import {
   Search,
   Clear,
   ExpandMore,
-  ExpandLess,
-  AttachMoney,
-  Category as CategoryIcon
+  ExpandLess
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
@@ -155,8 +152,8 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       const dateMatch = dayjs(exp.date).isBetween(dateFrom, dateTo, 'day', '[]');
       const statusMatch = statusFilter.length === 0 || statusFilter.includes(exp.status);
       const typeMatch = typeFilter.length === 0 || typeFilter.includes(exp.expense_type);
-      const categoryMatch = categoryFilter.length === 0 || categoryFilter.includes(exp.category);
-      const projectMatch = projectFilter.length === 0 || projectFilter.includes(exp.project?.name || '');
+      const categoryMatch = categoryFilter.length === 0 || categoryFilter.includes(exp.category ?? '');
+      const projectMatch = projectFilter.length === 0 || projectFilter.includes(exp.project?.name ?? '');
       
       // Search term (description, category, project name)
       const searchMatch = !searchTerm || 

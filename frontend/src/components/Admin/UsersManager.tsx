@@ -122,6 +122,7 @@ const UsersManager: React.FC = () => {
         hourly_rate: '',
         worker_id: '',
         worker_name: '',
+        worker_contract_country: '',
         password: ''
       });
     }

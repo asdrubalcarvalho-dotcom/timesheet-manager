@@ -19,8 +19,7 @@ import {
   TableRow,
   Paper,
   TablePagination,
-  Typography,
-  Grid
+  Typography
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -58,7 +57,7 @@ interface ExpenseEntry {
 }
 
 export const ExpenseManager: React.FC = () => {
-  const { showSuccess, showError, showWarning } = useNotification();
+  const { showSuccess, showError } = useNotification();
   useTenantGuard(); // Ensure tenant_slug exists
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -84,7 +83,6 @@ export const ExpenseManager: React.FC = () => {
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [ratePerKm, setRatePerKm] = useState<number>(0.36); // Default rate
   const [vehicleType, setVehicleType] = useState('car');
-  const [submitted, setSubmitted] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreviewOpen, setAttachmentPreviewOpen] = useState(false);
   const [previewAttachmentUrl, setPreviewAttachmentUrl] = useState<string>('');
@@ -236,7 +234,6 @@ export const ExpenseManager: React.FC = () => {
         loadExpenses();
         setDialogOpen(false);
         resetForm();
-        setSubmitted(false);
       } else {
         const errorData = await response.json();
         showError(errorData.message || `Failed to ${selectedExpense ? 'update' : 'create'} expense`);

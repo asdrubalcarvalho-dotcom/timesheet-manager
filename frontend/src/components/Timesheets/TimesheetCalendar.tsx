@@ -201,7 +201,6 @@ const TimesheetCalendar: React.FC = () => {
       }
     }, [projects]);
   const [taskId, setTaskId] = useState<number>(0);
-  const [taskIdStr, setTaskIdStr] = useState<string>('');
   const [locationId, setLocationId] = useState<string>('');
   const [hoursWorked, setHoursWorked] = useState<number>(0);
   const [description, setDescription] = useState('');
@@ -237,8 +236,8 @@ const TimesheetCalendar: React.FC = () => {
     const currentUserTechnician = technicians.find(t => t.email === user.email);
 
     // If project is selected, filter by project membership
-    if (projectId > 0) {
-      const selectedProject = projects.find(p => p.id === projectId);
+    if (Number(projectId) > 0) {
+      const selectedProject = projects.find(p => p.id === Number(projectId));
       
       // Try both camelCase and snake_case (Laravel returns snake_case by default)
       const memberRecords = selectedProject?.memberRecords || selectedProject?.member_records || [];
@@ -429,7 +428,6 @@ const TimesheetCalendar: React.FC = () => {
     
     // Only reload travels when the visible month actually changes
     const newMonth = dayjs(info.view.currentStart).format('YYYY-MM');
-    const currentMonth = dayjs().format('YYYY-MM'); // Keep track of what we have loaded
     
     // Only reload if we don't have data for this month yet
     if (!travelsByDate || Object.keys(travelsByDate).length === 0 || 
@@ -2433,7 +2431,7 @@ const TimesheetCalendar: React.FC = () => {
                             onChange={(e) => {
                               const value = e.target.value;
                               setProjectId(value === '' ? '' : Number(value));
-                              setTaskIdStr(''); // Reset task when project changes
+                              setTaskId(0); // Reset task when project changes
                             }}
                             variant="outlined"
                             id="timesheet-project-field"
@@ -2525,7 +2523,6 @@ const TimesheetCalendar: React.FC = () => {
                             value={locationId}
                             onChange={(e) => setLocationId(e.target.value)}
                             variant="outlined"
-                            required
                             id="timesheet-location-field"
                             InputProps={{
                               startAdornment: <LocationIcon color="action" sx={{ mr: 1 }} />
@@ -2579,7 +2576,6 @@ const TimesheetCalendar: React.FC = () => {
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Describe the work performed..."
                         variant="outlined"
-                        required
                         helperText={description.length ? `${description.length} characters` : ''}
                         id="timesheet-description-field"
                         sx={{
