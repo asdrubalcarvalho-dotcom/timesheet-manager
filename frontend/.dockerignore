@@ -1,0 +1,11 @@
+node_modules
+dist
+cypress
+Cypress
+**/*.spec.ts
+**/*.spec.tsx
+**/*.test.ts
+**/*.test.tsx
+tsconfig.tsbuildinfo
+tsconfig.node.tsbuildinfo
+tsconfig.app.tsbuildinfo
