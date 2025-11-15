@@ -1,20 +1,19 @@
-# Use official Node.js runtime as base image
-FROM node:20-alpine
-
-# Set the working directory
+# ===== BUILD STAGE =====
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy project files
 COPY . .
+RUN npm run build
 
-# Expose port 3000
-EXPOSE 3000
+# ===== RUNTIME STAGE =====
+FROM nginx:alpine
 
-# Start the development server
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+RUN rm -rf /usr/share/nginx/html/*
+
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY ./nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
