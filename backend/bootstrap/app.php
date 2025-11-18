@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'can.edit.timesheets' => \App\Http\Middleware\CanEditTimesheets::class,
             'can.edit.expenses' => \App\Http\Middleware\CanEditExpenses::class,
+            'can.manage.project.members' => \App\Http\Middleware\CanManageProjectMembers::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'tenant.domain' => \App\Http\Middleware\InitializeTenancyByDomainWithFallback::class,
             'tenant.initialize' => \App\Http\Middleware\InitializeTenancyBySlug::class, // Custom: lookup by slug from X-Tenant header
@@ -34,6 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'sanctum.tenant' => \App\Http\Middleware\SetSanctumTenantConnection::class,
             'auth.token' => \App\Http\Middleware\AuthenticateViaToken::class,
         ]);
+        
+        // CRITICAL: Prepend SetSanctumTenantConnection to API middleware group
+        // This MUST run BEFORE auth:sanctum to configure tenant DB connection
+        $middleware->prependToGroup('api', \App\Http\Middleware\SetSanctumTenantConnection::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

@@ -112,7 +112,7 @@ const TasksManager: React.FC = () => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/tasks');
+      const response = await api.get('/api/tasks');
       // Normalize is_active to boolean for all tasks
       setTasks(
         normalizeApiResponse<Task>(response.data).map(t => ({
@@ -129,7 +129,7 @@ const TasksManager: React.FC = () => {
 
   const fetchProjects = async () => {
     try {
-      const response = await api.get('/projects');
+      const response = await api.get('/api/projects');
       setProjects(normalizeApiResponse<Project>(response.data));
     } catch (error) {
       console.error('Failed to load projects');
@@ -196,10 +196,10 @@ const TasksManager: React.FC = () => {
       };
 
       if (editingTask) {
-        await api.put(`/tasks/${editingTask.id}`, payload);
+        await api.put(`/api/tasks/${editingTask.id}`, payload);
         showSuccess('Task updated successfully');
       } else {
-        await api.post('/tasks', payload);
+        await api.post('/api/tasks', payload);
         showSuccess('Task created successfully');
       }
       fetchTasks();
@@ -222,7 +222,7 @@ const TasksManager: React.FC = () => {
       },
       action: async () => {
         try {
-          await api.delete(`/tasks/${id}`);
+          await api.delete(`/api/tasks/${id}`);
           showSuccess('Task deleted successfully');
           fetchTasks();
         } catch (error) {
@@ -387,7 +387,7 @@ const TasksManager: React.FC = () => {
       {tasks.length > 0 && (
       <Fab
           color="primary"
-          onClick={() => setOpenDialog(true)}
+          onClick={() => handleOpenDialog()}
           sx={{
             position: 'fixed',
             bottom: 32,
