@@ -87,7 +87,7 @@ const LocationsManager: React.FC = () => {
   const fetchLocations = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/locations');
+      const response = await api.get('/api/locations');
       setLocations(normalizeApiResponse<Location>(response.data));
     } catch {
       showError('Failed to load locations');
@@ -160,10 +160,10 @@ const LocationsManager: React.FC = () => {
       };
 
       if (editingLocation) {
-        await api.put(`/locations/${editingLocation.id}`, payload);
+        await api.put(`/api/locations/${editingLocation.id}`, payload);
         showSuccess('Location updated successfully');
       } else {
-        await api.post('/locations', payload);
+        await api.post('/api/locations', payload);
         showSuccess('Location created successfully');
       }
       fetchLocations();
@@ -188,7 +188,7 @@ const LocationsManager: React.FC = () => {
       },
       action: async () => {
         try {
-          await api.delete(`/locations/${id}`);
+          await api.delete(`/api/locations/${id}`);
           showSuccess('Location deleted successfully');
           fetchLocations();
         } catch {
@@ -346,7 +346,7 @@ const LocationsManager: React.FC = () => {
       {locations.length > 0 && (
       <Fab
           color="primary"
-          onClick={() => setOpenDialog(true)}
+          onClick={() => handleOpenDialog()}
           sx={{
             position: 'fixed',
             bottom: 32,

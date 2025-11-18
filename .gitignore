@@ -3,11 +3,14 @@ backend/vendor/
 backend/node_modules/
 backend/.env
 backend/.env.*
+!backend/.env.example  # Keep example file
 backend/Homestead.json
 backend/Homestead.yaml
 backend/auth.json
 backend/npm-debug.log
 backend/yarn-error.log
+backend/bootstrap/cache/*  # Cache files
+!backend/bootstrap/cache/.gitkeep
 
 # Ignore ALL backend storage + tenants
 backend/storage
@@ -32,6 +35,7 @@ frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
+frontend/.env.production  # Production URLs (create on server)
 frontend/dist/
 frontend/build/
 frontend/npm-debug.log*
@@ -41,14 +45,17 @@ frontend/yarn-error.log*
 # Docker
 .docker/
 docker-compose.override.yml
+docker-compose.prod.yml  # Production compose (create on server)
 
-# General
-.DS_Store
-.vscode/
-.idea/
-*.log
-*.pid
+# Database
+*.sql
+*.sqlite
+*.db
+*.dump  # DB dumps
+
+# General/Node
 *.seed
+*.pid
 *.pid.lock
 .nyc_output/
 .grunt
@@ -66,11 +73,6 @@ typings/
 .env
 .cache
 
-# Database
-*.sql
-*.sqlite
-*.db
-
 # IDE
 .vscode/
 .idea/
@@ -86,3 +88,4 @@ typings/
 .Trashes
 ehthumbs.db
 Thumbs.db
+frontend/tsconfigXback.zip

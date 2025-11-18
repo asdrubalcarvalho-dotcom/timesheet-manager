@@ -10,7 +10,6 @@ import {
   Button,
   Grid,
   TextField,
-  Autocomplete,
   Paper,
   Collapse,
   FormControl,
@@ -111,27 +110,6 @@ const ApprovalManager: React.FC = () => {
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expenseLoading, setExpenseLoading] = useState(false);
-
-  // Keep track of all technicians from the full dataset
-  const technicianOptions = useMemo(() => {
-    const map = new Map<number, Technician>();
-    
-    // Add from managerRows
-    managerRows.forEach((row) => {
-      if (row.technician) {
-        map.set(row.technician.id, row.technician as Technician);
-      }
-    });
-    
-    // Add from allTechnicians state
-    allTechnicians.forEach((tech) => {
-      if (!map.has(tech.id)) {
-        map.set(tech.id, tech);
-      }
-    });
-    
-    return Array.from(map.values());
-  }, [managerRows, allTechnicians]);
 
   // Contar filtros ativos
   const activeFiltersCount = useMemo(() => {

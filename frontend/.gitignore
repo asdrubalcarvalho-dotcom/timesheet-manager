@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Ignore production config (use .env.production.local for local builds)
+.env.production.local
