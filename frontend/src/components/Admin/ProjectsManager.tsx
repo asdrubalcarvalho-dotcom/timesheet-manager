@@ -75,10 +75,17 @@ const ProjectsManager: React.FC = () => {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/projects');
-      setProjects(response.data);
-    } catch {
-      showError('Failed to load projects');
+      const response = await api.get('/api/projects');
+      console.log('[ProjectsManager] Projects response:', response.data);
+      
+      // Backend returns { data: [...], user_permissions: {...} }
+      const projectsData = Array.isArray(response.data) ? response.data : response.data.data;
+      console.log('[ProjectsManager] Extracted projects:', projectsData);
+      setProjects(projectsData || []);
+    } catch (error: any) {
+      console.error('[ProjectsManager] Error fetching projects:', error);
+      console.error('[ProjectsManager] Error response:', error.response?.data);
+      showError(error.response?.data?.message || 'Failed to load projects');
     } finally {
       setLoading(false);
     }
@@ -127,10 +134,10 @@ const ProjectsManager: React.FC = () => {
       };
 
       if (editingProject) {
-        await api.put(`/projects/${editingProject.id}`, cleanData);
+        await api.put(`/api/projects/${editingProject.id}`, cleanData);
         showSuccess('Project updated successfully');
       } else {
-        await api.post('/projects', cleanData);
+        await api.post('/api/projects', cleanData);
         showSuccess('Project created successfully');
       }
       fetchProjects();
@@ -153,7 +160,7 @@ const ProjectsManager: React.FC = () => {
       },
       action: async () => {
         try {
-          await api.delete(`/projects/${id}`);
+          await api.delete(`/api/projects/${id}`);
           showSuccess('Project deleted successfully');
           fetchProjects();
         } catch {

@@ -23,7 +23,7 @@ export const taskService = {
 
   // Create task
   createTask: async (taskData: Partial<Task>): Promise<Task> => {
-    const response = await api.post('/tasks', taskData);
+    const response = await api.post('/api/tasks', taskData);
     return response.data.data;
   },
 

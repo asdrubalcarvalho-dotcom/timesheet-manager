@@ -17,7 +17,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import BusinessIcon from '@mui/icons-material/Business';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../contexts/NotificationContext';
-import api, { tenantApi } from '../../services/api';
+import api from '../../services/api';
 
 interface RegistrationFormData {
   company_name: string;
@@ -30,6 +30,42 @@ interface RegistrationFormData {
   country?: string;
   timezone?: string;
 }
+
+const getTenancyBaseDomain = (): string => {
+  // Allow override via environment variables
+  const envBase =
+    (import.meta as any).env?.VITE_TENANCY_BASE_DOMAIN ||
+    (import.meta as any).env?.VITE_BASE_DOMAIN;
+
+  if (envBase && typeof envBase === 'string') {
+    return envBase;
+  }
+
+  const host = window.location.hostname;
+
+  // In production we expect something like app.vendaslive.com
+  // We want to extract the "vendaslive.com" part so we can build
+  // tenant subdomains like "demo.vendaslive.com"
+  if (host.includes('.')) {
+    const parts = host.split('.');
+    if (parts.length >= 2) {
+      return parts.slice(-2).join('.');
+    }
+  }
+
+  // Sensible default for local development
+  return 'vendaslive.localhost';
+};
+
+const buildTenantLoginUrl = (slug: string, adminEmail: string): string => {
+  const baseDomain = getTenancyBaseDomain();
+  const protocol = window.location.protocol || 'http:';
+  const port = window.location.port ? `:${window.location.port}` : '';
+  const host = `${slug}.${baseDomain}`;
+  const emailParam = encodeURIComponent(adminEmail);
+
+  return `${protocol}//${host}${port}/login?email=${emailParam}`;
+};
 
 const TenantRegistration: React.FC = () => {
   const navigate = useNavigate();
@@ -150,7 +186,7 @@ const TenantRegistration: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await tenantApi.register({
+      const response = await api.post('/api/tenants/register', {
         company_name: formData.company_name,
         slug: formData.slug,
         admin_name: formData.admin_name,
@@ -165,14 +201,17 @@ const TenantRegistration: React.FC = () => {
       showSuccess(`Welcome! Your workspace "${formData.company_name}" has been created successfully!`);
       
       // Store tenant slug and token
-      localStorage.setItem('tenant_slug', response.tenant);
-      if (response.admin?.token) {
-        localStorage.setItem('auth_token', response.admin.token);
+      localStorage.setItem('tenant_slug', response.data.tenant);
+      if (response.data.admin?.token) {
+        localStorage.setItem('auth_token', response.data.admin.token);
       }
 
-      // Redirect to login or dashboard
+      // Redirect to tenant-specific login on its subdomain
+      const tenantSlug = response.data.tenant || formData.slug;
+      const loginUrl = buildTenantLoginUrl(tenantSlug, formData.admin_email);
+
       setTimeout(() => {
-        navigate(`/login?tenant=${response.tenant}&email=${formData.admin_email}`);
+        window.location.href = loginUrl;
       }, 1500);
 
     } catch (error: any) {
@@ -267,7 +306,7 @@ const TenantRegistration: React.FC = () => {
             helperText={
               slugError || 
               errors.slug?.[0] || 
-              'This will be your unique workspace identifier (e.g., acme.app.timeperk.com)'
+              'This will be your unique workspace identifier (e.g., acme.vendaslive.com)'
             }
             required
             InputProps={{

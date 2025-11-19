@@ -4,13 +4,13 @@ import type { Location } from '../types';
 export const locationService = {
   // Get all locations
   getLocations: async (): Promise<Location[]> => {
-    const response = await api.get('/locations');
+    const response = await api.get('/api/locations');
     return response.data.data;
   },
 
   // Get active locations only
   getActiveLocations: async (): Promise<Location[]> => {
-    const response = await api.get('/locations/active');
+    const response = await api.get('/api/locations/active');
     return response.data.data;
   },
 
@@ -22,7 +22,7 @@ export const locationService = {
 
   // Create location
   createLocation: async (locationData: Partial<Location>): Promise<Location> => {
-    const response = await api.post('/locations', locationData);
+    const response = await api.post('/api/locations', locationData);
     return response.data.data;
   },
 

@@ -1,127 +1,128 @@
-# 🧭 TimePerk Cortex - AI Agent Instructions
-
-> **Multi-tenant Timesheet, Expense & Travel Management System**  
-> Laravel 11 API + React 18 SPA + Docker Compose + Stancl Tenancy
-
-## Core Development Principles
-
-1. **Analyze before modifying** - Check existing implementations in `backend/app/`, `frontend/src/` before adding new code
-2. **Reuse Laravel patterns** - Use Artisan commands, existing middleware, FormRequests, Policies
-3. **Respect multi-tenancy** - Every API call needs `X-Tenant` header (local) or subdomain (production)
-4. **Follow authorization layers** - Permission middleware → Custom middleware → Policy checks (see Authorization section)
-5. **Maintain consistency** - Match patterns in existing controllers/components (see Templates section)
-6. **Use NotificationContext** - ALWAYS use global notification system, never create local snackbar state
-7. **CRITICAL: Owner Protection** - ONE Owner per tenant (created at registration), CANNOT be deleted, CANNOT have email/role edited, seeders MUST use existing Owner
-
-## Quick Start Commands
-
-```bash
-# Container operations
-docker-compose up --build              # Rebuild after code changes
-docker exec -it timesheet_app bash     # Enter backend container
-
-# Backend operations (inside container)
-php artisan migrate                    # Run migrations
-php artisan test                       # Run test suite
-php artisan db:seed --class=AdminUserSeeder  # Seed admin user
-
-# Access points
-# Frontend:  http://localhost:3000
-# Backend:   http://localhost:8080/api
-# MySQL:     localhost:3307 (user: timesheet, pass: secret)
-# Database:  timesheet (central), timesheet_{tenant_slug} (tenant DBs)
-```
-
-**Demo Credentials:** `acarvalho@upg2ai.com` / `upg-to-ai` (tenant) / `password`
-
+---
+applyTo: '**'
 ---
 
-# Architecture & Stack Overview
+# TimePerk Cortex - AI Agent Instructions
 
-## Technology Stack
-**Full-stack timesheet/expense management system with Docker Compose orchestration:**
-- **Backend**: Laravel 11 + PHP 8.3 (REST API with Sanctum auth)
-- **Frontend**: React 18 + TypeScript + Vite + MUI (SPA)
-- **Database**: MySQL 8.0 with foreign key constraints
-- **Multi-Tenancy**: Stancl Tenancy (isolated databases per tenant)
-- **Cache/Sessions**: Redis
-- **Web Server**: Nginx reverse proxy to PHP-FPM
+Multi-tenant Timesheet/Expense/Travel Management (Laravel 11 + React 18 + Docker + Stancl Tenancy)
 
-## Container Architecture (docker-compose.yml)
-```yaml
-services:
-  app:          # Laravel PHP-FPM (backend code)
-  webserver:    # Nginx on :8080 (host) → :80 (container)
-  database:     # MySQL on :3307 (host) → :3306 (container)
-  redis:        # Redis on :6379
-  frontend:     # Vite dev server on :3000
+## Essential Architecture
+
+### Stack
+- **Backend**: Laravel 11 + PHP 8.3 (REST API, Sanctum auth)
+- **Frontend**: React 18 + TypeScript + Vite + MUI
+- **Database**: MySQL 8.0 (central DB + isolated tenant DBs with ULID naming)
+- **Tenancy**: Stancl (subdomain in production, X-Tenant header in dev/local)
+- **Containers**: Docker Compose (app, nginx_api, nginx_app, database, redis)
+
+### Critical Port Mappings
+- **Frontend**: `http://localhost:8082` (nginx_app container port 80 → host 8082)
+- **Backend API**: `http://api.localhost/api` (nginx_api container port 80 → host 80)
+- **MySQL**: `localhost:3307` → container `3306` (user: `timesheet`, pass: `secret`)
+- **Container names**: `timesheet_app`, `timesheet_nginx_api`, `timesheet_nginx_app`, `timesheet_mysql`, `timesheet_redis`
+
+### Multi-Tenancy (ULID-Based)
+- **Central DB**: `timesheet` (tenant metadata, migrations)
+- **Tenant DBs**: `timesheet_{ULID}` (e.g., `timesheet_01K9WMTAY3AKY23HVHQDW9PYGC`)
+- **Resolution**: Production uses subdomain (`acme.timeperk.app`), dev/local uses `X-Tenant: slug` header
+- **Model**: `app/Models/Tenant.php` auto-generates ULID on creation, sets internal DB config via `setInternal('db_name', 'timesheet_' . $tenant->id)`
+- **Frontend**: `frontend/src/services/api.ts` axios interceptor auto-adds `X-Tenant` header from subdomain or localStorage
+
+## Critical Development Patterns
+
+### Backend Controller Pattern (MANDATORY)
+```php
+public function store(StoreTimesheetRequest $request): JsonResponse {
+    $this->authorize('create', Timesheet::class); // Policy check FIRST
+    $validated = $request->validated(); // FormRequest validation
+    // HasAuditFields trait auto-sets created_by/updated_by
+    $timesheet = Timesheet::create($validated);
+    return response()->json($timesheet, 201);
+}
+```
+- **NEVER** skip `$this->authorize()` in mutation methods
+- **NEVER** manually set `created_by`/`updated_by` (use `HasAuditFields` trait)
+- Use FormRequests for validation (see `app/Http/Requests/`)
+
+### Frontend Patterns (MANDATORY)
+```tsx
+// ALWAYS use NotificationContext (never local snackbar state)
+const { showSuccess, showError } = useNotification();
+
+// ALWAYS use api service from services/api.ts (auto-includes X-Tenant + auth)
+import { api } from '../services/api';
+await api.get('/timesheets'); // Headers auto-added
+
+// Validation UX: Button enabled, errors show after submit/blur
+const [submitted, setSubmitted] = useState(false);
+<TextField
+  required
+  error={submitted && !value}
+  helperText={submitted && !value ? 'Required field' : ''}
+/>
+<Button type="submit" variant="contained">Save</Button>
 ```
 
-**Critical Port Mappings:**
-- Frontend (host browser) → `http://localhost:3000`
-- Backend API (host browser) → `http://localhost:8080/api`
-- MySQL (host tools) → `localhost:3307` (user: `timesheet`, pass: `secret`)
-- **Inside containers**: Backend uses `:80`, MySQL uses `:3306` (NO port mappings in internal communication)
+### Authorization (3 Layers)
+1. **Permission middleware** (`routes/api.php`): `->middleware('permission:approve-timesheets')`
+2. **Custom middleware**: `->middleware(['can.edit.timesheets'])` (accepts edit-own OR edit-all)
+3. **Policy** (in controller): `$this->authorize('update', $timesheet)` - checks ownership, status, project role
 
----
+### Project Roles (Triple System)
+- `project_members` table has 3 independent role columns per user per project:
+  - `project_role`: timesheet approvals (member|manager)
+  - `expense_role`: expense approvals (member|manager)
+  - `finance_role`: finance approvals (none|member|manager)
+- **Manager Segregation**: Managers CANNOT view/edit/approve other managers' records (filtered in backend queries via `whereHas('user.memberRecords')`)
+- **Self-approval**: Managers CAN approve their own records
 
-# Multi-Tenancy Architecture (CRITICAL)
+## Key Commands
 
-## Hybrid Tenant Resolution
-**Production = subdomain, Dev/Local = X-Tenant header**
-
-```env
-# backend/.env
-TENANCY_ALLOW_CENTRAL_FALLBACK=true
-TENANCY_FALLBACK_ENVIRONMENTS=local,development,testing
-CENTRAL_DOMAINS=127.0.0.1,localhost,app.timeperk.localhost
-TENANCY_HEADER=X-Tenant
-```
-
-**How it works:**
-- **Production**: `https://acme.timeperk.app` → tenant `acme`
-- **Local/Dev**: `http://localhost:8080` + `X-Tenant: upg-to-ai` header → tenant `upg-to-ai`
-- **Middleware**: `AllowCentralDomainFallback` enables localhost API testing without subdomain
-
-## Database Isolation
-- **Central DB**: `timesheet` (tenant metadata, migrations, central tables)
-- **Tenant DBs**: `timesheet_{ulid}` (e.g., `timesheet_01K9WMTAY3AKY23HVHQDW9PYGC`)
-- **Active Tenants**: `slugcheck` (testing), `upg-to-ai` (demo with Owner user)
-
-## Frontend Tenant Handling
-**Location:** `frontend/src/services/api.ts`
-
-```typescript
-// Auto-includes X-Tenant header in ALL API calls
-const getTenantSlug = (): string | null => {
-  // Try subdomain first (production)
-  const host = window.location.hostname;
-  const parts = host.split('.');
-  if (parts.length > 2 && parts[0] !== 'app' && parts[0] !== 'www') {
-    return parts[0]; // e.g., "acme" from "acme.timeperk.app"
-  }
-  // Fall back to localStorage (set during login)
-  return localStorage.getItem('tenant_slug');
-};
-
-// Axios interceptor adds header to all requests
-api.interceptors.request.use((config) => {
-  const tenant = getTenantSlug();
-  if (tenant) config.headers['X-Tenant'] = tenant;
-  // ... also adds Authorization header
-});
-```
-
-**Testing Tenant Access:**
 ```bash
-# Using header (local/dev)
-curl -H "X-Tenant: upg-to-ai" -H "Authorization: Bearer <token>" \
-  http://localhost:8080/api/projects
+# Development
+docker-compose up --build                    # Rebuild after dependency changes
+docker exec -it timesheet_app bash           # Backend shell
+docker exec -it timesheet_app php artisan migrate
+docker exec -it timesheet_app php artisan test
 
-# Using subdomain (production simulation)
-curl -H "Authorization: Bearer <token>" \
-  http://upg-to-ai.timeperk.app/api/projects
+# Database check
+docker exec -it timesheet_mysql mysql -u timesheet -psecret -e "SHOW DATABASES;"
 ```
+
+## Critical Business Rules
+
+1. **Time Overlap Prevention**: `StoreTimesheetRequest::hasTimeOverlap()` checks ALL technician timesheets on same date (cross-project)
+2. **Status Immutability**: `approved`/`closed` timesheets/expenses cannot be edited (except by Admin)
+3. **Audit Fields**: EVERY migration MUST include `created_by`/`updated_by` FKs to users table
+4. **Owner Protection**: ONE Owner per tenant, cannot be deleted, self-edit only (name field)
+5. **Travel Direction**: NEVER manually set - auto-classified by `TravelSegment::classifyDirection()` based on contract country
+
+## Common Pitfalls
+
+- ❌ Missing Policy check in controllers
+- ❌ Manual auth/tenant headers (use `api` service)
+- ❌ Local snackbar state (use `NotificationContext`)
+- ❌ Container port confusion (external :8082/:80 vs internal :80/:3306)
+- ❌ Manually setting travel `direction`, `travel_date`, or `duration_minutes` (auto-calculated)
+- ❌ Creating migrations without `created_by`/`updated_by` columns
+- ❌ Duplicate validation in controller (belongs in FormRequest)
+
+## Key Files Reference
+
+- **Audit Trait**: `backend/app/Traits/HasAuditFields.php`
+- **Tenant Model**: `backend/app/Models/Tenant.php` (ULID generation + DB config)
+- **API Client**: `frontend/src/services/api.ts` (tenant header injection)
+- **Notifications**: `frontend/src/contexts/NotificationContext.tsx`
+- **Routes**: `backend/routes/api.php` (permission + throttle middleware)
+- **Policies**: `backend/app/Policies/TimesheetPolicy.php` (3-layer auth logic)
+
+## Documentation
+
+See `/docs/` for detailed specs:
+- `MULTI_DATABASE_TENANCY_FIXES.md` - ULID tenant DB architecture
+- `EXPENSE_WORKFLOW_SPEC.md` - Multi-stage approval flow
+- `TRAVEL_TASKS_SPEC.md` - Travel segment management
+- `OWNER_PROTECTION_SYSTEM.md` - Owner role constraints
 
 ---
 
@@ -1633,3 +1634,315 @@ docker exec -it timesheet_mysql mysql -u timesheet -psecret -e "SHOW DATABASES;"
 - **Permissions**: `docs/PERMISSION_MATRIX.md`
 - **Multi-Tenancy**: `docs/MULTI_DATABASE_TENANCY_FIXES.md`
 - **Travel Tasks**: `docs/TRAVEL_TASKS_SPEC.md`
+
+# 🧭 TimePerk Cortex — Copilot Project Instructions  
+**Tenant-based Timesheet, Expense & Travel Platform**  
+Laravel 11 API • React 18 SPA • Docker Compose • Stancl Tenancy ULID Database Model
+
+---
+
+# 1) GLOBAL PRINCIPLES
+
+Copilot must always follow these rules:
+
+1. **Analyze before modifying** — check existing code before suggesting new code.  
+2. **Avoid duplication** — reuse existing FormRequests, Policies, Traits, front‑end components.  
+3. **Respect Multi‑Tenancy** — using the NEW 2025 ULID‑based architecture.  
+4. **Authorization Pipeline** — Permissions → Custom Middleware → Policies.  
+5. **Maintain consistency** — match patterns in `backend/app/…` and `frontend/src/…`.  
+6. **Use NotificationContext** — never create local snackbars.  
+7. **Owner Protection** — Owner cannot be deleted and can only edit their own name.  
+8. **Clean, predictable code** — no inline hacks, no partial patterns.  
+9. **All API calls (except login) must be tenant‑aware**.  
+10. **Validation UX standard** — Save button always enabled, validation only on submit/blur.
+
+---
+
+# 2) MULTI‑TENANCY (NEW ARCHITECTURE 2025)
+
+## 2.1 Overview
+
+- **Main DB**: `timesheet`  
+- **Tenant DBs**: `timesheet_{ULID}`  
+- **Tenant resolution**:
+  - Local: via `X-Tenant: {slug}` header  
+  - Production: subdomain `{slug}.domain.tld`  
+
+Copilot must always generate code compatible with this pattern.
+
+---
+
+## 2.2 Tenant Registration (Mandatory Pattern)
+
+### Required flow for Copilot suggestions:
+
+1. **Validate request** (slug, admin user, plan, timezone, etc.)  
+2. **Reject reserved slugs** (admin, api, system, app, www, etc.)  
+3. **Create Tenant** in central DB:
+   ```php
+   $tenant = Tenant::create([
+       'name'         => $request->company_name,
+       'slug'         => $request->slug,
+       'owner_email'  => $request->admin_email,
+       'status'       => 'active',
+       'plan'         => $request->plan ?? 'trial',
+       'timezone'     => $request->timezone ?? 'UTC',
+       'trial_ends_at'=> now()->addDays(14),
+       // NO 'data' key - Tenant model's booted() method handles it automatically
+   ]);
+   ```
+   - ULID auto-generated by model  
+   - `booted()` method automatically calls:
+     - `setInternal('db_name', 'timesheet_' . $tenant->id)` → stored as `tenancy_db_name`
+     - `setInternal('db_driver', 'mysql')` → stored as `tenancy_db_driver`
+
+4. **Get database name** from tenant (auto-set by model):
+   ```php
+   $databaseName = $tenant->getInternal('db_name');
+   // getInternal() automatically strips 'tenancy_' prefix
+   // Returns: 'timesheet_01KABC123XYZ...'
+   ```
+
+5. **Create tenant database** manually:
+   ```php
+   DB::statement("CREATE DATABASE IF NOT EXISTS `{$databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+   ```
+   ⚠️ **CRITICAL**: This must happen BEFORE `$tenant->run()`  
+   ⚠️ **DO NOT** manually set config or purge DB - Stancl handles this automatically
+
+6. **Create Company record** in central DB (while still in central context)
+
+7. **Boot tenant context** and seed:
+   ```php
+   $tenant->run(function () use ($request, $tenant, &$adminToken) {
+       // Stancl automatically connects to tenant DB here
+       
+       // Run tenant migrations
+       Artisan::call('migrate', ['--path' => 'database/migrations/tenant', '--force' => true]);
+       
+       // Seed roles & permissions
+       Artisan::call('db:seed', ['--class' => 'RolesAndPermissionsSeeder', '--force' => true]);
+       
+       // Create Owner user
+       $owner = User::create([...]);
+       $owner->assignRole('Owner');
+       
+       // Create Owner technician
+       Technician::create([...]);
+       
+       // Generate API token
+       $adminToken = $owner->createToken('onboarding-token')->plainTextToken;
+   });
+   ```
+
+8. **Return success response** with tenant info, DB name, Owner token, next steps  
+
+### Copilot must NEVER:
+- Create tenant DB based on slug (always use ULID from tenant->id)  
+- Use `Domain::create()` (domains managed automatically)  
+- Manually set `tenant->data` in controller (model's booted() handles it)  
+- Call `config()->set('database.connections.tenant.database', ...)` (Stancl manages this)  
+- Call `DB::purge('tenant')` manually (Stancl bootstrapper handles it)  
+- Use `setInternal('tenancy_db_name', ...)` (duplicates prefix - use `setInternal('db_name', ...)`)  
+
+---
+
+# 3) API MULTI‑TENANT RULES (CRITICAL)
+
+All API calls (except login) must include:
+
+```
+X-Tenant: {slug}
+Authorization: Bearer {token}
+```
+
+Frontend MUST use the shared `api()` client.  
+Copilot must **never** suggest raw fetch/axios calls with manual headers.
+
+---
+
+# 4) BACKEND STANDARDS
+
+## 4.1 Controllers
+
+Copilot must:
+
+- Use **FormRequests** for validation  
+- Call `$this->authorize()` before store/update/delete  
+- Never set `created_by` or `updated_by` manually (use `HasAuditFields`)  
+- Always return `JsonResponse`  
+- Never duplicate validation logic already handled in FormRequests  
+
+## 4.2 Policies (Layer 3)
+
+Must enforce:
+
+- Status immutability  
+- Ownership rules  
+- Manager vs member segregation  
+- Finance roles (phase 1 implementation)  
+
+## 4.3 DB Migrations
+
+Every tenant table must include:
+
+```
+created_by
+updated_by
+```
+
+Use the `HasAuditFields` trait.
+
+---
+
+# 5) FRONTEND STANDARDS
+
+## 5.1 API Client Usage
+
+Copilot must use:
+
+```ts
+import { api } from '../lib/apiClient';
+```
+
+Never:
+
+- fetch()
+- Axios without tenant headers
+- Manual Authorization headers
+
+## 5.2 Notification System
+
+Always use:
+
+```ts
+const { showSuccess, showError } = useNotification();
+```
+
+Never create local snackbar state.
+
+---
+
+## 5.3 Validation UX (Mandatory)
+
+### Pattern:
+- Save button always enabled  
+- Validation errors appear ONLY after the user submits or blurs  
+
+### Example Copilot MUST follow:
+
+```tsx
+const [submitted, setSubmitted] = useState(false);
+
+<TextField
+  required
+  value={description}
+  onChange={(e) => setDescription(e.target.value)}
+  error={submitted && !description}
+  helperText={submitted && !description ? 'Preencha este campo.' : ''}
+/>
+
+<Button type="submit" variant="contained" color="primary">
+  Save
+</Button>
+```
+
+Copilot must not propose disabled save buttons.
+
+---
+
+# 6) ROLE SYSTEM (PROJECT‑SCOPED)
+
+Each project member has:
+
+```
+project_role   = member | manager
+expense_role   = member | manager
+finance_role   = none | member | manager
+```
+
+Managers:
+
+- Can manage members  
+- Cannot see/edit/approve other managers  
+- Can approve their own entries  
+
+Frontend receives memberships via:
+`user.project_memberships`.
+
+---
+
+# 7) OWNER PROTECTION SYSTEM
+
+Copilot must enforce:
+
+- Only 1 Owner per tenant  
+- Owner created during tenant registration  
+- Cannot be deleted  
+- Cannot be edited except self‑name  
+- Invisible to non‑owners in lists  
+- Has all permissions  
+
+---
+
+# 8) TRAVEL MANAGEMENT (2025)
+
+Copilot must follow updated schema:
+
+- `start_at` (required datetime)  
+- `end_at` (nullable, after or equal)  
+- `travel_date` auto-generated  
+- `duration_minutes` auto-calculated  
+- `direction` auto-classified (never manually set)  
+- ISO 3166‑1 alpha‑2 country codes  
+
+---
+
+# 9) DOCKER / DEVELOPMENT
+
+Copilot must align with existing setup:
+
+```
+timesheet_app       (Laravel)
+timesheet_nginx_api (nginx)
+timesheet_mysql     (MySQL, port 3307)
+timesheet_frontend  (React)
+timesheet_redis     (Redis)
+```
+
+Primary commands:
+
+```
+docker-compose up --build
+docker exec -it timesheet_app bash
+php artisan migrate
+php artisan test
+```
+
+---
+
+# 10) COPILOT MUST NEVER:
+
+- Ignore tenant header requirements  
+- Suggest non‑tenant‑aware DB queries  
+- Create migrations without audit fields  
+- Create local snackbars  
+- Add finance permissions at system level  
+- Bypass Policies  
+- Suggest disabled save buttons  
+- Modify Owner behavior  
+- Break the ULID‑based DB creation model  
+
+---
+
+# 11) WHEN COPILOT SHOULD ASK FOR CONTEXT
+
+If missing:
+
+- Expected tenant slug  
+- Which role applies in ambiguous cases  
+- Whether environment is local or production  
+
+---
+
+# ✔️ END OF FILE — FINALIZED

@@ -23,7 +23,7 @@ class CompleteTenantSeeder extends Seeder
     /**
      * Run the database seeds.
      * Creates a complete tenant database with realistic data:
-     * - Users with roles (Owner, Admin, Manager, Technician, Viewer)
+     * - Users with roles (Owner, Admin, Manager, Technician)
      * - Technicians linked to users
      * - Projects with members and roles
      * - Tasks with locations and resources
@@ -33,9 +33,9 @@ class CompleteTenantSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Create Roles and Permissions
-        $this->createRolesAndPermissions();
-
+        // NOTE: Roles and Permissions are already created by RolesAndPermissionsSeeder
+        // Skip step 1 when called after reset-data
+        
         // 2. Create Users
         $users = $this->createUsers();
 
@@ -217,16 +217,6 @@ class CompleteTenantSeeder extends Seeder
         );
         $tech3->assignRole('Technician');
 
-        $viewer = User::firstOrCreate(
-            ['email' => 'viewer@upg2ai.com'],
-            [
-                'name' => 'Viewer User',
-                'password' => Hash::make('password'),
-                'role' => 'Viewer',
-            ]
-        );
-        $viewer->assignRole('Viewer');
-
         $this->command->info('✅ Users created');
 
         return [
@@ -237,7 +227,6 @@ class CompleteTenantSeeder extends Seeder
             'tech1' => $tech1,
             'tech2' => $tech2,
             'tech3' => $tech3,
-            'viewer' => $viewer,
         ];
     }
 
@@ -252,21 +241,8 @@ class CompleteTenantSeeder extends Seeder
             throw new \Exception('Owner technician not found. Should be created during tenant registration.');
         }
 
-        $technicians['admin'] = Technician::firstOrCreate(
-            ['email' => 'admin@upg2ai.com'],
-            [
-                'name' => 'System Owner',
-                'user_id' => $users['owner']->id,
-                'role' => 'manager',
-                'hourly_rate' => 75.00,
-                'is_active' => true,
-                'worker_id' => 'OWN001',
-                'worker_name' => 'System Owner',
-                'worker_contract_country' => 'PT',
-                'created_by' => $users['owner']->id,
-                'updated_by' => $users['owner']->id,
-            ]
-        );
+        // Note: Owner technician already exists, created during registration/reset
+        // No need to create it again here
 
         $technicians['admin'] = Technician::firstOrCreate(
             ['email' => 'admin@upg2ai.com'],
@@ -558,6 +534,16 @@ class CompleteTenantSeeder extends Seeder
 
     private function assignProjectMembers(array $projects, array $users): void
     {
+        // Add Owner to E-Commerce Platform as manager
+        ProjectMember::firstOrCreate(
+            ['project_id' => $projects['ecommerce']->id, 'user_id' => $users['owner']->id],
+            [
+                'project_role' => 'manager',
+                'expense_role' => 'manager',
+                'finance_role' => 'manager',
+            ]
+        );
+
         // E-Commerce Platform - Manager1 leads, Tech1 and Tech2 as members
         ProjectMember::firstOrCreate(
             ['project_id' => $projects['ecommerce']->id, 'user_id' => $users['manager1']->id],
@@ -586,7 +572,16 @@ class CompleteTenantSeeder extends Seeder
             ]
         );
 
-        // Mobile Banking App - Manager2 leads, Tech2 and Tech3 as members
+        // Mobile Banking App - Owner as manager, Manager2 leads, Tech2 and Tech3 as members
+        ProjectMember::firstOrCreate(
+            ['project_id' => $projects['mobile_app']->id, 'user_id' => $users['owner']->id],
+            [
+                'project_role' => 'manager',
+                'expense_role' => 'manager',
+                'finance_role' => 'manager',
+            ]
+        );
+
         ProjectMember::firstOrCreate(
             ['project_id' => $projects['mobile_app']->id, 'user_id' => $users['manager2']->id],
             [
@@ -614,6 +609,16 @@ class CompleteTenantSeeder extends Seeder
             ]
         );
 
+        // Add Owner to ERP Migration as manager
+        ProjectMember::firstOrCreate(
+            ['project_id' => $projects['erp_migration']->id, 'user_id' => $users['owner']->id],
+            [
+                'project_role' => 'manager',
+                'expense_role' => 'manager',
+                'finance_role' => 'manager',
+            ]
+        );
+
         // ERP Migration - Manager1 leads, all techs as members
         ProjectMember::firstOrCreate(
             ['project_id' => $projects['erp_migration']->id, 'user_id' => $users['manager1']->id],
@@ -635,6 +640,16 @@ class CompleteTenantSeeder extends Seeder
 
         ProjectMember::firstOrCreate(
             ['project_id' => $projects['erp_migration']->id, 'user_id' => $users['tech3']->id],
+            [
+                'project_role' => 'member',
+                'expense_role' => 'member',
+                'finance_role' => 'none',
+            ]
+        );
+
+        // Add Owner to Cloud Infrastructure as MEMBER (exception - not manager)
+        ProjectMember::firstOrCreate(
+            ['project_id' => $projects['infrastructure']->id, 'user_id' => $users['owner']->id],
             [
                 'project_role' => 'member',
                 'expense_role' => 'member',
@@ -998,6 +1013,8 @@ class CompleteTenantSeeder extends Seeder
                 'travel_date' => Carbon::now()->subDays(15),
             ],
             [
+                'start_at' => Carbon::now()->subDays(15)->setTime(8, 30),
+                'end_at' => Carbon::now()->subDays(15)->setTime(11, 15),
                 'origin_country' => 'PT',
                 'origin_location_id' => $locations['lisbon_office']->id,
                 'destination_country' => 'ES',
@@ -1016,6 +1033,8 @@ class CompleteTenantSeeder extends Seeder
                 'travel_date' => Carbon::now()->subDays(10),
             ],
             [
+                'start_at' => Carbon::now()->subDays(10)->setTime(14, 0),
+                'end_at' => Carbon::now()->subDays(10)->setTime(16, 45),
                 'origin_country' => 'ES',
                 'origin_location_id' => $locations['madrid_office']->id,
                 'destination_country' => 'PT',
@@ -1034,6 +1053,8 @@ class CompleteTenantSeeder extends Seeder
                 'travel_date' => Carbon::now()->subDays(7),
             ],
             [
+                'start_at' => Carbon::now()->subDays(7)->setTime(9, 0),
+                'end_at' => Carbon::now()->subDays(7)->setTime(12, 30),
                 'origin_country' => 'PT',
                 'origin_location_id' => $locations['lisbon_office']->id,
                 'destination_country' => 'PT',
@@ -1052,6 +1073,8 @@ class CompleteTenantSeeder extends Seeder
                 'travel_date' => Carbon::now()->subDays(5),
             ],
             [
+                'start_at' => Carbon::now()->subDays(5)->setTime(10, 15),
+                'end_at' => Carbon::now()->subDays(5)->setTime(12, 30),
                 'origin_country' => 'ES',
                 'origin_location_id' => $locations['madrid_office']->id,
                 'destination_country' => 'FR',
@@ -1070,6 +1093,8 @@ class CompleteTenantSeeder extends Seeder
                 'travel_date' => Carbon::now()->subDays(3),
             ],
             [
+                'start_at' => Carbon::now()->subDays(3)->setTime(7, 45),
+                'end_at' => Carbon::now()->subDays(3)->setTime(9, 30),
                 'origin_country' => 'FR',
                 'origin_location_id' => $locations['paris_office']->id,
                 'destination_country' => 'DE',
@@ -1088,6 +1113,8 @@ class CompleteTenantSeeder extends Seeder
                 'travel_date' => Carbon::now()->addDays(5),
             ],
             [
+                'start_at' => Carbon::now()->addDays(5)->setTime(6, 30),
+                'end_at' => Carbon::now()->addDays(5)->setTime(9, 0),
                 'origin_country' => 'PT',
                 'origin_location_id' => $locations['lisbon_office']->id,
                 'destination_country' => 'FR',

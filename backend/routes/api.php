@@ -3,17 +3,14 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TechnicianController;
-use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TimesheetController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\TenantController;
-use App\Http\Controllers\TaskController;
-use App\Http\Controllers\LocationController;
-use App\Http\Controllers\SuggestionController;
+use App\Http\Controllers\Api\TenantDataController;
 use App\Http\Controllers\Api\EventController;
-use App\Http\Controllers\AccessManagerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TravelSegmentController;
 
@@ -45,6 +42,13 @@ Route::post('tenants/register', [TenantController::class, 'register'])
 Route::get('tenants/check-slug', [TenantController::class, 'checkSlug'])
     ->middleware('throttle:30,1'); // 30 checks per minute
 
+    // Simple ping without tenant context (must be outside tenant.initialize)
+Route::get('tenants/ping', function () {
+    return response()->json([
+        'pong' => true,
+        'timestamp' => now(),
+    ]);
+});
 // Authentication routes (no tenant middleware - tenant identified via request body)
 Route::middleware('throttle:login')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -65,22 +69,14 @@ Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
 */
 
 Route::middleware(['tenant.initialize'])->group(function () {
-    Route::get('tenants/ping', function () {
-        return response()->json([
-            'tenant' => tenant('id'),
-            'slug' => tenant('slug'),
-            'status' => tenant('status'),
-        ]);
-    });
-
     // Special route for attachment download - uses custom auth via token query param
     // Must be OUTSIDE auth:sanctum group to avoid login redirect
     Route::get('expenses/{expense}/attachment', [ExpenseController::class, 'downloadAttachment'])
         ->middleware(['auth.token', 'throttle:read']);
 
-    // For protected routes, ensure tenant.initialize runs BEFORE auth:sanctum
-    // by placing it in the same middleware array
-    Route::middleware(['auth:sanctum', 'tenant.auth'])->group(function () {
+    // Protected routes with tenant context and authentication
+    // Note: SetSanctumTenantConnection runs globally via bootstrap/app.php prependToGroup('api')
+    Route::middleware(['tenant.initialize', 'auth:sanctum', 'tenant.auth'])->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('user', [AuthController::class, 'user']);
 
@@ -88,18 +84,18 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::middleware('throttle:api')->group(function () {
     // Access management routes for admin UI
     Route::prefix('access')->group(function () {
-        Route::get('users', [AccessManagerController::class, 'listUsers'])->middleware('throttle:read');
-        Route::get('roles', [AccessManagerController::class, 'listRoles'])->middleware('throttle:read');
-        Route::get('permissions', [AccessManagerController::class, 'indexPermissions'])->middleware('throttle:read');
-        Route::post('users/{user}/assign-role', [AccessManagerController::class, 'assignRole'])->middleware('throttle:edit');
-        Route::post('users/{user}/remove-role', [AccessManagerController::class, 'removeRole'])->middleware('throttle:edit');
-        Route::post('users/{user}/assign-permission', [AccessManagerController::class, 'assignPermission'])->middleware('throttle:edit');
-        Route::post('users/{user}/remove-permission', [AccessManagerController::class, 'removePermission'])->middleware('throttle:edit');
+        Route::get('users', [\App\Http\Controllers\AccessManagerController::class, 'listUsers'])->middleware('throttle:read');
+        Route::get('roles', [\App\Http\Controllers\AccessManagerController::class, 'listRoles'])->middleware('throttle:read');
+        Route::get('permissions', [\App\Http\Controllers\AccessManagerController::class, 'indexPermissions'])->middleware('throttle:read');
+        Route::post('users/{user}/assign-role', [\App\Http\Controllers\AccessManagerController::class, 'assignRole'])->middleware('throttle:edit');
+        Route::post('users/{user}/remove-role', [\App\Http\Controllers\AccessManagerController::class, 'removeRole'])->middleware('throttle:edit');
+        Route::post('users/{user}/assign-permission', [\App\Http\Controllers\AccessManagerController::class, 'assignPermission'])->middleware('throttle:edit');
+        Route::post('users/{user}/remove-permission', [\App\Http\Controllers\AccessManagerController::class, 'removePermission'])->middleware('throttle:edit');
 
         // Role-permission management endpoints for matrix UI
-        Route::get('roles/{role}/permissions', [AccessManagerController::class, 'getRolePermissions'])->middleware('throttle:read');
-        Route::post('roles/{role}/assign-permission', [AccessManagerController::class, 'assignPermissionToRole'])->middleware('throttle:edit');
-        Route::post('roles/{role}/remove-permission', [AccessManagerController::class, 'removePermissionFromRole'])->middleware('throttle:edit');
+        Route::get('roles/{role}/permissions', [\App\Http\Controllers\AccessManagerController::class, 'getRolePermissions'])->middleware('throttle:read');
+        Route::post('roles/{role}/assign-permission', [\App\Http\Controllers\AccessManagerController::class, 'assignPermissionToRole'])->middleware('throttle:edit');
+        Route::post('roles/{role}/remove-permission', [\App\Http\Controllers\AccessManagerController::class, 'removePermissionFromRole'])->middleware('throttle:edit');
     });
 
     // Technicians - List visible technicians (all authenticated users)
@@ -112,7 +108,6 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::put('technicians/{technician}', [TechnicianController::class, 'update'])->middleware('throttle:edit');
         Route::delete('technicians/{technician}', [TechnicianController::class, 'destroy'])->middleware('throttle:delete');
     });
-
     // Projects - manage-projects permission controls access to Project Management page
     Route::middleware('permission:manage-projects')->group(function () {
         Route::get('projects', [ProjectController::class, 'index'])->middleware('throttle:read');
@@ -164,32 +159,36 @@ Route::middleware(['tenant.initialize'])->group(function () {
     Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->middleware(['can.edit.expenses', 'throttle:delete']);
 
     // Tasks - View for all, manage for admins
-    Route::get('tasks', [TaskController::class, 'index'])->middleware('throttle:read');
-    Route::get('tasks/{task}', [TaskController::class, 'show'])->middleware('throttle:read');
-    Route::get('projects/{project}/tasks', [TaskController::class, 'byProject'])->middleware('throttle:read');
+    Route::get('tasks', [\App\Http\Controllers\TaskController::class, 'index'])->middleware('throttle:read');
+    Route::get('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'show'])->middleware('throttle:read');
+    Route::get('projects/{project}/tasks', [\App\Http\Controllers\TaskController::class, 'byProject'])->middleware('throttle:read');
     Route::middleware('permission:manage-tasks')->group(function () {
-        Route::post('tasks', [TaskController::class, 'store'])->middleware('throttle:create');
-        Route::put('tasks/{task}', [TaskController::class, 'update'])->middleware('throttle:edit');
-        Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('throttle:delete');
+        Route::post('tasks', [\App\Http\Controllers\TaskController::class, 'store'])->middleware('throttle:create');
+        Route::put('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'update'])->middleware('throttle:edit');
+        Route::delete('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'destroy'])->middleware('throttle:delete');
     });
 
     // Locations - View for all, manage for admins
-    Route::get('locations/active', [LocationController::class, 'active'])->middleware('throttle:read');
-    Route::get('locations', [LocationController::class, 'index'])->middleware('throttle:read');
-    Route::get('locations/{location}', [LocationController::class, 'show'])->middleware('throttle:read');
+    Route::get('locations/active', [\App\Http\Controllers\LocationController::class, 'active'])->middleware('throttle:read');
+    Route::get('locations', [\App\Http\Controllers\LocationController::class, 'index'])->middleware('throttle:read');
+    Route::get('locations/{location}', [\App\Http\Controllers\LocationController::class, 'show'])->middleware('throttle:read');
     Route::middleware('permission:manage-locations')->group(function () {
-        Route::post('locations', [LocationController::class, 'store'])->middleware('throttle:create');
-        Route::put('locations/{location}', [LocationController::class, 'update'])->middleware('throttle:edit');
-        Route::delete('locations/{location}', [LocationController::class, 'destroy'])->middleware('throttle:delete');
+        Route::post('locations', [\App\Http\Controllers\LocationController::class, 'store'])->middleware('throttle:create');
+        Route::put('locations/{location}', [\App\Http\Controllers\LocationController::class, 'update'])->middleware('throttle:edit');
+        Route::delete('locations/{location}', [\App\Http\Controllers\LocationController::class, 'destroy'])->middleware('throttle:delete');
     });
 
     // AI Suggestions
     Route::prefix('ai')->group(function () {
-        Route::get('suggestions/timesheet', [SuggestionController::class, 'getTimesheetSuggestions'])->middleware('throttle:read');
-        Route::get('suggestions/access', [SuggestionController::class, 'getAccessSuggestions'])->middleware('throttle:read');
-        Route::post('suggestions/feedback', [SuggestionController::class, 'submitFeedback'])->middleware('throttle:create');
-        Route::get('status', [SuggestionController::class, 'getStatus'])->middleware('throttle:read');
+        Route::get('suggestions/timesheet', [\App\Http\Controllers\SuggestionController::class, 'getTimesheetSuggestions'])->middleware('throttle:read');
+        Route::get('suggestions/access', [\App\Http\Controllers\SuggestionController::class, 'getAccessSuggestions'])->middleware('throttle:read');
+        Route::post('suggestions/feedback', [\App\Http\Controllers\SuggestionController::class, 'submitFeedback'])->middleware('throttle:create');
+        Route::get('status', [\App\Http\Controllers\SuggestionController::class, 'getStatus'])->middleware('throttle:read');
     });
+
+    // Tenant Data Management - OWNER ONLY
+    Route::post('tenant/reset-data', [TenantDataController::class, 'resetData'])
+        ->middleware(['throttle:critical']); // Only Owner can access (enforced in controller)
 
     // Project Members Management - same permission as projects
     Route::middleware('permission:manage-projects')->group(function () {
@@ -254,6 +253,10 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::put('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'updateLocation']);
         Route::delete('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'destroyLocation']);
     });
+
+    // Admin-only: Reset tenant data (preserves Owner user)
+    Route::post('admin/reset-data', [TenantDataController::class, 'resetData'])
+        ->middleware(['role:Owner|Admin', 'throttle:critical']);
     });
     });
 });

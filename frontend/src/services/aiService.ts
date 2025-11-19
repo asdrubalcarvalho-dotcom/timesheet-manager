@@ -34,7 +34,7 @@ class AIService {
   async checkStatus(): Promise<{ available: boolean; model_loaded: boolean; response_time?: number }> {
     try {
       const startTime = Date.now();
-      const response = await api.get('/ai/status');
+      const response = await api.get('/api/ai/status');
       const responseTime = Date.now() - startTime;
       
       return {
@@ -58,7 +58,7 @@ class AIService {
     try {
       console.log('Requesting AI suggestion:', request);
       
-      const response = await api.post('/ai/suggestions/timesheet', request);
+      const response = await api.post('/api/ai/suggestions/timesheet', request);
       
       if (response.data && response.data.confidence > 0.3) {
         console.log('AI suggestion received:', response.data);
@@ -78,7 +78,7 @@ class AIService {
    */
   async provideFeedback(feedback: SuggestionFeedback): Promise<boolean> {
     try {
-      await api.post('/ai/suggestions/feedback', feedback);
+      await api.post('/api/ai/suggestions/feedback', feedback);
       console.log('AI feedback sent successfully');
       return true;
     } catch (error) {

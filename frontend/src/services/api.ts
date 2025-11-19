@@ -14,14 +14,21 @@ import type {
   TopProject
 } from '../types';
 
-// API Configuration
-const API_BASE_URL = 'http://timeperk.localhost:8080/api';
+/**
+ * API ROOT (sem /api no fim - será adicionado nas rotas)
+ * - PROD:  https://api.vendaslive.com
+ * - DEV (Docker): http://webserver   (via VITE_API_URL)
+ * - DEV (fora de Docker): http://api.localhost
+ */
+export const API_URL =
+  import.meta.env.VITE_API_URL || 'http://api.localhost';
 
+// Axios instance - baseURL SEM /api (adicionado em cada rota)
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    Accept: 'application/json',
   },
 });
 
@@ -134,40 +141,40 @@ export interface TimesheetManagerViewParams {
 // Technicians API
 export const techniciansApi = {
   getAll: (): Promise<ApiResponse<Technician[]>> =>
-    api.get('/technicians').then(res => res.data),
+    api.get('/api/technicians').then(res => res.data),
   
   getById: (id: number): Promise<ApiResponse<Technician>> =>
-    api.get(`/technicians/${id}`).then(res => res.data),
+    api.get(`/api/technicians/${id}`).then(res => res.data),
   
   create: (data: Partial<Technician>): Promise<ApiResponse<Technician>> =>
-    api.post('/technicians', data).then(res => res.data),
+    api.post('/api/technicians', data).then(res => res.data),
   
   update: (id: number, data: Partial<Technician>): Promise<ApiResponse<Technician>> =>
-    api.put(`/technicians/${id}`, data).then(res => res.data),
+    api.put(`/api/technicians/${id}`, data).then(res => res.data),
   
   delete: (id: number): Promise<ApiResponse<void>> =>
-    api.delete(`/technicians/${id}`).then(res => res.data),
+    api.delete(`/api/technicians/${id}`).then(res => res.data),
 };
 
 // Projects API
 export const projectsApi = {
   getAll: (): Promise<Project[]> =>
-    api.get('/projects').then(res => res.data),
+    api.get('/api/projects').then(res => res.data),
   
   getForCurrentUser: (): Promise<Project[]> =>
-    api.get('/user/projects').then(res => res.data),
+    api.get('/api/user/projects').then(res => res.data),
   
   getById: (id: number): Promise<Project> =>
-    api.get(`/projects/${id}`).then(res => res.data),
+    api.get(`/api/projects/${id}`).then(res => res.data),
   
   create: (data: Partial<Project>): Promise<Project> =>
-    api.post('/projects', data).then(res => res.data),
+    api.post('/api/projects', data).then(res => res.data),
   
   update: (id: number, data: Partial<Project>): Promise<Project> =>
-    api.put(`/projects/${id}`, data).then(res => res.data),
+    api.put(`/api/projects/${id}`, data).then(res => res.data),
   
   delete: (id: number): Promise<void> =>
-    api.delete(`/projects/${id}`).then(res => res.data),
+    api.delete(`/api/projects/${id}`).then(res => res.data),
 };
 
 // Timesheets API
@@ -178,37 +185,37 @@ export const timesheetsApi = {
     date_from?: string; 
     date_to?: string; 
   }): Promise<Timesheet[]> =>
-    api.get('/timesheets', { params }).then(res => res.data),
+    api.get('/api/timesheets', { params }).then(res => res.data),
   
   getById: (id: number): Promise<TimesheetMutationResponse> =>
-    api.get(`/timesheets/${id}`).then(res => res.data),
+    api.get(`/api/timesheets/${id}`).then(res => res.data),
   
   create: (data: TimesheetFormData): Promise<TimesheetMutationResponse> =>
-    api.post('/timesheets', data).then(res => res.data),
+    api.post('/api/timesheets', data).then(res => res.data),
   
   update: (id: number, data: Partial<TimesheetFormData>): Promise<TimesheetMutationResponse> =>
-    api.put(`/timesheets/${id}`, data).then(res => res.data),
+    api.put(`/api/timesheets/${id}`, data).then(res => res.data),
   
   delete: (id: number): Promise<void> =>
-    api.delete(`/timesheets/${id}`).then(res => res.data),
+    api.delete(`/api/timesheets/${id}`).then(res => res.data),
 
   getValidation: (id: number): Promise<TimesheetValidationResult> =>
-    api.get(`/timesheets/${id}/validation`).then(res => res.data),
+    api.get(`/api/timesheets/${id}/validation`).then(res => res.data),
 
   getManagerView: (params?: TimesheetManagerViewParams): Promise<TimesheetManagerResponse> =>
-    api.get('/timesheets/manager-view', { params }).then(res => res.data),
+    api.get('/api/timesheets/manager-view', { params }).then(res => res.data),
   
   getPendingCounts: (): Promise<{ timesheets: number; expenses: number; total: number }> =>
-    api.get('/timesheets/pending-counts').then(res => res.data),
+    api.get('/api/timesheets/pending-counts').then(res => res.data),
   
   submit: (id: number): Promise<Timesheet> =>
-    api.patch(`/timesheets/${id}/submit`).then(res => res.data),
+    api.patch(`/api/timesheets/${id}/submit`).then(res => res.data),
   
   approve: (id: number): Promise<Timesheet> =>
-    api.put(`/timesheets/${id}/approve`).then(res => res.data),
+    api.put(`/api/timesheets/${id}/approve`).then(res => res.data),
   
   reject: (id: number, reason: string): Promise<Timesheet> =>
-    api.put(`/timesheets/${id}/reject`, { reason }).then(res => res.data),
+    api.put(`/api/timesheets/${id}/reject`, { reason }).then(res => res.data),
 };
 
 // Expenses API
@@ -219,10 +226,10 @@ export const expensesApi = {
     date_from?: string; 
     date_to?: string; 
   }): Promise<ApiResponse<Expense[]>> =>
-    api.get('/expenses', { params }).then(res => res.data),
+    api.get('/api/expenses', { params }).then(res => res.data),
   
   getById: (id: number): Promise<ApiResponse<Expense>> =>
-    api.get(`/expenses/${id}`).then(res => res.data),
+    api.get(`/api/expenses/${id}`).then(res => res.data),
   
   create: (data: ExpenseFormData): Promise<ApiResponse<Expense>> => {
     const formData = new FormData();
@@ -235,7 +242,7 @@ export const expensesApi = {
         }
       }
     });
-    return api.post('/expenses', formData, {
+    return api.post('/api/expenses', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }).then(res => res.data);
   },
@@ -251,46 +258,46 @@ export const expensesApi = {
         }
       }
     });
-    return api.put(`/expenses/${id}`, formData, {
+    return api.put(`/api/expenses/${id}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }).then(res => res.data);
   },
   
   delete: (id: number): Promise<ApiResponse<void>> =>
-    api.delete(`/expenses/${id}`).then(res => res.data),
+    api.delete(`/api/expenses/${id}`).then(res => res.data),
   
   submit: (id: number): Promise<ApiResponse<Expense>> =>
-    api.patch(`/expenses/${id}/submit`).then(res => res.data),
+    api.patch(`/api/expenses/${id}/submit`).then(res => res.data),
   
   approve: (id: number): Promise<ApiResponse<Expense>> =>
-    api.patch(`/expenses/${id}/approve`).then(res => res.data),
+    api.patch(`/api/expenses/${id}/approve`).then(res => res.data),
   
   reject: (id: number): Promise<ApiResponse<Expense>> =>
-    api.patch(`/expenses/${id}/reject`).then(res => res.data),
+    api.patch(`/api/expenses/${id}/reject`).then(res => res.data),
 };
 
 // Tasks API
 export const tasksApi = {
   getAll: (): Promise<any[]> =>
-    api.get('/tasks').then(res => res.data),
+    api.get('/api/tasks').then(res => res.data),
   
   getById: (id: number): Promise<any> =>
-    api.get(`/tasks/${id}`).then(res => res.data),
+    api.get(`/api/tasks/${id}`).then(res => res.data),
   
   getByProject: (projectId: number): Promise<any[]> =>
-    api.get(`/projects/${projectId}/tasks`).then(res => res.data),
+    api.get(`/api/projects/${projectId}/tasks`).then(res => res.data),
 };
 
 // Locations API
 export const locationsApi = {
   getAll: (): Promise<any[]> =>
-    api.get('/locations').then(res => res.data),
+    api.get('/api/locations').then(res => res.data),
   
   getActive: (): Promise<any[]> =>
-    api.get('/locations/active').then(res => res.data),
+    api.get('/api/locations/active').then(res => res.data),
   
   getById: (id: number): Promise<any> =>
-    api.get(`/locations/${id}`).then(res => res.data),
+    api.get(`/api/locations/${id}`).then(res => res.data),
 };
 
 // Dashboard API
@@ -299,7 +306,7 @@ export const dashboardApi = {
     date_from?: string;
     date_to?: string;
   }): Promise<DashboardStatistics> =>
-    api.get('/dashboard/statistics', { params }).then(res => res.data),
+    api.get('/api/dashboard/statistics', { params }).then(res => res.data),
   
   getTopProjects: (params?: {
     limit?: number;
@@ -307,7 +314,7 @@ export const dashboardApi = {
     date_from?: string;
     date_to?: string;
   }): Promise<TopProject[]> =>
-    api.get('/dashboard/top-projects', { params }).then(res => res.data),
+    api.get('/api/dashboard/top-projects', { params }).then(res => res.data),
 };
 
 // Tenant API (Central - no tenant context required)
@@ -353,19 +360,19 @@ export const tenantApi = {
    * This endpoint does NOT require X-Tenant header
    */
   register: (data: TenantRegistrationData): Promise<TenantRegistrationResponse> =>
-    api.post('/tenants/register', data).then(res => res.data),
+    api.post('/api/tenants/register', data).then(res => res.data),
   
   /**
    * List all tenants (Admin only)
    */
   list: (): Promise<any[]> =>
-    api.get('/tenants').then(res => res.data.tenants),
+    api.get('/api/tenants').then(res => res.data.tenants),
   
   /**
    * Get tenant details by slug
    */
   get: (slug: string): Promise<any> =>
-    api.get(`/tenants/${slug}`).then(res => res.data.tenant),
+    api.get(`/api/tenants/${slug}`).then(res => res.data.tenant),
 };
 
 export default api;

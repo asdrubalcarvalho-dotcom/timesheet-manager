@@ -30,7 +30,7 @@ import PageHeader from '../Common/PageHeader';
 import EmptyState from '../Common/EmptyState';
 import InputDialog from '../Common/InputDialog';
 import { useNotification } from '../../contexts/NotificationContext';
-import { getAuthHeaders, fetchWithAuth } from '../../services/api';
+import { getAuthHeaders, fetchWithAuth, API_URL } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 
 interface Project {
@@ -96,11 +96,15 @@ export const ExpenseManager: React.FC = () => {
   const loadExpenses = async () => {
     try {
       setLoading(true);
-      const response = await fetchWithAuth('http://localhost:8080/api/expenses');
+      const response = await fetchWithAuth(`${API_URL}/api/expenses`);
       
       if (response.ok) {
         const data = await response.json();
-        setExpenses(Array.isArray(data) ? data : []);
+        console.log('[ExpenseManager] Expenses response:', data);
+        // Handle nested response like ProjectsManager
+        const expensesData = Array.isArray(data) ? data : (data.data || []);
+        console.log('[ExpenseManager] Extracted expenses:', expensesData);
+        setExpenses(expensesData);
       } else {
         console.error('Failed to load expenses - Status:', response.status);
         setExpenses([]); // Set empty array on error
@@ -120,7 +124,7 @@ export const ExpenseManager: React.FC = () => {
   const loadProjects = async () => {
     try {
       // Get only projects where user is member or manager (same as timesheets)
-      const url = 'http://localhost:8080/api/projects?my_projects=true';
+      const url = `${API_URL}/api/projects?my_projects=true`;
       const response = await fetchWithAuth(url);
       
       if (response.ok) {
@@ -213,7 +217,7 @@ export const ExpenseManager: React.FC = () => {
         formData.append('_method', 'PUT');
         const headers = getAuthHeaders();
         delete (headers as any)['Content-Type']; // Let browser set it for multipart/form-data
-        response = await fetch(`http://localhost:8080/api/expenses/${selectedExpense.id}`, {
+        response = await fetch(`${API_URL}/api/expenses/${selectedExpense.id}`, {
           method: 'POST', // POST with _method=PUT for FormData file uploads
           headers,
           body: formData
@@ -222,7 +226,7 @@ export const ExpenseManager: React.FC = () => {
         // Create new expense
         const headers = getAuthHeaders();
         delete (headers as any)['Content-Type']; // Let browser set it for multipart/form-data
-        response = await fetch('http://localhost:8080/api/expenses', {
+        response = await fetch(`${API_URL}/api/expenses`, {
           method: 'POST',
           headers,
           body: formData
@@ -246,7 +250,7 @@ export const ExpenseManager: React.FC = () => {
   const handleDelete = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
-        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}`, {
+        const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}`, {
           method: 'DELETE',
           headers: getAuthHeaders(),
         });
@@ -267,7 +271,7 @@ export const ExpenseManager: React.FC = () => {
     if (!selectedExpense?.id) return;
     
     try {
-      const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${selectedExpense.id}/submit`, {
+      const response = await fetchWithAuth(`${API_URL}/api/expenses/${selectedExpense.id}/submit`, {
         method: 'PUT'
       });
 
@@ -286,7 +290,7 @@ export const ExpenseManager: React.FC = () => {
     if (!selectedExpense?.id) return;
     
     try {
-      const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${selectedExpense.id}/approve`, {
+      const response = await fetchWithAuth(`${API_URL}/api/expenses/${selectedExpense.id}/approve`, {
         method: 'PUT'
       });
 
@@ -310,7 +314,7 @@ export const ExpenseManager: React.FC = () => {
       message: 'Please provide a reason for rejecting this expense:',
       action: async (reason: string) => {
         try {
-          const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${selectedExpense.id}/reject`, {
+          const response = await fetchWithAuth(`${API_URL}/api/expenses/${selectedExpense.id}/reject`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json'
@@ -419,7 +423,7 @@ export const ExpenseManager: React.FC = () => {
                     {expense.project?.name || 'Unknown'}
                   </TableCell>
                   <TableCell>
-                    ${Number(expense.amount).toFixed(2)}
+                    €{Number(expense.amount).toFixed(2)}
                   </TableCell>
                   <TableCell>{expense.description}</TableCell>
                   <TableCell>
@@ -429,7 +433,7 @@ export const ExpenseManager: React.FC = () => {
                         color="primary"
                         onClick={async () => {
                           try {
-                            const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${expense.id}/attachment`);
+                            const response = await fetchWithAuth(`${API_URL}/api/expenses/${expense.id}/attachment`);
                             if (response.ok) {
                               const blob = await response.blob();
                               const url = URL.createObjectURL(blob);

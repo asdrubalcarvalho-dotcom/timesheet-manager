@@ -183,7 +183,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
   const fetchLocations = async () => {
     try {
       // Get all active locations (will be filtered by project later)
-      const locationsResponse = await api.get('/locations');
+      const locationsResponse = await api.get('/api/locations');
       const allLocations = locationsResponse.data.data || locationsResponse.data || [];
       
       const activeLocations = allLocations.filter((loc: Location) => loc.is_active);

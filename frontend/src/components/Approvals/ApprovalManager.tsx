@@ -46,7 +46,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import type { TimesheetManagerRow, TimesheetManagerSummary, Technician, Expense, Project, Task, Location, Timesheet, TravelSegment } from '../../types';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
-import { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth } from '../../services/api';
+import { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth, API_URL } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 import TimesheetEditDialog from '../Timesheets/TimesheetEditDialog';
 import PageHeader from '../Common/PageHeader';
@@ -209,7 +209,7 @@ const ApprovalManager: React.FC = () => {
   const loadExpensePending = useCallback(async () => {
     setExpenseLoading(true);
     try {
-      const response = await fetchWithAuth('http://localhost:8080/api/expenses/pending');
+      const response = await fetchWithAuth(`${API_URL}/api/expenses/pending`);
 
       if (response.ok) {
         const data = await response.json();
@@ -325,12 +325,10 @@ const ApprovalManager: React.FC = () => {
             
             let errorMessage = 'Bulk rejection failed.';
             
-            if (error.response?.status === 403) {
-              errorMessage = 'Permission denied. You cannot approve/reject your own timesheets or timesheets from other project managers.';
+            if (error.response?.data?.message) {
+              errorMessage = error.response.data.message;
             } else if (error.response?.status === 422) {
               errorMessage = 'Invalid timesheet status. Only submitted timesheets can be rejected.';
-            } else if (error.response?.data?.message) {
-              errorMessage = error.response.data.message;
             }
             
             showError(errorMessage);
@@ -354,12 +352,10 @@ const ApprovalManager: React.FC = () => {
       
       let errorMessage = 'Bulk approval failed.';
       
-      if (error.response?.status === 403) {
-        errorMessage = 'Permission denied. You cannot approve/reject your own timesheets or timesheets from other project managers.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       } else if (error.response?.status === 422) {
         errorMessage = 'Invalid timesheet status. Only submitted timesheets can be approved.';
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
       }
       
       showError(errorMessage);
@@ -389,7 +385,7 @@ const ApprovalManager: React.FC = () => {
   const handleExpenseApprove = async (expenseIds: number[]) => {
     try {
       for (const id of expenseIds) {
-        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}/approve`, {
+        const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}/approve`, {
           method: 'PUT'
         });
 
@@ -409,7 +405,7 @@ const ApprovalManager: React.FC = () => {
   const handleExpenseReject = async (expenseIds: number[], reason: string) => {
     try {
       for (const id of expenseIds) {
-        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}/reject`, {
+        const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}/reject`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rejection_reason: reason })
@@ -431,7 +427,7 @@ const ApprovalManager: React.FC = () => {
   const handleExpenseMarkPaid = async (expenseIds: number[], paymentRef: string) => {
     try {
       for (const id of expenseIds) {
-        const response = await fetchWithAuth(`http://localhost:8080/api/expenses/${id}/mark-paid`, {
+        const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}/mark-paid`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ payment_reference: paymentRef })
@@ -489,7 +485,7 @@ const ApprovalManager: React.FC = () => {
     try {
       // Fetch full travel segment details using the segment_ids
       const travelPromises = row.travels.segment_ids.map(async (id) => {
-        const response = await fetchWithAuth(`http://localhost:8080/api/travels/${id}`);
+        const response = await fetchWithAuth(`${API_URL}/api/travels/${id}`);
         if (response.ok) {
           return response.json();
         }

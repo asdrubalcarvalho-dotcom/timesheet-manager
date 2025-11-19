@@ -35,10 +35,12 @@ import {
   SmartToy as AIIcon,
   Group as TeamIcon,
   FolderOpen as ProjectsIcon,
-  AdminPanelSettings as AdminIcon
+  AdminPanelSettings as AdminIcon,
+  DeleteSweep as ResetIcon
 } from '@mui/icons-material';
 import { useAuth } from '../Auth/AuthContext';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
+import ResetDataDialog from '../Admin/ResetDataDialog';
 
 interface SideMenuProps {
   currentPage: string;
@@ -49,7 +51,7 @@ const DRAWER_WIDTH = 280;
 const DRAWER_WIDTH_COLLAPSED = 72;
 
 export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange }) => {
-  const { user, logout, isAdmin, hasPermission } = useAuth();
+  const { user, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -57,6 +59,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const [collapsed, setCollapsed] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const [administrationOpen, setAdministrationOpen] = useState(true); // Start open for admins
+  const [resetDataDialogOpen, setResetDataDialogOpen] = useState(false);
 
   const menuItems = [
     {
@@ -157,6 +160,14 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       icon: <TeamIcon />,
       path: 'admin-users',
       show: isAdmin()
+    },
+    {
+      id: 'reset-data',
+      label: 'Reset Data',
+      icon: <ResetIcon />,
+      path: 'reset-data',
+      show: isOwner(), // Only Owner can see this
+      action: true // Special flag to trigger dialog instead of navigation
     }
   ];
 
@@ -168,7 +179,17 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
     setCollapsed(!collapsed);
   };
 
-  const handleItemClick = (path: string) => {
+  const handleItemClick = (path: string, isAction?: boolean) => {
+    // Handle special actions (like reset-data)
+    if (path === 'reset-data' && isAction) {
+      setResetDataDialogOpen(true);
+      if (isMobile) {
+        setMobileOpen(false);
+      }
+      return;
+    }
+    
+    // Normal navigation
     onPageChange(path);
     if (isMobile) {
       setMobileOpen(false);
@@ -176,9 +197,9 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   };
 
   // Determine user display role badge
-  const isOwner = user?.roles?.includes('Owner');
+  const isOwnerRole = user?.roles?.includes('Owner');
   const isSuperAdmin = user?.roles?.includes('Admin');
-  const displayRole = isOwner ? 'Owner' : (isSuperAdmin ? 'Admin' : null);
+  const displayRole = isOwnerRole ? 'Owner' : (isSuperAdmin ? 'Admin' : null);
   const displayName = user?.name || 'User';
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
@@ -449,7 +470,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                 administrationItems.filter(item => item.show).map((item) => (
                   <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
-                      onClick={() => handleItemClick(item.path)}
+                      onClick={() => handleItemClick(item.path, item.action)}
                       selected={currentPage === item.path}
                       sx={{
                         mx: 1,
@@ -478,7 +499,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                   {administrationItems.filter(item => item.show).map((item) => (
                     <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
                       <ListItemButton
-                        onClick={() => handleItemClick(item.path)}
+                        onClick={() => handleItemClick(item.path, item.action)}
                         selected={currentPage === item.path}
                         sx={{
                           mx: 2,
@@ -604,6 +625,12 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
           {drawerContent}
         </Drawer>
       )}
+
+      {/* Reset Data Dialog */}
+      <ResetDataDialog 
+        open={resetDataDialogOpen}
+        onClose={() => setResetDataDialogOpen(false)}
+      />
     </>
   );
 };
