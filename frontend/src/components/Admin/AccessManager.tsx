@@ -51,8 +51,8 @@ const AccessManager: React.FC = () => {
     setLoading(true);
     try {
       const [rolesRes, permsRes] = await Promise.all([
-        api.get('/access/roles'),
-        api.get('/access/permissions')
+        api.get('/api/access/roles'),
+        api.get('/api/access/permissions')
       ]);
       const rolesData: Role[] = Array.isArray(rolesRes.data) ? rolesRes.data : rolesRes.data?.data ?? [];
       const permissionsData: Permission[] = Array.isArray(permsRes.data) ? permsRes.data : permsRes.data?.data ?? [];
@@ -74,7 +74,7 @@ const AccessManager: React.FC = () => {
     try {
       const entries = await Promise.all(
         roles.map(async (role) => {
-          const perms = await api.get(`/access/roles/${encodeURIComponent(role.name)}/permissions`);
+          const perms = await api.get(`/api/access/roles/${encodeURIComponent(role.name)}/permissions`);
           const permsArray: Permission[] = Array.isArray(perms.data) ? perms.data : perms.data?.data ?? [];
           return [role.name, permsArray.map((p) => p.name)] as const;
         })
@@ -101,10 +101,10 @@ const AccessManager: React.FC = () => {
     try {
       const hasPerm = rolePermissions[role]?.includes(permission);
       if (hasPerm) {
-        await api.post(`/access/roles/${role}/remove-permission`, { permission });
+        await api.post(`/api/access/roles/${role}/remove-permission`, { permission });
         showSuccess(`Removed ${permission} from ${role}`);
       } else {
-        await api.post(`/access/roles/${role}/assign-permission`, { permission });
+        await api.post(`/api/access/roles/${role}/assign-permission`, { permission });
         showSuccess(`Assigned ${permission} to ${role}`);
       }
       setRolePermissions((prev) => {
@@ -122,7 +122,7 @@ const AccessManager: React.FC = () => {
   const fetchAiSuggestion = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/ai/suggestions/access');
+      const res = await api.get('/api/ai/suggestions/access');
       setAiSuggestion(res.data.suggestion || 'No suggestion available');
     } catch (err) {
       setAiSuggestion('Failed to fetch AI suggestion');

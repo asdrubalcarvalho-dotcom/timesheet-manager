@@ -123,12 +123,13 @@ const AppContent: React.FC = () => {
     }
   }, [location.pathname, navigate]);
 
-  // Public routes that don't require authentication
-  if (location.pathname === '/register') {
-    return <TenantRegistration />;
-  }
-
+  // Handle authentication and routing
   if (!user) {
+    // Show TenantRegistration ONLY on /register route
+    if (location.pathname === '/register') {
+      return <TenantRegistration />;
+    }
+    // Show LoginForm for all other routes
     return <LoginForm />;
   }
 
@@ -148,7 +149,7 @@ const AppContent: React.FC = () => {
         return (
           <Box sx={{ p: 3 }}>
             <h1>👥 Team</h1>
-            <p>Gestão de equipe em breve...</p>
+            <p>Team management coming soon...</p>
           </Box>
         );
       case 'planning':

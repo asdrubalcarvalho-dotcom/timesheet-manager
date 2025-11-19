@@ -52,88 +52,159 @@ class TenantController extends Controller
         }
 
         try {
-            // Define base domain for tenant URLs
+            // Base domain for tenant URLs (frontend)
             $baseDomain = config('app.domain', 'localhost:3000');
-            
-            // 1. Create Tenant in central database (triggers TenantCreated event)
-            // TenantCreated event automatically creates Domain via ProvisionTenantDomain listener
-            $tenant = Tenant::create([
-                'name' => $request->company_name,
-                'slug' => $request->slug,
-                'owner_email' => $request->admin_email,
-                'status' => 'active',
-                'plan' => $request->plan ?? 'trial',
-                'timezone' => $request->timezone ?? 'UTC',
-                'trial_ends_at' => now()->addDays(14),
-            ]);
 
-            // 2. Create Company record (in central DB)
-            Company::create([
-                'tenant_id' => $tenant->id,
-                'name' => $request->company_name,
-                'industry' => $request->industry,
-                'country' => $request->country,
-                'timezone' => $request->timezone ?? 'UTC',
-                'status' => 'active',
-            ]);
+            // 1. Create Tenant in central database
+            // The Tenant model automatically sets tenancy_db_name in booted() method
+            try {
+                $tenant = Tenant::create([
+                    'name'         => $request->company_name,
+                    'slug'         => $request->slug,
+                    'owner_email'  => $request->admin_email,
+                    'status'       => 'active',
+                    'plan'         => $request->plan ?? 'trial',
+                    'timezone'     => $request->timezone ?? 'UTC',
+                    'trial_ends_at'=> now()->addDays(14),
+                ]);
+                \Log::info('Tenant::create() SUCCESS');
+            } catch (\Throwable $e) {
+                \Log::error('Tenant::create() FAILED', ['error' => $e->getMessage(), 'line' => $e->getLine(), 'file' => $e->getFile()]);
+                throw $e;
+            }
 
-            // 3. Create tenant database manually (since we disabled automatic jobs)
-            $databaseName = $tenant->tenancy_db_name ?? "timesheet_{$tenant->id}";
+            // CRITICAL: Refresh model to decode VirtualColumn data
+            // The 'creating' event sets internal keys, but they're only persisted after save()
+            // We need to refresh the model so VirtualColumn decodes the JSON data column
+            \Log::info('BEFORE refresh', ['attributes' => array_keys($tenant->getAttributes())]);
+            $tenant->refresh();
+            \Log::info('AFTER refresh', ['attributes' => array_keys($tenant->getAttributes()), 'has_tenancy_db_name' => $tenant->hasAttribute('tenancy_db_name')]);
+
+            // 2. Get database name from tenant data (auto-set by model)
+            // Note: getInternal() automatically handles the 'tenancy_' prefix
+            $databaseName = $tenant->getInternal('db_name');
+
+            // 3. Create tenant database manually
             DB::statement("CREATE DATABASE IF NOT EXISTS `{$databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 
-            // 5. Initialize tenant context and seed database
+            // 4. Create Company record (central DB)
+            Company::create([
+                'tenant_id' => $tenant->id,
+                'name'      => $request->company_name,
+                'industry'  => $request->industry,
+                'country'   => $request->country,
+                'timezone'  => $request->timezone ?? 'UTC',
+                'status'    => 'active',
+            ]);
+
+            //  6. Initialize tenant context and seed database
             $adminToken = null;
-            $tenant->run(function () use ($request, $tenant, &$adminToken) {
-                // Run migrations if not already run by TenantCreated event
+
+            // WORKAROUND: Manually set tenant connection config before $tenant->run()
+            // This fixes the "array_merge(): Argument #1 must be of type array, null given" error
+            config(['database.connections.tenant' => [
+                'driver' => 'mysql',
+                'host' => config('database.connections.mysql.host'),
+                'port' => config('database.connections.mysql.port'),
+                'database' => $databaseName,
+                'username' => config('database.connections.mysql.username'),
+                'password' => config('database.connections.mysql.password'),
+                'unix_socket' => config('database.connections.mysql.unix_socket'),
+                'charset' => config('database.connections.mysql.charset'),
+                'collation' => config('database.connections.mysql.collation'),
+                'prefix' => '',
+                'prefix_indexes' => true,
+                'strict' => true,
+                'engine' => null,
+                'options' => config('database.connections.mysql.options', []),
+            ]]);
+
+            // DEBUG: Check config BEFORE $tenant->run()
+            \Log::info('BEFORE $tenant->run()', [
+                'template_connection' => config('tenancy.database.template_tenant_connection'),
+                'config_tenant' => config('database.connections.tenant'),
+                'config_tenant_is_null' => config('database.connections.tenant') === null,
+                'all_connections' => array_keys(config('database.connections')),
+            ]);
+
+            // DEBUG: Test database()->connection() outside of tenant context
+            try {
+                $dbConfig = $tenant->database();
+                \Log::info('DatabaseConfig created successfully', ['name' => $dbConfig->getName()]);
+                
+                $connection = $dbConfig->connection();
+                \Log::info('Connection config generated', ['connection' => $connection]);
+            } catch (\Exception $e) {
+                \Log::error('Failed to get connection config', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+
+            $tenant->run(function () use ($request, $tenant, &$adminToken, $databaseName) {
+                // MANUAL DATABASE CONNECTION (DatabaseTenancyBootstrapper disabled)
+                // Set the tenant connection to use the newly created database
+                config(['database.connections.tenant.database' => $databaseName]);
+                DB::purge('tenant'); // Clear any cached connection
+                DB::reconnect('tenant'); // Reconnect with new database
+                DB::setDefaultConnection('tenant'); // Switch to tenant connection
+                
+                \Log::info('Tenant DB connection established', [
+                    'database' => $databaseName,
+                    'default_connection' => DB::getDefaultConnection(),
+                ]);
+                
+                // Run tenant migrations
                 \Artisan::call('migrate', [
-                    '--path' => 'database/migrations/tenant',
+                    '--path'  => 'database/migrations/tenant',
                     '--force' => true,
                 ]);
 
-                // Seed roles and permissions first
+                // Seed roles and permissions
                 \Artisan::call('db:seed', [
                     '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
                     '--force' => true,
                 ]);
 
-                // Create owner user in tenant database (no tenant_id in multi-DB tenancy)
+                // Create owner user in tenant DB
                 $owner = User::create([
-                    'name' => $request->admin_name,
-                    'email' => $request->admin_email,
-                    'password' => Hash::make($request->admin_password),
+                    'name'              => $request->admin_name,
+                    'email'             => $request->admin_email,
+                    'password'          => Hash::make($request->admin_password),
                     'email_verified_at' => now(),
+                    'role'              => 'Owner', // CRITICAL: Set role field for frontend isAdmin() check
                 ]);
 
-                // Assign Owner role (highest privilege level)
+                // Assign Owner role (Spatie permissions)
                 $owner->assignRole('Owner');
 
-                // Create Technician record for Owner user
+                // Create Technician record for Owner
                 \App\Models\Technician::create([
-                    'name' => $owner->name,
-                    'email' => $owner->email,
-                    'role' => 'owner',
-                    'phone' => null,
-                    'user_id' => $owner->id,
+                    'name'       => $owner->name,
+                    'email'      => $owner->email,
+                    'role'       => 'owner',
+                    'phone'      => null,
+                    'user_id'    => $owner->id,
                     'created_by' => $owner->id,
                     'updated_by' => $owner->id,
                 ]);
 
-                // Generate API token for immediate use
+                // Generate API token
                 $adminToken = $owner->createToken('onboarding-token')->plainTextToken;
             });
 
             return response()->json([
-                'status' => 'ok',
-                'message' => 'Tenant created successfully',
-                'tenant' => $request->slug,
-                'database' => config('tenancy.database.prefix', 'timesheet_') . $tenant->id,
+                'status'   => 'ok',
+                'message'  => 'Tenant created successfully',
+                'tenant'   => $request->slug,
+                'database' => $databaseName,
                 'tenant_info' => [
-                    'id' => $tenant->id,
-                    'slug' => $tenant->slug,
-                    'name' => $tenant->name,
-                    'domain' => $request->slug . '.' . $baseDomain,
-                    'status' => $tenant->status,
-                    'trial_ends_at' => $tenant->trial_ends_at->toISOString(),
+                    'id'            => $tenant->id,
+                    'slug'          => $tenant->slug,
+                    'name'          => $tenant->name,
+                    'domain'        => $request->slug . '.' . $baseDomain,
+                    'status'        => $tenant->status,
+                    'trial_ends_at' => optional($tenant->trial_ends_at)->toISOString(),
                 ],
                 'admin' => [
                     'email' => $request->admin_email,
@@ -142,30 +213,31 @@ class TenantController extends Controller
                 'next_steps' => [
                     'login_url' => (app()->environment('local') ? 'http://' : 'https://') . $request->slug . '.' . $baseDomain . '/login',
                     'api_header' => 'X-Tenant: ' . $request->slug,
-                ]
+                ],
             ], 201);
 
         } catch (\Exception $e) {
             \Log::error('Tenant registration failed', [
-                'slug' => $request->slug ?? 'unknown',
+                'slug'  => $request->slug ?? 'unknown',
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            // Cleanup on failure
             try {
                 if (isset($tenant)) {
-                    $tenant->delete(); // This will trigger TenantDeleted event and drop database
+                    $tenant->delete();
                 }
             } catch (\Exception $cleanupError) {
                 \Log::error('Cleanup failed after tenant registration error', [
-                    'error' => $cleanupError->getMessage()
+                    'error' => $cleanupError->getMessage(),
                 ]);
             }
 
             return response()->json([
                 'message' => 'Tenant registration failed',
-                'error' => app()->environment('local') ? $e->getMessage() : 'An error occurred during registration. Please try again.'
+                'error'   => app()->environment('local')
+                    ? $e->getMessage()
+                    : 'An error occurred during registration. Please try again.',
             ], 500);
         }
     }

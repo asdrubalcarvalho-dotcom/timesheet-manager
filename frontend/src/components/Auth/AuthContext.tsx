@@ -1,6 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback
+} from 'react';
+import { API_URL } from '../../services/api';
 import type { ReactNode } from 'react';
-import { fetchWithAuth } from '../../services/api';
+
+/* ===============================================================
+   TYPES
+================================================================ */
 
 interface User {
   id: number;
@@ -14,7 +24,7 @@ interface User {
   is_technician: boolean;
   is_admin: boolean;
   managed_projects: number[];
-  tenant_id?: string; // ULID of tenant
+  tenant_id?: string;
   project_memberships?: Array<{
     project_id: number;
     project_role: 'member' | 'manager';
@@ -38,7 +48,6 @@ interface AuthContextType {
   login: (email: string, password: string, tenantSlug: string) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
-  // Utility functions for role checking
   isOwner: () => boolean;
   isManager: () => boolean;
   isTechnician: () => boolean;
@@ -48,61 +57,97 @@ interface AuthContextType {
   hasPermission: (permission: string) => boolean;
 }
 
+/* ===============================================================
+   CONTEXT
+================================================================ */
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
+
+/* ===============================================================
+   AUTH PROVIDER
+================================================================ */
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  /* ---------------------------------------------------------------
+     STATE
+  --------------------------------------------------------------- */
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantSlug, setTenantSlugState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+
+
+  /* ---------------------------------------------------------------
+     NORMALIZE USER
+  --------------------------------------------------------------- */
   const normalizeUser = useCallback((userData: any): User => {
-    const roles: string[] = Array.isArray(userData?.roles) ? userData.roles : [];
-    const permissions: string[] = Array.isArray(userData?.permissions) ? userData.permissions : [];
-    const managedProjectsRaw = Array.isArray(userData?.managed_projects) ? userData.managed_projects : [];
-    const projectMemberships = Array.isArray(userData?.project_memberships) ? userData.project_memberships : [];
+    const roles = Array.isArray(userData?.roles) ? userData.roles : [];
+    const permissions = Array.isArray(userData?.permissions)
+      ? userData.permissions
+      : [];
+    const managedProjects = Array.isArray(userData?.managed_projects)
+      ? userData.managed_projects
+      : [];
+    const memberships = Array.isArray(userData?.project_memberships)
+      ? userData.project_memberships
+      : [];
+
+    const primaryRole = (userData?.role || 'Technician') as User['role'];
 
     return {
       id: Number(userData?.id),
       name: userData?.name ?? '',
       email: userData?.email ?? '',
-      role: (userData?.role ?? 'Technician') as User['role'],
+      role: primaryRole,
       roles,
       permissions,
-      is_owner: Boolean(userData?.is_owner ?? roles.includes('Owner')),
-      is_manager: Boolean(userData?.is_manager ?? roles.includes('Manager')),
-      is_technician: Boolean(userData?.is_technician ?? roles.includes('Technician')),
-      is_admin: Boolean(userData?.is_admin ?? roles.includes('Admin') ?? roles.includes('Owner')),
-      managed_projects: managedProjectsRaw.map((projectId: any) => Number(projectId)).filter((id: number) => !Number.isNaN(id)),
-      project_memberships: projectMemberships,
-      tenant_id: userData?.tenant_id,
+      is_owner: roles.includes('Owner') || primaryRole === 'Owner',
+      is_manager: roles.includes('Manager') || primaryRole === 'Manager',
+      is_technician: roles.includes('Technician') || primaryRole === 'Technician',
+      is_admin:
+        roles.includes('Admin') ||
+        primaryRole === 'Admin' ||
+        primaryRole === 'Owner',
+      managed_projects: managedProjects
+        .map((id: any) => Number(id))
+        .filter((id: number) => !isNaN(id)),
+      project_memberships: memberships,
+      tenant_id: userData?.tenant_id
     };
   }, []);
 
-  // Check for existing session on mount
+  /* ---------------------------------------------------------------
+     CHECK SESSION ON LOAD
+  --------------------------------------------------------------- */
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const token = localStorage.getItem('auth_token');
-        const storedTenantSlug = localStorage.getItem('tenant_slug');
-        
-        if (token && storedTenantSlug) {
-          setTenantSlugState(storedTenantSlug);
-          
-          const response = await fetchWithAuth('http://localhost:8080/api/user');
-          
+        const storedTenant = localStorage.getItem('tenant_slug');
+
+        if (token && storedTenant) {
+          setTenantSlugState(storedTenant);
+
+          const response = await fetch(`${API_URL}/api/user`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'X-Tenant': storedTenant,
+            },
+          });
+
           if (response.ok) {
             const userData = await response.json();
             setUser(normalizeUser(userData));
@@ -121,50 +166,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     checkAuth();
-  }, [normalizeUser]);
+  }, [normalizeUser, API_URL]);
 
-  const login = async (email: string, password: string, tenantSlug: string): Promise<boolean> => {
+  /* ---------------------------------------------------------------
+     LOGIN
+  --------------------------------------------------------------- */
+  const login = async (
+    email: string,
+    password: string,
+    tenantSlug: string
+  ): Promise<boolean> => {
     try {
-      const response = await fetch('http://localhost:8080/api/login', {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
+          'X-Tenant': tenantSlug
         },
-        body: JSON.stringify({ 
-          email, 
+        body: JSON.stringify({
+          email,
           password,
-          tenant_slug: tenantSlug  // Send tenant slug in body (snake_case for Laravel)
+          tenant_slug: tenantSlug
         })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Store auth token and tenant slug
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('tenant_slug', tenantSlug);
-        
-        setUser(normalizeUser(data.user));
-        setTenantSlugState(tenantSlug);
-        
-        // Set tenant info if available in response
-        if (data.tenant) {
-          setTenant(data.tenant);
-        }
-        
-        return true;
-      } else {
-        const errorData = await response.json();
-        console.error('Login failed with status', response.status, ':', errorData);
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Login failed:', error);
         return false;
       }
+
+      const data = await response.json();
+
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('tenant_slug', tenantSlug);
+
+      setUser(normalizeUser(data.user));
+      setTenantSlugState(tenantSlug);
+
+      if (data.tenant) {
+        setTenant(data.tenant);
+      }
+
+      return true;
     } catch (error) {
       console.error('Login network error:', error);
       return false;
     }
   };
 
+  /* ---------------------------------------------------------------
+     LOGOUT
+  --------------------------------------------------------------- */
   const logout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('tenant_slug');
@@ -173,40 +227,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setTenantSlugState(null);
   };
 
-  // Role checking utility functions
-  const isOwner = (): boolean => user?.roles?.includes('Owner') || false;
-  const isManager = (): boolean => user?.is_manager || user?.roles?.includes('Manager') || false;
-  const isTechnician = (): boolean => user?.is_technician || user?.roles?.includes('Technician') || false;
-  const isAdmin = (): boolean => user?.is_admin || user?.roles?.includes('Admin') || user?.roles?.includes('Owner') || false;
-  
-  const canValidateTimesheets = (): boolean => {
-    return user?.permissions?.includes('approve-timesheets') || false;
-  };
-  
-  const canManageProjects = (): boolean => {
-    return user?.permissions?.includes('manage-projects') || false;
-  };
-  
-  const hasPermission = (permission: string): boolean => {
-    return user?.permissions?.includes(permission) || false;
-  };
+  /* ---------------------------------------------------------------
+     ROLE HELPERS
+  --------------------------------------------------------------- */
+  const isOwner = () => user?.is_owner ?? false;
+  const isManager = () => user?.is_manager ?? false;
+  const isTechnician = () => user?.is_technician ?? false;
+  const isAdmin = () => user?.is_admin ?? false;
 
+  const canValidateTimesheets = () =>
+    user?.permissions?.includes('approve-timesheets') ?? false;
+
+  const canManageProjects = () =>
+    user?.permissions?.includes('manage-projects') ?? false;
+
+  const hasPermission = (perm: string) =>
+    user?.permissions?.includes(perm) ?? false;
+
+  /* ---------------------------------------------------------------
+     PROVIDER
+  --------------------------------------------------------------- */
   return (
-    <AuthContext.Provider value={{ 
-      user,
-      tenant,
-      tenantSlug,
-      login, 
-      logout, 
-      loading,
-      isOwner,
-      isManager,
-      isTechnician,
-      isAdmin,
-      canValidateTimesheets,
-      canManageProjects,
-      hasPermission
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        tenant,
+        tenantSlug,
+        login,
+        logout,
+        loading,
+        isOwner,
+        isManager,
+        isTechnician,
+        isAdmin,
+        canValidateTimesheets,
+        canManageProjects,
+        hasPermission
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

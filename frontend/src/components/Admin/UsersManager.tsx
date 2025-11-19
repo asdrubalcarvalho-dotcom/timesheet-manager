@@ -85,7 +85,7 @@ const UsersManager: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/technicians');
+      const response = await api.get('/api/technicians');
       setUsers(extractRows(response.data));
     } catch (error) {
       showError('Failed to load users');
@@ -168,10 +168,10 @@ const UsersManager: React.FC = () => {
       }
 
       if (editingUser) {
-        await api.put(`/technicians/${editingUser.id}`, payload);
+        await api.put(`/api/technicians/${editingUser.id}`, payload);
         showSuccess('User updated successfully');
       } else {
-        await api.post('/technicians', payload);
+        await api.post('/api/technicians', payload);
         showSuccess('User created successfully');
       }
       fetchUsers();
@@ -200,7 +200,7 @@ const UsersManager: React.FC = () => {
       },
       action: async () => {
         try {
-          await api.delete(`/technicians/${id}`);
+          await api.delete(`/api/technicians/${id}`);
           showSuccess('User deleted successfully');
           fetchUsers();
         } catch (error) {

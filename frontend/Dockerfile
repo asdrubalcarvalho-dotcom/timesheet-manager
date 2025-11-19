@@ -6,6 +6,13 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
+
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+# Pass Vite APP URL argument (missing before)
+ARG VITE_APP_URL
+ENV VITE_APP_URL=$VITE_APP_URL
+
 RUN npm run build
 
 # ===== RUNTIME STAGE =====
