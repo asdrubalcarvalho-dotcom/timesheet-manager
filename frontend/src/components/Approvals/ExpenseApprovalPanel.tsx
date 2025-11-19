@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { API_URL } from '../../services/api';
 import {
   Box,
   Card,
@@ -68,7 +69,7 @@ dayjs.extend(isBetween);
 const getAttachmentUrl = (expenseId: number): string => {
   const token = localStorage.getItem('auth_token');
   const tenant = localStorage.getItem('tenant_slug');
-  return `http://localhost:8080/api/expenses/${expenseId}/attachment?token=${token}&tenant=${tenant}`;
+  return `${API_URL}/api/expenses/${expenseId}/attachment?token=${token}&tenant=${tenant}`;
 };
 
 interface ExpenseApprovalPanelProps {

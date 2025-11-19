@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { SmartToy as RobotIcon } from '@mui/icons-material';
 import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -21,6 +22,7 @@ export const LoginForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,9 +225,9 @@ export const LoginForm: React.FC = () => {
                   size="small"
                   variant="contained"
                   onClick={() => {
-                    setEmail('acarvalho@upg2ai.com');
-                    setTenantSlug('upg-to-ai');
-                    setPassword('password');
+                    setEmail('admin@success.com');
+                    setTenantSlug('success1763470193');
+                    setPassword('password123');
                   }}
                   disabled={loading}
                   sx={{ 
@@ -234,7 +236,7 @@ export const LoginForm: React.FC = () => {
                     py: 1
                   }}
                 >
-                  Owner (UPG to AI)
+                  Owner (Success Demo)
                 </Button>
               </Box>
 
@@ -243,7 +245,7 @@ export const LoginForm: React.FC = () => {
                 <Typography variant="body2" color="text.secondary">
                   Don't have a workspace?{' '}
                   <Button
-                    onClick={() => window.location.href = '/register'}
+                    onClick={() => navigate('/register')}
                     sx={{ 
                       textTransform: 'none',
                       fontWeight: 600,

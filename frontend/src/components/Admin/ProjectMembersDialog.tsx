@@ -90,7 +90,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
   const fetchMembers = async (projectId: number) => {
     setLoadingMembers(true);
     try {
-      const response = await api.get(`/projects/${projectId}/members`);
+      const response = await api.get(`/api/projects/${projectId}/members`);
       setMembers(normalizeArray<ProjectMember>(response.data));
     } catch {
       setMembers([]);
@@ -102,7 +102,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
 
   const fetchAvailableUsers = async () => {
     try {
-      const response = await api.get('/technicians');
+      const response = await api.get('/api/technicians');
       setAvailableUsers(normalizeArray<Technician>(response.data));
     } catch {
       showSnackbar('Failed to load available users', 'error');
@@ -128,7 +128,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
         expense_role: field === 'expense_role' ? value : member.expense_role,
         finance_role: field === 'finance_role' ? value : member.finance_role
       };
-      const response = await api.put(`/projects/${project.id}/members/${member.user_id}`, payload);
+      const response = await api.put(`/api/projects/${project.id}/members/${member.user_id}`, payload);
       setMembers((prev) => prev.map((item) => (item.id === member.id ? response.data : item)));
       showSnackbar('Roles updated successfully', 'success');
     } catch {
@@ -155,7 +155,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
       action: async () => {
         setUpdatingMemberId(member.user_id);
         try {
-          await api.delete(`/projects/${project.id}/members/${member.user_id}`);
+          await api.delete(`/api/projects/${project.id}/members/${member.user_id}`);
           setMembers((prev) => prev.filter((item) => item.id !== member.id));
           showSnackbar('Member removed', 'success');
         } catch {
@@ -173,7 +173,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
 
     setSavingNewMember(true);
     try {
-      const response = await api.post(`/projects/${project.id}/members`, {
+      const response = await api.post(`/api/projects/${project.id}/members`, {
         user_id: formData.user_id,
         project_role: formData.project_role,
         expense_role: formData.expense_role,

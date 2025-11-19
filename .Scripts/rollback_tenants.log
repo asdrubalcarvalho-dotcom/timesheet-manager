@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# ============================================================
+# 🧹 Tenant Rollback Utility for TimePerk SaaS
+# ------------------------------------------------------------
+# Safely removes a tenant and its database from the system.
+# Usage:
+#   ./scripts/rollback_tenant.sh <tenant_slug>
+#
+# Example:
+#   ./scripts/rollback_tenant.sh testcorp
+#
+# Requires:
+#   - docker compose (services: timesheet_app, timesheet_mysql)
+#   - root access to MySQL container
+# ============================================================
+
+set -euo pipefail
+LOG_FILE="rollback_tenants.log"
+DATESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+
+# --- Check arguments ---
+if [[ $# -ne 1 ]]; then
+  echo "❌ Usage: $0 <tenant_slug>"
+  exit 1
+fi
+
+TENANT_SLUG="$1"
+TENANT_DB="timesheet_${TENANT_SLUG}"
+
+echo "⚠️  You are about to permanently delete tenant '${TENANT_SLUG}' and database '${TENANT_DB}'."
+read -p "Type 'DELETE' to confirm: " CONFIRM
+
+if [[ "$CONFIRM" != "DELETE" ]]; then
+  echo "❎ Operation cancelled."
+  exit 0
+fi
+
+echo "🚀 Starting rollback at $DATESTAMP..." | tee -a "$LOG_FILE"
+
+# --- Step 1: Run Laravel command to clean up central tenant record ---
+echo "🧭 Removing tenant from central DB..."
+docker compose exec -T timesheet_app php artisan tenants:delete "$TENANT_SLUG" || true
+
+# --- Step 2: Drop tenant database directly ---
+echo "🧨 Dropping tenant database '$TENANT_DB'..."
+docker compose exec -T timesheet_mysql mysql -uroot -proot -e "DROP DATABASE IF EXISTS ${TENANT_DB};"
+
+# --- Step 3: Verify deletion ---
+echo "🔍 Verifying database deletion..."
+DB_EXISTS=$(docker compose exec -T timesheet_mysql mysql -uroot -proot -sse "SHOW DATABASES LIKE '${TENANT_DB}';" || true)
+
+if [[ -z "$DB_EXISTS" ]]; then
+  echo "✅ Database ${TENANT_DB} successfully removed."
+else
+  echo "❌ Database ${TENANT_DB} still exists. Check logs."
+fi
+
+# --- Step 4: Log completion ---
+echo "[${DATESTAMP}] Tenant '${TENANT_SLUG}' rolled back. Database: '${TENANT_DB}'" >> "$LOG_FILE"
+echo "🧾 Log updated → $LOG_FILE"
+echo "✅ Rollback complete!"
+
+# ============================================================
+# HOW TO USE:
+# ------------------------------------------------------------
+# 1) Make the script executable:
+#      chmod +x scripts/rollback_tenant.sh
+#
+# 2) Run with a tenant slug:
+#      ./scripts/rollback_tenant.sh testcorp
+#
+# 3) Confirm the deletion:
+#      ⚠️  You are about to permanently delete tenant 'testcorp'...
+#      Type 'DELETE' to confirm: DELETE
+#
+# 4) Expected output:
+#      🧭 Removing tenant from central DB...
+#      🧨 Dropping tenant database 'timesheet_testcorp'...
+#      ✅ Database timesheet_testcorp successfully removed.
+#      🧾 Log updated → rollback_tenants.log
+#      ✅ Rollback complete!
+#
+# ============================================================
+# SAFETY NOTES:
+# ------------------------------------------------------------
+# - Never deletes data without manual confirmation ("DELETE").
+# - Calls `php artisan tenants:delete` before dropping the DB directly.
+# - Keeps a permanent log in rollback_tenants.log for audit trail.
+# - Safe to use in CI/CD cleanup for ephemeral tenants (autotest_*).
+# - Adjust DB credentials or service names if your docker-compose differs.
+# ============================================================

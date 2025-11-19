@@ -94,7 +94,7 @@ const PlanningGantt: React.FC = () => {
   useEffect(() => {
     const loadProjects = async () => {
       try {
-        const response = await api.get<ApiResponse<Project>>('/planning/projects');
+        const response = await api.get<ApiResponse<Project>>('/api/planning/projects');
         const list = normalizeApiResponse(response.data);
         setProjects(list);
         if (list.length > 0) {
@@ -120,7 +120,7 @@ const PlanningGantt: React.FC = () => {
       setLoadingTasks(true);
       setError(null);
       try {
-        const response = await api.get<ApiResponse<PlanningTask>>('/planning/tasks', {
+        const response = await api.get<ApiResponse<PlanningTask>>('/api/planning/tasks', {
           params: { project_id: selectedProject },
         });
         const tasks = normalizeApiResponse(response.data);

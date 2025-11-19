@@ -206,7 +206,8 @@ const TimesheetCalendar: React.FC = () => {
   const [description, setDescription] = useState('');
   const [startTimeObj, setStartTimeObj] = useState<Dayjs | null>(dayjs().hour(9).minute(0).second(0));
   const [endTimeObj, setEndTimeObj] = useState<Dayjs | null>(dayjs().hour(10).minute(0).second(0));
-  const [timesheetScope, setTimesheetScope] = useState<'mine' | 'others' | 'all'>('mine');
+  // Default to 'all' to show all timesheets (not just 'mine')
+  const [timesheetScope, setTimesheetScope] = useState<'mine' | 'others' | 'all'>('all');
   const [validationFilter, setValidationFilter] = useState<'all' | 'ai_flagged' | 'overcap'>('all');
   const userIsManager = isManager();
   const userIsAdmin = isAdmin();
@@ -367,20 +368,8 @@ const TimesheetCalendar: React.FC = () => {
     loadTravels(); // Load travel indicators for calendar
   }, [authLoading, user?.id]);
 
-  useEffect(() => {
-    if (!user) {
-      if (timesheetScope !== 'mine') {
-        setTimesheetScope('mine');
-      }
-      return;
-    }
-
-    // Set initial scope only once (not on every change)
-    // Admins/Managers can manually change scope using toggle buttons
-    if (!userIsManager && timesheetScope !== 'mine') {
-      setTimesheetScope('mine');
-    }
-  }, [user, userIsAdmin, userIsManager]);
+  // Don't force scope - respect the default 'all' value from useState
+  // Users can manually change scope using toggle buttons
 
   // Auto-select technician when creating new entry
   useEffect(() => {
