@@ -12,7 +12,7 @@ export interface Project {
 export const projectService = {
   // Get all projects
   getProjects: async (): Promise<Project[]> => {
-    const response = await api.get('/projects');
+    const response = await api.get('/api/projects');
     return response.data.data || response.data;
   },
 
@@ -24,7 +24,7 @@ export const projectService = {
 
   // Create project
   createProject: async (projectData: Partial<Project>): Promise<Project> => {
-    const response = await api.post('/projects', projectData);
+    const response = await api.post('/api/projects', projectData);
     return response.data.data || response.data;
   },
 

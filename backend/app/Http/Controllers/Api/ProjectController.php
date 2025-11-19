@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\ProjectMember;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
@@ -108,5 +110,152 @@ class ProjectController extends Controller
     {
         $project->delete();
         return response()->json(['message' => 'Project deleted successfully']);
+    }
+
+    /**
+     * Get all members of a project with their roles
+     */
+    public function getMembers(Project $project): JsonResponse
+    {
+        $members = $project->memberRecords()
+            ->with(['user.roles'])
+            ->get()
+            ->map(function ($member) {
+                return [
+                    'id' => $member->id,
+                    'user_id' => $member->user_id,
+                    'project_role' => $member->project_role,
+                    'expense_role' => $member->expense_role,
+                    'finance_role' => $member->finance_role,
+                    'user' => $member->user ? [
+                        'id' => $member->user->id,
+                        'name' => $member->user->name,
+                        'email' => $member->user->email,
+                        'roles' => $member->user->roles->pluck('name'),
+                    ] : null,
+                ];
+            });
+
+        return response()->json($members);
+    }
+
+    /**
+     * Get project roles for a specific user
+     */
+    public function getUserRoles(Project $project, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $member = $project->memberRecords()->where('user_id', $user->id)->first();
+
+        if (!$member) {
+            return response()->json([
+                'project_role' => null,
+                'expense_role' => null,
+                'finance_role' => null,
+            ]);
+        }
+
+        return response()->json([
+            'project_role' => $member->project_role,
+            'expense_role' => $member->expense_role,
+            'finance_role' => $member->finance_role,
+        ]);
+    }
+
+    /**
+     * Add a member to the project
+     */
+    public function addMember(Request $request, Project $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'project_role' => ['required', Rule::in(['member', 'manager'])],
+            'expense_role' => ['required', Rule::in(['member', 'manager'])],
+            'finance_role' => ['required', Rule::in(['none', 'member', 'manager'])],
+        ]);
+
+        // Check if user is already a member
+        $existing = ProjectMember::where('project_id', $project->id)
+            ->where('user_id', $validated['user_id'])
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'message' => 'User is already a member of this project'
+            ], 422);
+        }
+
+        $member = ProjectMember::create([
+            'project_id' => $project->id,
+            'user_id' => $validated['user_id'],
+            'project_role' => $validated['project_role'],
+            'expense_role' => $validated['expense_role'],
+            'finance_role' => $validated['finance_role'],
+        ]);
+
+        $member->load('user.roles');
+
+        return response()->json([
+            'id' => $member->id,
+            'user_id' => $member->user_id,
+            'project_role' => $member->project_role,
+            'expense_role' => $member->expense_role,
+            'finance_role' => $member->finance_role,
+            'user' => [
+                'id' => $member->user->id,
+                'name' => $member->user->name,
+                'email' => $member->user->email,
+                'roles' => $member->user->roles->pluck('name'),
+            ],
+        ], 201);
+    }
+
+    /**
+     * Update a member's roles in the project
+     */
+    public function updateMember(Request $request, Project $project, User $user): JsonResponse
+    {
+        $validated = $request->validate([
+            'project_role' => ['required', Rule::in(['member', 'manager'])],
+            'expense_role' => ['required', Rule::in(['member', 'manager'])],
+            'finance_role' => ['required', Rule::in(['none', 'member', 'manager'])],
+        ]);
+
+        $member = ProjectMember::where('project_id', $project->id)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        $member->update($validated);
+        $member->load('user.roles');
+
+        return response()->json([
+            'id' => $member->id,
+            'user_id' => $member->user_id,
+            'project_role' => $member->project_role,
+            'expense_role' => $member->expense_role,
+            'finance_role' => $member->finance_role,
+            'user' => [
+                'id' => $member->user->id,
+                'name' => $member->user->name,
+                'email' => $member->user->email,
+                'roles' => $member->user->roles->pluck('name'),
+            ],
+        ]);
+    }
+
+    /**
+     * Remove a member from the project
+     */
+    public function removeMember(Project $project, User $user): JsonResponse
+    {
+        $member = ProjectMember::where('project_id', $project->id)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        $member->delete();
+
+        return response()->json([
+            'message' => 'Member removed successfully'
+        ]);
     }
 }

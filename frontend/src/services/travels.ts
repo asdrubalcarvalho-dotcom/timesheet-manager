@@ -12,23 +12,23 @@ export const travelsApi = {
     if (filters?.start_date) params.append('start_date', filters.start_date);
     if (filters?.end_date) params.append('end_date', filters.end_date);
     
-    return api.get(`/travels?${params.toString()}`).then(res => res.data);
+    return api.get(`/api/travels?${params.toString()}`).then(res => res.data);
   },
 
   getById: (id: number) =>
-    api.get(`/travels/${id}`).then(res => res.data),
+    api.get(`/api/travels/${id}`).then(res => res.data),
 
   create: (data: Partial<TravelSegment>) =>
-    api.post('/travels', data).then(res => res.data),
+    api.post('/api/travels', data).then(res => res.data),
 
   update: (id: number, data: Partial<TravelSegment>) =>
-    api.put(`/travels/${id}`, data).then(res => res.data),
+    api.put(`/api/travels/${id}`, data).then(res => res.data),
 
   delete: (id: number) =>
-    api.delete(`/travels/${id}`).then(res => res.data),
+    api.delete(`/api/travels/${id}`).then(res => res.data),
 
   getSuggestions: (technicianId: number, projectId: number) =>
-    api.get(`/travels/suggestions?technician_id=${technicianId}&project_id=${projectId}`)
+    api.get(`/api/travels/suggestions?technician_id=${technicianId}&project_id=${projectId}`)
       .then(res => res.data.suggestion as TravelSuggestion),
 
   getTravelsByDate: (params: { technician_id?: number; month?: string; start_date?: string; end_date?: string; project_id?: number }) => {
@@ -39,6 +39,6 @@ export const travelsApi = {
     if (params.end_date) queryParams.append('end_date', params.end_date);
     if (params.project_id) queryParams.append('project_id', params.project_id.toString());
     
-    return api.get(`/travels/by-date?${queryParams.toString()}`).then(res => res.data);
+    return api.get(`/api/travels/by-date?${queryParams.toString()}`).then(res => res.data);
   },
 };

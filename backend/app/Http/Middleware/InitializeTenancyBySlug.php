@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Models\Tenant;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Stancl\Tenancy\Tenancy;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -66,6 +68,29 @@ class InitializeTenancyBySlug
         // Initialize tenancy
         \Log::info('Initializing tenancy', ['slug' => $slug, 'tenant_id' => $tenant->id]);
         $this->tenancy->initialize($tenant);
+        
+        // CRITICAL: Set up tenant DB connection for Sanctum BEFORE auth:sanctum middleware runs
+        $databaseName = $tenant->getInternal('db_name');
+        
+        config(['database.connections.tenant' => [
+            'driver' => 'mysql',
+            'host' => config('database.connections.mysql.host'),
+            'port' => config('database.connections.mysql.port'),
+            'database' => $databaseName,
+            'username' => config('database.connections.mysql.username'),
+            'password' => config('database.connections.mysql.password'),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+        ]]);
+        
+        DB::purge('tenant');
+        DB::reconnect('tenant');
+        DB::setDefaultConnection('tenant');
+        
+        // Force Sanctum to use tenant connection
+        Config::set('sanctum.connection', 'tenant');
 
         return $next($request);
     }

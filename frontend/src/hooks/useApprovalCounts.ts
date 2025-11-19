@@ -13,7 +13,7 @@ interface ApprovalCounts {
  * Uses lightweight count-only endpoint and caches results for 30 seconds
  */
 export const useApprovalCounts = (refreshInterval: number = 30000) => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [counts, setCounts] = useState<ApprovalCounts>({
     timesheets: 0,
     expenses: 0,
@@ -24,7 +24,8 @@ export const useApprovalCounts = (refreshInterval: number = 30000) => {
   const canApprove = hasPermission('approve-timesheets') || hasPermission('approve-expenses');
 
   const fetchCounts = useCallback(async () => {
-    if (!canApprove) {
+    // Don't fetch if user is not authenticated or doesn't have permission
+    if (!user || !canApprove) {
       setCounts({ timesheets: 0, expenses: 0, total: 0 });
       return;
     }
@@ -46,18 +47,18 @@ export const useApprovalCounts = (refreshInterval: number = 30000) => {
     } finally {
       setLoading(false);
     }
-  }, [canApprove]);
+  }, [canApprove, user]);
 
   useEffect(() => {
     // Initial fetch
     fetchCounts();
 
     // Set up polling if user can approve
-    if (canApprove && refreshInterval > 0) {
+    if (user && canApprove && refreshInterval > 0) {
       const interval = setInterval(fetchCounts, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [fetchCounts, canApprove, refreshInterval]);
+  }, [fetchCounts, canApprove, refreshInterval, user]);
 
   return { counts, loading, refresh: fetchCounts };
 };

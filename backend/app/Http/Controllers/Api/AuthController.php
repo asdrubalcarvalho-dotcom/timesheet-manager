@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Models\Tenant;
@@ -31,7 +32,26 @@ class AuthController extends Controller
 
         // Initialize tenant context and execute login within tenant database
         return $tenant->run(function () use ($request, $tenant) {
+            // MANUAL DATABASE CONNECTION (DatabaseTenancyBootstrapper disabled)
+            $databaseName = $tenant->getInternal('db_name');
+            config(['database.connections.tenant.database' => $databaseName]);
+            DB::purge('tenant');
+            DB::reconnect('tenant');
+            DB::setDefaultConnection('tenant');
+            
+            \Log::info('Login attempt', [
+                'email' => $request->email,
+                'database' => $databaseName,
+                'connection' => DB::getDefaultConnection(),
+            ]);
+            
             $user = User::where('email', $request->email)->first();
+            
+            \Log::info('User lookup result', [
+                'user_found' => $user !== null,
+                'user_id' => $user?->id,
+                'user_email' => $user?->email,
+            ]);
 
             if (!$user || !Hash::check($request->password, $user->password)) {
                 throw ValidationException::withMessages([
