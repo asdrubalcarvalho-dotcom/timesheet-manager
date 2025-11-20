@@ -13,6 +13,7 @@ dayjs.locale('pt');
 
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { FeatureProvider } from './contexts/FeatureContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SideMenu from './components/Layout/SideMenu';
 import { LoginForm } from './components/Auth/LoginForm';
@@ -215,9 +216,11 @@ const App: React.FC = () => {
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt">
           <CssBaseline />
           <AuthProvider>
-            <NotificationProvider>
-              <AppContent />
-            </NotificationProvider>
+            <FeatureProvider>
+              <NotificationProvider>
+                <AppContent />
+              </NotificationProvider>
+            </FeatureProvider>
           </AuthProvider>
         </LocalizationProvider>
       </ThemeProvider>

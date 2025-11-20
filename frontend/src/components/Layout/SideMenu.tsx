@@ -15,7 +15,8 @@ import {
   useTheme,
   useMediaQuery,
   alpha,
-  Collapse
+  Collapse,
+  Tooltip
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -40,7 +41,9 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../Auth/AuthContext';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
+import { useFeatures } from '../../contexts/FeatureContext';
 import ResetDataDialog from '../Admin/ResetDataDialog';
+import UpgradeModal from '../Billing/UpgradeModal';
 
 interface SideMenuProps {
   currentPage: string;
@@ -53,6 +56,7 @@ const DRAWER_WIDTH_COLLAPSED = 72;
 export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange }) => {
   const { user, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
+  const { isEnabled, isCore } = useFeatures();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -60,6 +64,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const [managementOpen, setManagementOpen] = useState(false);
   const [administrationOpen, setAdministrationOpen] = useState(true); // Start open for admins
   const [resetDataDialogOpen, setResetDataDialogOpen] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [selectedModule, setSelectedModule] = useState('');
 
   const menuItems = [
     {
@@ -81,7 +87,9 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       label: 'Travels',
       icon: <TravelsIcon />,
       path: 'travels',
-      show: hasPermission('view-timesheets') || isAdmin()
+      show: hasPermission('view-timesheets') || isAdmin(),
+      module: 'travel', // Feature flag identifier
+      isPro: true // Show PRO badge if not enabled
     },
     {
       id: 'expenses',
@@ -139,10 +147,12 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
     },
     {
       id: 'planning',
-      label: 'Planning',
+      label: 'Planning & Gantt',
       icon: <PlanningIcon />,
       path: 'planning',
-      show: true
+      show: true,
+      module: 'planning', // Feature flag identifier
+      isPro: true // Show PRO badge if not enabled
     }
   ];
 
@@ -179,13 +189,20 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
     setCollapsed(!collapsed);
   };
 
-  const handleItemClick = (path: string, isAction?: boolean) => {
+  const handleItemClick = (path: string, isAction?: boolean, moduleName?: string, moduleId?: string) => {
     // Handle special actions (like reset-data)
     if (path === 'reset-data' && isAction) {
       setResetDataDialogOpen(true);
       if (isMobile) {
         setMobileOpen(false);
       }
+      return;
+    }
+    
+    // Check if module is enabled (if module-gated)
+    if (moduleId && !isCore(moduleId) && !isEnabled(moduleId)) {
+      setSelectedModule(moduleName || moduleId);
+      setUpgradeModalOpen(true);
       return;
     }
     
@@ -319,48 +336,71 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
         }
       }}>
         <List>
-          {menuItems.filter(item => item.show).map((item) => (
-            <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                onClick={() => handleItemClick(item.path)}
-                selected={currentPage === item.path}
-                sx={{
-                  mx: 1,
-                  borderRadius: 2,
-                  color: 'grey.300',
-                  '&.Mui-selected': {
-                    bgcolor: alpha(theme.palette.primary.main, 0.2),
-                    color: 'primary.light',
-                    '& .MuiListItemIcon-root': { color: 'primary.light' }
-                  },
-                  '&:hover': {
-                    bgcolor: alpha(theme.palette.common.white, 0.05)
-                  }
-                }}
-              >
-                <ListItemIcon sx={{ 
-                  minWidth: collapsed ? 0 : 40, 
-                  color: 'inherit',
-                  justifyContent: 'center'
-                }}>
-                  {item.icon}
-                </ListItemIcon>
-                {!collapsed && (
-                  <>
-                    <ListItemText primary={item.label} />
-                    {item.badge && (
-                      <Chip
-                        label={item.badge}
-                        size="small"
-                        color={(item as any).badgeColor || 'error'}
-                        sx={{ ml: 1, minWidth: 20, height: 20, fontWeight: 600 }}
-                      />
+          {menuItems.filter(item => item.show).map((item) => {
+            const moduleItem = item as any;
+            const needsUpgrade = moduleItem.isPro && moduleItem.module && !isEnabled(moduleItem.module);
+            
+            return (
+              <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                <Tooltip title={needsUpgrade ? `${item.label} requires upgrade` : ''} placement="right">
+                  <ListItemButton
+                    onClick={() => handleItemClick(item.path, false, item.label, moduleItem.module)}
+                    selected={currentPage === item.path}
+                    sx={{
+                      mx: 1,
+                      borderRadius: 2,
+                      color: 'grey.300',
+                      opacity: needsUpgrade ? 0.6 : 1,
+                      '&.Mui-selected': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.2),
+                        color: 'primary.light',
+                        '& .MuiListItemIcon-root': { color: 'primary.light' }
+                      },
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.common.white, 0.05)
+                      }
+                    }}
+                  >
+                    <ListItemIcon sx={{ 
+                      minWidth: collapsed ? 0 : 40, 
+                      color: 'inherit',
+                      justifyContent: 'center'
+                    }}>
+                      {item.icon}
+                    </ListItemIcon>
+                    {!collapsed && (
+                      <>
+                        <ListItemText primary={item.label} />
+                        {needsUpgrade && (
+                          <Chip
+                            label="PRO"
+                            size="small"
+                            sx={{ 
+                              ml: 1, 
+                              height: 18,
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              bgcolor: '#fbbf24',
+                              color: '#78350f',
+                              '& .MuiChip-label': { px: 1 }
+                            }}
+                          />
+                        )}
+                        {item.badge && !needsUpgrade && (
+                          <Chip
+                            label={item.badge}
+                            size="small"
+                            color={(item as any).badgeColor || 'error'}
+                            sx={{ ml: 1, minWidth: 20, height: 20, fontWeight: 600 }}
+                          />
+                        )}
+                      </>
                     )}
-                  </>
-                )}
-              </ListItemButton>
-            </ListItem>
-          ))}
+                  </ListItemButton>
+                </Tooltip>
+              </ListItem>
+            );
+          })}
 
           {/* Management Section */}
           <Divider sx={{ my: 2, borderColor: alpha(theme.palette.common.white, 0.1) }} />
@@ -383,64 +423,92 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
           {/* Show icons when collapsed, or full items when expanded */}
           {collapsed ? (
             // Show only icons when collapsed
-            managementItems.filter(item => item.show).map((item) => (
-              <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
-                <ListItemButton
-                  onClick={() => handleItemClick(item.path)}
-                  selected={currentPage === item.path}
-                  sx={{
-                    mx: 1,
-                    borderRadius: 2,
-                    color: 'grey.300',
-                    justifyContent: 'center',
-                    '&.Mui-selected': {
-                      bgcolor: alpha(theme.palette.secondary.main, 0.2),
-                      color: 'secondary.light',
-                      '& .MuiListItemIcon-root': { color: 'secondary.light' }
-                    },
-                    '&:hover': {
-                      bgcolor: alpha(theme.palette.common.white, 0.05)
-                    }
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                    {item.icon}
-                  </ListItemIcon>
-                </ListItemButton>
-              </ListItem>
-            ))
+            managementItems.filter(item => item.show).map((item) => {
+              const moduleItem = item as any;
+              const needsUpgrade = moduleItem.isPro && moduleItem.module && !isEnabled(moduleItem.module);
+              
+              return (
+                <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                  <Tooltip title={needsUpgrade ? `${item.label} (PRO)` : item.label} placement="right">
+                    <ListItemButton
+                      onClick={() => handleItemClick(item.path, false, item.label, moduleItem.module)}
+                      selected={currentPage === item.path}
+                      sx={{
+                        mx: 1,
+                        borderRadius: 2,
+                        color: 'grey.300',
+                        opacity: needsUpgrade ? 0.6 : 1,
+                        justifyContent: 'center',
+                        '&.Mui-selected': {
+                          bgcolor: alpha(theme.palette.secondary.main, 0.2),
+                          color: 'secondary.light',
+                          '& .MuiListItemIcon-root': { color: 'secondary.light' }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.common.white, 0.05)
+                        }
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                        {item.icon}
+                      </ListItemIcon>
+                    </ListItemButton>
+                  </Tooltip>
+                </ListItem>
+              );
+            })
           ) : (
             // Show collapsible list when expanded
             <Collapse in={managementOpen} timeout="auto" unmountOnExit>
-              {managementItems.filter(item => item.show).map((item) => (
-                <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
-                  <ListItemButton
-                    onClick={() => handleItemClick(item.path)}
-                    selected={currentPage === item.path}
-                    sx={{
-                      mx: 2,
-                      borderRadius: 2,
-                      color: 'grey.400',
-                      '&.Mui-selected': {
-                        bgcolor: alpha(theme.palette.secondary.main, 0.2),
-                        color: 'secondary.light',
-                        '& .MuiListItemIcon-root': { color: 'secondary.light' }
-                      },
-                      '&:hover': {
-                        bgcolor: alpha(theme.palette.common.white, 0.05)
-                      }
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                      {item.icon}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={item.label}
-                      primaryTypographyProps={{ fontSize: '0.875rem' }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
+              {managementItems.filter(item => item.show).map((item) => {
+                const moduleItem = item as any;
+                const needsUpgrade = moduleItem.isPro && moduleItem.module && !isEnabled(moduleItem.module);
+                
+                return (
+                  <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      onClick={() => handleItemClick(item.path, false, item.label, moduleItem.module)}
+                      selected={currentPage === item.path}
+                      sx={{
+                        mx: 2,
+                        borderRadius: 2,
+                        color: 'grey.400',
+                        opacity: needsUpgrade ? 0.6 : 1,
+                        '&.Mui-selected': {
+                          bgcolor: alpha(theme.palette.secondary.main, 0.2),
+                          color: 'secondary.light',
+                          '& .MuiListItemIcon-root': { color: 'secondary.light' }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.common.white, 0.05)
+                        }
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                        {item.icon}
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={item.label}
+                        primaryTypographyProps={{ fontSize: '0.875rem' }}
+                      />
+                      {needsUpgrade && (
+                        <Chip
+                          label="PRO"
+                          size="small"
+                          sx={{ 
+                            height: 18,
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            bgcolor: '#fbbf24',
+                            color: '#78350f',
+                            '& .MuiChip-label': { px: 1 }
+                          }}
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })}
             </Collapse>
           )}
 
@@ -630,6 +698,13 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       <ResetDataDialog 
         open={resetDataDialogOpen}
         onClose={() => setResetDataDialogOpen(false)}
+      />
+      
+      {/* Upgrade Modal */}
+      <UpgradeModal 
+        open={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        moduleName={selectedModule}
       />
     </>
   );

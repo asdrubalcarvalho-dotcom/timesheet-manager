@@ -3,11 +3,11 @@
 ## Branch Strategy (Git Flow)
 
 ```
-main (production-ready) ────────────────────────────────────>
-  ↓
-server-sync (deployment staging) ────────────────────────>
-  ↓
-feature/* (short-lived, 1-3 days)
+main (produção / estável) ──────────────────────────────────────────>
+  ↕
+feature/* (novas funcionalidades, 1–3 dias, merge em main via PR)
+  ↕
+hotfix/* (correções urgentes diretamente sobre main)
 ```
 
 ---
@@ -188,19 +188,6 @@ git pull origin main
 
 ---
 
-## 📊 **Estado Atual das Branches**
-
-| Branch | Status | Próxima Ação |
-|--------|--------|--------------|
-| **main** | ✅ Atualizado (merged server-sync) | Base para features |
-| **server-sync** | 🔄 1 commit à frente | Fazer merge em main ou apagar |
-| **export-files-reports** | ⏸️ Pausado | Revisar se ainda necessário |
-| **test** | 🗑️ Obsoleto | Apagar (features já em main) |
-| **Tenant+Planning** | 🗑️ Abandonado | Apagar ou revivar features úteis |
-| ~~Timesheet-task-travels~~ | ✅ Apagado | Merged em main |
-
----
-
 ## 🎯 **Decisões de Hoje (18 Nov 2025)**
 
 1. ✅ **Merged `server-sync` → `main`**
@@ -269,3 +256,24 @@ git tag -l
 git tag -a v1.0.0 -m "Release 1.0.0"
 git push origin v1.0.0
 ```
+
+---
+
+## 🧾 Summary CHANGELOG
+
+### 2025-11-19 / 2025-11-20 — First Production Release (v1.0.0)
+
+- Docker Compose configured for production backend (Laravel), frontend (Vite/React), MySQL and Redis.
+- Nginx configured to serve:
+  - `vendaslive.com` → React frontend (TimePerk Cortex).
+  - `api.vendaslive.com` → Laravel API (`/api/*`).
+- Let's Encrypt certificates (`*.vendaslive.com`) integrated into Nginx containers.
+- Unified CORS:
+  - Laravel (`config/cors.php`) now accepts `https://*.vendaslive.com`.
+  - Nginx handles `OPTIONS` preflight requests and reflects the allowed `Origin`.
+- Production-ready multitenancy:
+  - Endpoints `api/tenants/check-slug`, `api/tenants/register`, and `api/tenants/ping` fully operational.
+  - Automatic creation of tenant databases `timesheet_<TENANT_ID>` with applied tenant migrations.
+- Full tenant onboarding and login flow:
+  - Registration creates the tenant, admin user, and dedicated tenant database.
+  - Login via `https://vendaslive.com` using the `X-Tenant` header and token persisted in `localStorage`.

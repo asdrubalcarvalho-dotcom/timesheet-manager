@@ -33,6 +33,9 @@ class RoleMatrix
             'manage-projects',
             'manage-tasks',
             'manage-locations',
+            
+            // Billing permissions
+            'manage-billing',
         ];
     }
 
