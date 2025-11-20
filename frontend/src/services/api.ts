@@ -35,15 +35,28 @@ const api = axios.create({
 /**
  * Extract tenant slug from subdomain or localStorage
  * Order: subdomain > localStorage
+ * 
+ * Examples:
+ * - Production: acme.timeperk.app → "acme"
+ * - Dev: upg-to-ai.localhost.com → "upg-to-ai"
+ * - Local: localhost:3000 → null (fallback to localStorage)
  */
 const getTenantSlug = (): string | null => {
-  // Try subdomain first (e.g., "acme" from "acme.app.timeperk.com")
+  // Try subdomain first
   const host = window.location.hostname;
   const parts = host.split('.');
   
-  // If subdomain exists and it's not "app" or "www", use it as tenant
-  if (parts.length > 2 && parts[0] !== 'app' && parts[0] !== 'www') {
-    return parts[0];
+  // Reserved subdomains to ignore
+  const reserved = ['app', 'www', 'localhost', 'api'];
+  
+  // Check if we have a subdomain (at least 2 parts: subdomain.domain)
+  if (parts.length >= 2) {
+    const subdomain = parts[0];
+    
+    // If first part is not reserved and not empty, use it as tenant slug
+    if (subdomain && !reserved.includes(subdomain)) {
+      return subdomain;
+    }
   }
   
   // Fall back to localStorage (set during login)
