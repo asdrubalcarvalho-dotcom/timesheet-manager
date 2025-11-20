@@ -31,7 +31,7 @@ export const FeatureProvider: React.FC<FeatureProviderProps> = ({ children }) =>
   const fetchEnabledModules = async () => {
     try {
       setIsLoading(true);
-      const response = await api.get('/features/enabled');
+      const response = await api.get('/api/features/enabled');
       setEnabledModules(response.data.enabled_modules || []);
     } catch (error) {
       console.error('Failed to load enabled modules:', error);

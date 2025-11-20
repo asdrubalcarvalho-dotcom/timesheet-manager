@@ -61,7 +61,7 @@ class BillingServiceProvider extends ServiceProvider
      */
     protected function loadRoutes(): void
     {
-        Route::middleware('api')
+        Route::middleware(['api', 'tenant.initialize'])
             ->prefix('api')
             ->group(__DIR__ . '/../routes/billing.php');
     }

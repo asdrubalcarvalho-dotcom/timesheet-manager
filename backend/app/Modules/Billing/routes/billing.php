@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Billing\Http\Controllers\BillingController;
 use Modules\Billing\Http\Controllers\SubscriptionController;
 use Modules\Billing\Http\Controllers\FeatureController;
-use Modules\Billing\Http\Controllers\WebhookController;
+// use Modules\Billing\Http\Controllers\WebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -12,9 +12,9 @@ use Modules\Billing\Http\Controllers\WebhookController;
 |--------------------------------------------------------------------------
 */
 
-// Stripe Webhooks (no auth required)
-Route::post('/webhooks/stripe', [WebhookController::class, 'handleWebhook'])
-    ->name('billing.webhooks.stripe');
+// Stripe Webhooks (no auth required) - TODO: Install Laravel Cashier
+// Route::post('/webhooks/stripe', [WebhookController::class, 'handleWebhook'])
+//     ->name('billing.webhooks.stripe');
 
 // Authenticated routes
 Route::middleware(['auth:sanctum'])->group(function () {
