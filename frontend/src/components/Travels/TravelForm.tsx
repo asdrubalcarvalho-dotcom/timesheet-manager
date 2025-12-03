@@ -19,6 +19,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import { AutoAwesome as AIIcon } from '@mui/icons-material';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useFeatures } from '../../contexts/FeatureContext';
 import { travelsApi } from '../../services/travels';
 import type { TravelSegment } from '../../services/travels';
 import { projectsApi, techniciansApi } from '../../services/api';
@@ -53,7 +54,8 @@ interface Location {
 }
 
 const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingTravel }) => {
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
+  const { hasAI } = useFeatures();
   const [loading, setLoading] = useState(false);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -210,6 +212,12 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
   };
 
   const handleSuggest = async () => {
+    // Feature gate: AI must be enabled
+    if (!hasAI) {
+      showInfo('AI features are not included in your current plan. Please upgrade to access AI travel suggestions.');
+      return;
+    }
+    
     if (!formData.technician_id || !formData.project_id) {
       showError('Please select technician and project first');
       return;
@@ -389,18 +397,20 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Box sx={{ fontWeight: 600, color: 'text.secondary' }}>Origin</Box>
-                <Tooltip title="Get AI suggestion">
-                  <span>
-                    <IconButton
-                      size="small"
-                      onClick={handleSuggest}
-                      disabled={loadingSuggestion || !formData.technician_id || !formData.project_id}
-                      sx={{ color: '#667eea' }}
-                    >
-                      {loadingSuggestion ? <CircularProgress size={20} /> : <AIIcon />}
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                {hasAI && (
+                  <Tooltip title="Get AI suggestion">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={handleSuggest}
+                        disabled={loadingSuggestion || !formData.technician_id || !formData.project_id}
+                        sx={{ color: '#667eea' }}
+                      >
+                        {loadingSuggestion ? <CircularProgress size={20} /> : <AIIcon />}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
               </Box>
             </Grid>
 

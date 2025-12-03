@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ])
     ->withCommands([
         BootstrapDemoTenant::class,
+        \App\Console\Commands\ExpireTrials::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
         // Registrar middleware de permissões
@@ -29,16 +30,21 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.domain' => \App\Http\Middleware\InitializeTenancyByDomainWithFallback::class,
             'tenant.initialize' => \App\Http\Middleware\InitializeTenancyBySlug::class, // Custom: lookup by slug from X-Tenant header
             'tenant.context' => \App\Http\Middleware\EnsureTenantContext::class,
+            'tenant.set-context' => \App\Http\Middleware\SetTenantContext::class, // Billing: Store tenant in container
             'tenant.auth' => \App\Http\Middleware\EnsureAuthenticatedTenant::class,
             'tenant.ensure-domain' => \App\Http\Middleware\EnsureTenantDomainRegistered::class,
             'tenant.prevent-central-domains' => \App\Http\Middleware\AllowCentralDomainFallback::class,
             'sanctum.tenant' => \App\Http\Middleware\SetSanctumTenantConnection::class,
             'auth.token' => \App\Http\Middleware\AuthenticateViaToken::class,
+            'module' => \App\Http\Middleware\EnsureModuleEnabled::class, // Billing: Feature-based module access control
         ]);
         
         // CRITICAL: Prepend SetSanctumTenantConnection to API middleware group
         // This MUST run BEFORE auth:sanctum to configure tenant DB connection
         $middleware->prependToGroup('api', \App\Http\Middleware\SetSanctumTenantConnection::class);
+        
+        // Register SetTenantContext globally for billing services
+        $middleware->append(\App\Http\Middleware\SetTenantContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

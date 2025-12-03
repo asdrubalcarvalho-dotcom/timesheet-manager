@@ -13,16 +13,13 @@ return new class extends Migration
             return;
         }
 
-        Schema::table('timesheets', function (Blueprint $table) {
-            // Verifica primeiro se o índice existe (para evitar erro)
-            $connection = Schema::getConnection();
-            $indexes = $connection->getDoctrineSchemaManager()
-                                 ->listTableIndexes('timesheets');
-
-            if (array_key_exists('timesheets_technician_id_project_id_date_unique', $indexes)) {
+        try {
+            Schema::table('timesheets', function (Blueprint $table) {
                 $table->dropUnique('timesheets_technician_id_project_id_date_unique');
-            }
-        });
+            });
+        } catch (\Exception $e) {
+            // Índice não existe, ignorar erro
+        }
     }
 
     public function down()

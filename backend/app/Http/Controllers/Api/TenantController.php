@@ -6,10 +6,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Models\PendingTenantSignup;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\TenantEmailVerification;
+use App\Services\Billing\PlanManager;
+use App\Support\EmailRecipient;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -96,6 +102,50 @@ class TenantController extends Controller
                 'timezone'  => $request->timezone ?? 'UTC',
                 'status'    => 'active',
             ]);
+
+            // 5. Start 15-day Enterprise trial with all features enabled
+            $planManager = app(PlanManager::class);
+            $subscription = $planManager->startTrialForTenant($tenant);
+            \Log::info('Trial subscription created', [
+                'tenant_id' => $tenant->id,
+                'plan' => $subscription->plan,
+                'is_trial' => $subscription->is_trial,
+                'trial_ends_at' => $subscription->trial_ends_at,
+            ]);
+
+            // 5b. Create Stripe Customer and BillingProfile (if Stripe enabled)
+            if (config('payments.driver') === 'stripe') {
+                try {
+                    \Stripe\Stripe::setApiKey(config('payments.stripe.secret_key'));
+                    
+                    $stripeCustomer = \Stripe\Customer::create([
+                        'name' => $request->company_name,
+                        'email' => $request->admin_email,
+                        'metadata' => [
+                            'tenant_id' => $tenant->id,
+                            'slug' => $tenant->slug,
+                        ],
+                    ]);
+
+                    \App\Models\BillingProfile::create([
+                        'tenant_id' => $tenant->id,
+                        'gateway' => 'stripe',
+                        'stripe_customer_id' => $stripeCustomer->id,
+                        'billing_email' => $request->admin_email,
+                        'billing_name' => $request->company_name,
+                    ]);
+
+                    \Log::info('Stripe customer created', [
+                        'tenant_id' => $tenant->id,
+                        'customer_id' => $stripeCustomer->id,
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::warning('Stripe customer creation failed (continuing anyway)', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             //  6. Initialize tenant context and seed database
             $adminToken = null;
@@ -316,5 +366,336 @@ class TenantController extends Controller
                 'company' => $tenant->company,
             ]
         ]);
+    }
+
+    /**
+     * Request tenant signup - creates pending signup and sends verification email.
+     */
+    public function requestSignup(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'company_name' => 'required|string|max:255',
+            'slug' => 'required|string|max:100|unique:tenants,slug|unique:pending_tenant_signups,slug|regex:/^[a-z0-9-]+$/',
+            'admin_name' => 'required|string|max:255',
+            'admin_email' => 'required|string|email|max:255|unique:pending_tenant_signups,admin_email',
+            'admin_password' => 'required|string|min:8|confirmed',
+            'industry' => 'nullable|string|max:100',
+            'country' => 'nullable|string|size:2',
+            'timezone' => 'nullable|string|max:50',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Prevent reserved slugs
+        $reservedSlugs = ['admin', 'api', 'system', 'app', 'www', 'mail', 'ftp', 'localhost', 'central'];
+        if (in_array(strtolower($request->slug), $reservedSlugs)) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => ['slug' => ['This slug is reserved and cannot be used.']]
+            ], 422);
+        }
+
+        try {
+            // Clean up any expired pending signups for this email
+            PendingTenantSignup::where('admin_email', $request->admin_email)
+                ->where('expires_at', '<', now())
+                ->delete();
+
+            // Create pending signup
+            $verificationToken = PendingTenantSignup::generateToken();
+            
+            $pendingSignup = PendingTenantSignup::create([
+                'company_name' => $request->company_name,
+                'slug' => $request->slug,
+                'admin_name' => $request->admin_name,
+                'admin_email' => $request->admin_email,
+                'password_hash' => Hash::make($request->admin_password),
+                'verification_token' => $verificationToken,
+                'industry' => $request->industry,
+                'country' => $request->country,
+                'timezone' => $request->timezone ?? 'UTC',
+                'expires_at' => Carbon::now()->addHours(24),
+            ]);
+
+            // Build verification URL
+            $frontendUrl = config('app.frontend_url', config('app.url'));
+            $verificationUrl = $frontendUrl . '/verify-signup?token=' . $verificationToken;
+
+            // Send verification email
+            $recipient = new EmailRecipient($request->admin_email, $request->admin_name);
+            $recipient->notify(new TenantEmailVerification($verificationUrl, $request->company_name));
+
+            \Log::info('Pending tenant signup created', [
+                'slug' => $request->slug,
+                'email' => $request->admin_email,
+                'expires_at' => $pendingSignup->expires_at,
+            ]);
+
+            return response()->json([
+                'status' => 'pending',
+                'message' => 'Verification email sent successfully',
+                'email' => $request->admin_email,
+                'expires_in_hours' => 24,
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Pending tenant signup failed', [
+                'slug' => $request->slug ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Signup request failed',
+                'error' => app()->environment('local')
+                    ? $e->getMessage()
+                    : 'An error occurred during signup. Please try again.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify email and complete tenant registration.
+     */
+    public function verifySignup(Request $request): JsonResponse
+    {
+        $token = $request->input('token');
+
+        if (!$token) {
+            return response()->json([
+                'message' => 'Verification token is required',
+            ], 400);
+        }
+
+        try {
+            // Find pending signup
+            $pendingSignup = PendingTenantSignup::where('verification_token', $token)->first();
+
+            if (!$pendingSignup) {
+                return response()->json([
+                    'message' => 'Invalid verification token',
+                    'error' => 'not_found',
+                ], 404);
+            }
+
+            // Check if already verified
+            if ($pendingSignup->verified) {
+                return response()->json([
+                    'message' => 'This email has already been verified',
+                    'error' => 'already_verified',
+                ], 400);
+            }
+
+            // Check if expired
+            if ($pendingSignup->isExpired()) {
+                $pendingSignup->delete();
+                return response()->json([
+                    'message' => 'Verification link has expired. Please start the registration process again.',
+                    'error' => 'expired',
+                ], 400);
+            }
+
+            // Check if slug was taken in the meantime
+            if (Tenant::where('slug', $pendingSignup->slug)->exists()) {
+                return response()->json([
+                    'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
+                    'error' => 'slug_taken',
+                ], 409);
+            }
+
+            // All checks passed - create the tenant using existing logic
+            $tenant = $this->createTenantFromPendingSignup($pendingSignup);
+
+            // Mark as verified and delete pending signup
+            $pendingSignup->delete();
+
+            \Log::info('Tenant created from verified signup', [
+                'slug' => $tenant->slug,
+                'email' => $tenant->owner_email,
+            ]);
+
+            // Build login URL
+            $baseDomain = config('app.domain', 'localhost:8082');
+            $loginUrl = (app()->environment('local') ? 'http://' : 'https://') 
+                . $pendingSignup->slug . '.' . $baseDomain . '/login?email=' 
+                . urlencode($pendingSignup->admin_email);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Email verified successfully! Your workspace has been created.',
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'slug' => $tenant->slug,
+                    'name' => $tenant->name,
+                ],
+                'login_url' => $loginUrl,
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Email verification failed', [
+                'token' => $token,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Verification failed',
+                'error' => app()->environment('local')
+                    ? $e->getMessage()
+                    : 'An error occurred during verification. Please try again or contact support.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Create tenant from verified pending signup (extracted from register method).
+     */
+    private function createTenantFromPendingSignup(PendingTenantSignup $pendingSignup): Tenant
+    {
+        // Base domain for tenant URLs (frontend)
+        $baseDomain = config('app.domain', 'localhost:3000');
+
+        // 1. Create Tenant in central database
+        $tenant = Tenant::create([
+            'name'         => $pendingSignup->company_name,
+            'slug'         => $pendingSignup->slug,
+            'owner_email'  => $pendingSignup->admin_email,
+            'status'       => 'active',
+            'plan'         => 'trial',
+            'timezone'     => $pendingSignup->timezone,
+            'trial_ends_at'=> now()->addDays(14),
+        ]);
+
+        $tenant->refresh();
+
+        // 2. Get database name
+        $databaseName = $tenant->getInternal('db_name');
+
+        // 3. Create tenant database
+        DB::statement("CREATE DATABASE IF NOT EXISTS `{$databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+        // 4. Run tenant migrations (MUST be done before accessing tenant tables)
+        try {
+            Artisan::call('tenants:migrate', ['--tenants' => $tenant->id]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to run tenant migrations', [
+                'tenant_id' => $tenant->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Continue anyway - migrations might have partially run
+        }
+
+        // 5. Create Company record in tenant database
+        $tenant->run(function () use ($pendingSignup, $tenant) {
+            Company::create([
+                'tenant_id' => $tenant->id,
+                'name'      => $pendingSignup->company_name,
+                'industry'  => $pendingSignup->industry,
+                'country'   => $pendingSignup->country,
+                'timezone'  => $pendingSignup->timezone,
+                'status'    => 'active',
+            ]);
+        });
+
+        // 6. Start trial subscription (in central database)
+        $planManager = app(PlanManager::class);
+        $planManager->startTrialForTenant($tenant);
+
+        // 7. Create Stripe customer if enabled
+        if (config('payments.driver') === 'stripe') {
+            try {
+                \Stripe\Stripe::setApiKey(config('payments.stripe.secret_key'));
+                
+                $stripeCustomer = \Stripe\Customer::create([
+                    'name' => $pendingSignup->company_name,
+                    'email' => $pendingSignup->admin_email,
+                    'metadata' => [
+                        'tenant_id' => $tenant->id,
+                        'slug' => $tenant->slug,
+                    ],
+                ]);
+
+                \App\Models\BillingProfile::create([
+                    'tenant_id' => $tenant->id,
+                    'gateway' => 'stripe',
+                    'stripe_customer_id' => $stripeCustomer->id,
+                    'billing_email' => $pendingSignup->admin_email,
+                    'billing_name' => $pendingSignup->company_name,
+                ]);
+            } catch (\Exception $e) {
+                \Log::warning('Stripe customer creation failed', [
+                    'tenant_id' => $tenant->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // 7. Configure tenant connection
+        config(['database.connections.tenant' => [
+            'driver' => 'mysql',
+            'host' => config('database.connections.mysql.host'),
+            'port' => config('database.connections.mysql.port'),
+            'database' => $databaseName,
+            'username' => config('database.connections.mysql.username'),
+            'password' => config('database.connections.mysql.password'),
+            'unix_socket' => config('database.connections.mysql.unix_socket'),
+            'charset' => config('database.connections.mysql.charset'),
+            'collation' => config('database.connections.mysql.collation'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => config('database.connections.mysql.options', []),
+        ]]);
+
+        // 8. Initialize tenant and create admin user
+        $tenant->run(function () use ($pendingSignup, $tenant, $databaseName) {
+            // Set tenant connection
+            config(['database.connections.tenant.database' => $databaseName]);
+            DB::purge('tenant');
+            DB::reconnect('tenant');
+            DB::setDefaultConnection('tenant');
+            
+            // Run migrations
+            \Artisan::call('migrate', [
+                '--path'  => 'database/migrations/tenant',
+                '--force' => true,
+            ]);
+
+            // Seed roles and permissions
+            \Artisan::call('db:seed', [
+                '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
+                '--force' => true,
+            ]);
+
+            // Create owner user
+            $owner = User::create([
+                'name'              => $pendingSignup->admin_name,
+                'email'             => $pendingSignup->admin_email,
+                'password'          => $pendingSignup->password_hash, // Already hashed
+                'email_verified_at' => now(), // Email already verified
+                'role'              => 'Owner',
+            ]);
+
+            $owner->assignRole('Owner');
+
+            // Create Technician record
+            \App\Models\Technician::create([
+                'name'       => $owner->name,
+                'email'      => $owner->email,
+                'role'       => 'owner',
+                'phone'      => null,
+                'user_id'    => $owner->id,
+                'created_by' => $owner->id,
+                'updated_by' => $owner->id,
+            ]);
+        });
+
+        return $tenant;
     }
 }

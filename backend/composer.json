@@ -8,12 +8,14 @@
     "require": {
         "php": "^8.2",
         "laravel/framework": "^11.31",
+        "laravel/pennant": "^1.18",
         "laravel/sanctum": "^4.2",
         "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.9",
         "spatie/laravel-activitylog": "^4.0",
         "spatie/laravel-permission": "^6.23",
-        "stancl/tenancy": "^3.9"
+        "stancl/tenancy": "^3.9",
+        "stripe/stripe-php": "^19.0"
     },
     "require-dev": {
         "beyondcode/laravel-er-diagram-generator": "^5.0",
@@ -30,7 +32,8 @@
         "psr-4": {
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
-            "Database\\Seeders\\": "database/seeders/"
+            "Database\\Seeders\\": "database/seeders/",
+            "Modules\\": "/../Modules/"
         }
     },
     "autoload-dev": {

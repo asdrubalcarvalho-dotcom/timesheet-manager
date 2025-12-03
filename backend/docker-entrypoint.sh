@@ -1,0 +1,42 @@
+#!/bin/bash
+set -e
+
+echo "🚀 Starting Laravel application..."
+echo "📍 Environment: ${APP_ENV:-production}"
+echo "🔧 Auto-migrate: ${AUTO_MIGRATE:-false}"
+
+# Wait for MySQL to be ready
+echo "⏳ Waiting for MySQL to be ready..."
+until php artisan db:monitor --quiet 2>/dev/null || mysql -h"${DB_HOST}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -e "SELECT 1" &>/dev/null; do
+    echo "   MySQL is unavailable - sleeping"
+    sleep 2
+done
+
+echo "✅ MySQL is ready!"
+
+# Only run migrations if AUTO_MIGRATE=true (default: false for safety)
+if [ "${AUTO_MIGRATE}" = "true" ]; then
+    echo "🔧 AUTO_MIGRATE=true - running automatic setup..."
+    
+    # Setup database permissions for multi-tenancy
+    echo "🔐 Setting up database permissions..."
+    php artisan db:setup-permissions || echo "⚠️  Permission setup skipped (may already exist)"
+    
+    # Run central database migrations
+    echo "📦 Running central database migrations..."
+    php artisan migrate --force --no-interaction
+else
+    echo "🛡️  AUTO_MIGRATE not enabled - skipping automatic migrations"
+    echo "💡 To enable: set AUTO_MIGRATE=true in .env or docker-compose.yml"
+    echo "⚠️  Run migrations manually: docker-compose exec app php artisan migrate"
+fi
+
+# Cache configuration for better performance
+echo "⚡ Caching configuration..."
+php artisan config:cache
+php artisan route:cache
+
+echo "✅ Laravel application ready!"
+
+# Start PHP-FPM
+exec php-fpm

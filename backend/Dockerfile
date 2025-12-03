@@ -25,11 +25,18 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy application files
-COPY . /var/www/html
+# Copy Modules from workspace root FIRST
+COPY Modules /Modules
 
-# Install PHP dependencies
-RUN composer install --optimize-autoloader --no-dev
+# Copy backend application files
+COPY backend /var/www/html
+
+# Install PHP dependencies (keep all packages including Pennant)
+RUN composer install --optimize-autoloader
+
+# Copy entrypoint script (before chown so it gets correct permissions)
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set proper permissions
 RUN chown -R www-data:www-data /var/www/html \
@@ -44,13 +51,6 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.revalidate_freq=60" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.fast_shutdown=1" >> /usr/local/etc/php/conf.d/opcache.ini
 
-# Create startup script
-RUN echo '#!/bin/bash\n\
-php artisan config:cache\n\
-php artisan route:cache\n\
-php artisan view:cache\n\
-php-fpm' > /usr/local/bin/start-laravel.sh && chmod +x /usr/local/bin/start-laravel.sh
-
 EXPOSE 9000
 
-CMD ["/usr/local/bin/start-laravel.sh"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

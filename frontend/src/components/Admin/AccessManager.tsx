@@ -20,6 +20,7 @@ import {
 import api from '../../services/api';
 import AdminLayout from './AdminLayout';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useFeatures } from '../../contexts/FeatureContext';
 
 interface Role {
   id: number;
@@ -34,7 +35,8 @@ interface RolePermissions {
 }
 
 const AccessManager: React.FC = () => {
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
+  const { hasAI } = useFeatures();
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<RolePermissions>({});
@@ -120,6 +122,12 @@ const AccessManager: React.FC = () => {
   };
 
   const fetchAiSuggestion = async () => {
+    // Feature gate: AI must be enabled
+    if (!hasAI) {
+      showInfo('AI features are not included in your current plan. Please upgrade to access AI suggestions.');
+      return;
+    }
+    
     setLoading(true);
     try {
       const res = await api.get('/api/ai/suggestions/access');
@@ -137,9 +145,11 @@ const AccessManager: React.FC = () => {
         <Button variant="contained" onClick={handleMatrixOpen} sx={{ bgcolor: '#1976d2', color: '#fff' }}>
           Edit Matrix (Roles × Permissions)
         </Button>
-        <Button variant="outlined" onClick={fetchAiSuggestion}>
-          AI Suggestion
-        </Button>
+        {hasAI && (
+          <Button variant="outlined" onClick={fetchAiSuggestion}>
+            AI Suggestion
+          </Button>
+        )}
       </Box>
       {aiSuggestion && (
         <Typography color="info.main" sx={{ mb: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>

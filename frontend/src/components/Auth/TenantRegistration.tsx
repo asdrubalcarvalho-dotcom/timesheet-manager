@@ -31,41 +31,43 @@ interface RegistrationFormData {
   timezone?: string;
 }
 
-const getTenancyBaseDomain = (): string => {
-  // Allow override via environment variables
-  const envBase =
-    (import.meta as any).env?.VITE_TENANCY_BASE_DOMAIN ||
-    (import.meta as any).env?.VITE_BASE_DOMAIN;
+// Temporarily disabled - will be used for direct tenant login after email verification
+// const getTenancyBaseDomain = (): string => {
+//   // Allow override via environment variables
+//   const envBase =
+//     (import.meta as any).env?.VITE_TENANCY_BASE_DOMAIN ||
+//     (import.meta as any).env?.VITE_BASE_DOMAIN;
+//
+//   if (envBase && typeof envBase === 'string') {
+//     return envBase;
+//   }
+//
+//   const host = window.location.hostname;
+//
+//   // In production we expect something like app.vendaslive.com
+//   // We want to extract the "vendaslive.com" part so we can build
+//   // tenant subdomains like "demo.vendaslive.com"
+//   if (host.includes('.')) {
+//     const parts = host.split('.');
+//     if (parts.length >= 2) {
+//       return parts.slice(-2).join('.');
+//     }
+//   }
+//
+//   // Sensible default for local development
+//   return 'vendaslive.localhost';
+// };
 
-  if (envBase && typeof envBase === 'string') {
-    return envBase;
-  }
-
-  const host = window.location.hostname;
-
-  // In production we expect something like app.vendaslive.com
-  // We want to extract the "vendaslive.com" part so we can build
-  // tenant subdomains like "demo.vendaslive.com"
-  if (host.includes('.')) {
-    const parts = host.split('.');
-    if (parts.length >= 2) {
-      return parts.slice(-2).join('.');
-    }
-  }
-
-  // Sensible default for local development
-  return 'vendaslive.localhost';
-};
-
-const buildTenantLoginUrl = (slug: string, adminEmail: string): string => {
-  const baseDomain = getTenancyBaseDomain();
-  const protocol = window.location.protocol || 'http:';
-  const port = window.location.port ? `:${window.location.port}` : '';
-  const host = `${slug}.${baseDomain}`;
-  const emailParam = encodeURIComponent(adminEmail);
-
-  return `${protocol}//${host}${port}/login?email=${emailParam}`;
-};
+// Temporarily disabled - will be used for direct tenant login after email verification
+// const buildTenantLoginUrl = (slug: string, adminEmail: string): string => {
+//   const baseDomain = getTenancyBaseDomain();
+//   const protocol = window.location.protocol || 'http:';
+//   const port = window.location.port ? `:${window.location.port}` : '';
+//   const host = `${slug}.${baseDomain}`;
+//   const emailParam = encodeURIComponent(adminEmail);
+//
+//   return `${protocol}//${host}${port}/login?email=${emailParam}`;
+// };
 
 const TenantRegistration: React.FC = () => {
   const navigate = useNavigate();
@@ -84,6 +86,8 @@ const TenantRegistration: React.FC = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string>('');
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [slugError, setSlugError] = useState<string>('');
@@ -122,7 +126,7 @@ const TenantRegistration: React.FC = () => {
       setSlugError('');
       
       try {
-        const response = await api.get(`/tenants/check-slug`, {
+        const response = await api.get(`/api/tenants/check-slug`, {
           params: { slug: formData.slug }
         });
         
@@ -186,7 +190,7 @@ const TenantRegistration: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/tenants/register', {
+      await api.post('/api/tenants/request-signup', {
         company_name: formData.company_name,
         slug: formData.slug,
         admin_name: formData.admin_name,
@@ -198,30 +202,19 @@ const TenantRegistration: React.FC = () => {
         timezone: formData.timezone || 'UTC',
       });
 
-      showSuccess(`Welcome! Your workspace "${formData.company_name}" has been created successfully!`);
-      
-      // Store tenant slug and token
-      localStorage.setItem('tenant_slug', response.data.tenant);
-      if (response.data.admin?.token) {
-        localStorage.setItem('auth_token', response.data.admin.token);
-      }
-
-      // Redirect to tenant-specific login on its subdomain
-      const tenantSlug = response.data.tenant || formData.slug;
-      const loginUrl = buildTenantLoginUrl(tenantSlug, formData.admin_email);
-
-      setTimeout(() => {
-        window.location.href = loginUrl;
-      }, 1500);
+      // Show success state
+      setRegistrationComplete(true);
+      setRegisteredEmail(formData.admin_email);
+      showSuccess('Verification email sent! Please check your inbox.');
 
     } catch (error: any) {
-      console.error('Registration failed:', error);
+      console.error('Signup request failed:', error);
       
       if (error.response?.data?.errors) {
         setErrors(error.response.data.errors);
         showError('Please fix the form errors');
       } else {
-        showError(error.response?.data?.message || 'Registration failed. Please try again.');
+        showError(error.response?.data?.message || 'Signup request failed. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -270,17 +263,49 @@ const TenantRegistration: React.FC = () => {
           mx: 2,
         }}
       >
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <BusinessIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-          <Typography variant="h4" gutterBottom>
-            Create Your Workspace
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Start your 14-day free trial • No credit card required
-          </Typography>
-        </Box>
+        {registrationComplete ? (
+          // Email verification sent screen
+          <Box sx={{ textAlign: 'center' }}>
+            <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
+            <Typography variant="h5" gutterBottom>
+              Check Your Email
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              We've sent a verification link to <strong>{registeredEmail}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Please click the link in the email to complete your registration and activate your workspace.
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 3 }}>
+              The verification link will expire in 24 hours.
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Didn't receive the email? Check your spam folder or{' '}
+              <Button
+                onClick={() => {
+                  setRegistrationComplete(false);
+                  setRegisteredEmail('');
+                }}
+                sx={{ textTransform: 'none', p: 0, minWidth: 'auto', verticalAlign: 'baseline' }}
+              >
+                try again
+              </Button>
+            </Typography>
+          </Box>
+        ) : (
+          // Registration form
+          <>
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
+              <BusinessIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+              <Typography variant="h4" gutterBottom>
+                Create Your Workspace
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Start your 14-day free trial • No credit card required
+              </Typography>
+            </Box>
 
-        <Box component="form" onSubmit={handleSubmit} noValidate>
+            <Box component="form" onSubmit={handleSubmit} noValidate>
           {/* Company Information */}
           <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
             Company Information
@@ -425,7 +450,7 @@ const TenantRegistration: React.FC = () => {
             {loading ? (
               <>
                 <CircularProgress size={20} sx={{ mr: 1 }} />
-                Creating workspace...
+                Sending verification email...
               </>
             ) : (
               'Create Workspace'
@@ -443,7 +468,9 @@ const TenantRegistration: React.FC = () => {
               </Button>
             </Typography>
           </Box>
-        </Box>
+            </Box>
+          </>
+        )}
       </Paper>
     </Box>
   );

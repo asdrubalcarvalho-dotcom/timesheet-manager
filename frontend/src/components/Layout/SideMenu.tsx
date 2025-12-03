@@ -40,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../Auth/AuthContext';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
+import { useFeatures } from '../../contexts/FeatureContext';
 import ResetDataDialog from '../Admin/ResetDataDialog';
 
 interface SideMenuProps {
@@ -53,6 +54,7 @@ const DRAWER_WIDTH_COLLAPSED = 72;
 export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange }) => {
   const { user, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
+  const { hasTravels, hasPlanning, hasAI } = useFeatures(); // Billing-controlled feature flags
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -81,7 +83,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       label: 'Travels',
       icon: <TravelsIcon />,
       path: 'travels',
-      show: hasPermission('view-timesheets') || isAdmin()
+      show: hasTravels && (hasPermission('view-timesheets') || isAdmin())
     },
     {
       id: 'expenses',
@@ -135,14 +137,14 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       label: 'AI Insights',
       icon: <AIIcon />, 
       path: 'ai-insights',
-      show: true
+      show: hasAI
     },
     {
       id: 'planning',
       label: 'Planning',
       icon: <PlanningIcon />,
       path: 'planning',
-      show: true
+      show: hasPlanning
     }
   ];
 
@@ -160,6 +162,13 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       icon: <TeamIcon />,
       path: 'admin-users',
       show: isAdmin()
+    },
+    {
+      id: 'billing',
+      label: 'Billing',
+      icon: <SettingsIcon />,
+      path: 'billing',
+      show: isAdmin() || isOwner()
     },
     {
       id: 'reset-data',
