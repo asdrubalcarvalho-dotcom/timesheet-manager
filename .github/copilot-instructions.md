@@ -1,1948 +1,457 @@
----
-applyTo: '**'
----
+# TimePerk Cortex - AI Coding Agent Instructions
 
-# TimePerk Cortex - AI Agent Instructions
+## 🎯 Project Overview
 
-Multi-tenant Timesheet/Expense/Travel Management (Laravel 11 + React 18 + Docker + Stancl Tenancy)
+**TimePerk Cortex** is a multi-tenant SaaS timesheet and expense management system built with:
+- **Backend**: Laravel 11 API (PHP 8.2+) with Stancl Tenancy
+- **Frontend**: React 18 + TypeScript + Vite + Material-UI
+- **Infrastructure**: Docker Compose with MySQL 8.0, Redis, Nginx
+- **Architecture**: Modular monolith (see `Modules/` directory)
 
-## Essential Architecture
+**Core Business Logic**: Track working hours and expenses per project with multi-stage approval workflows and role-based authorization.
 
-### Stack
-- **Backend**: Laravel 11 + PHP 8.3 (REST API, Sanctum auth)
-- **Frontend**: React 18 + TypeScript + Vite + MUI
-- **Database**: MySQL 8.0 (central DB + isolated tenant DBs with ULID naming)
-- **Tenancy**: Stancl (subdomain in production, X-Tenant header in dev/local)
-- **Containers**: Docker Compose (app, nginx_api, nginx_app, database, redis)
+**Critical Reading**: Before any code changes, read:
+1. `docs/DEVELOPMENT_GUIDELINES.md` - Common errors and patterns
+2. `.copilot/.cursorrules` - Protected code areas and phase control
+3. Relevant spec in `docs/` for the feature you're working on
 
-### Critical Port Mappings
-- **Frontend**: `http://localhost:8082` (nginx_app container port 80 → host 8082)
-- **Backend API**: `http://api.localhost/api` (nginx_api container port 80 → host 80)
-- **MySQL**: `localhost:3307` → container `3306` (user: `timesheet`, pass: `secret`)
-- **Container names**: `timesheet_app`, `timesheet_nginx_api`, `timesheet_nginx_app`, `timesheet_mysql`, `timesheet_redis`
+## 🏗️ Multi-Tenancy Architecture (Critical)
 
-### Multi-Tenancy (ULID-Based)
-- **Central DB**: `timesheet` (tenant metadata, migrations)
-- **Tenant DBs**: `timesheet_{ULID}` (e.g., `timesheet_01K9WMTAY3AKY23HVHQDW9PYGC`)
-- **Resolution**: Production uses subdomain (`acme.timeperk.app`), dev/local uses `X-Tenant: slug` header
-- **Model**: `app/Models/Tenant.php` auto-generates ULID on creation, sets internal DB config via `setInternal('db_name', 'timesheet_' . $tenant->id)`
-- **Frontend**: `frontend/src/services/api.ts` axios interceptor auto-adds `X-Tenant` header from subdomain or localStorage
+### Database Isolation Strategy
+- **Central DB** (`timesheet`): Stores tenant metadata, domains, companies
+- **Tenant DBs** (`timesheet_{slug}`): Isolated business data per tenant
+- Each tenant registration creates a new MySQL database automatically
 
-## Critical Development Patterns
-
-### Backend Controller Pattern (MANDATORY)
+### Tenant Identification (3 Methods)
 ```php
-public function store(StoreTimesheetRequest $request): JsonResponse {
-    $this->authorize('create', Timesheet::class); // Policy check FIRST
-    $validated = $request->validated(); // FormRequest validation
-    // HasAuditFields trait auto-sets created_by/updated_by
-    $timesheet = Timesheet::create($validated);
-    return response()->json($timesheet, 201);
-}
-```
-- **NEVER** skip `$this->authorize()` in mutation methods
-- **NEVER** manually set `created_by`/`updated_by` (use `HasAuditFields` trait)
-- Use FormRequests for validation (see `app/Http/Requests/`)
-
-### Frontend Patterns (MANDATORY)
-```tsx
-// ALWAYS use NotificationContext (never local snackbar state)
-const { showSuccess, showError } = useNotification();
-
-// ALWAYS use api service from services/api.ts (auto-includes X-Tenant + auth)
-import { api } from '../services/api';
-await api.get('/timesheets'); // Headers auto-added
-
-// Validation UX: Button enabled, errors show after submit/blur
-const [submitted, setSubmitted] = useState(false);
-<TextField
-  required
-  error={submitted && !value}
-  helperText={submitted && !value ? 'Required field' : ''}
-/>
-<Button type="submit" variant="contained">Save</Button>
+// 1. Subdomain (production): acme.app.timeperk.com → tenant: "acme"
+// 2. X-Tenant header (dev/API): X-Tenant: slugcheck
+// 3. Query parameter (fallback): ?tenant=test-company
 ```
 
-### Authorization (3 Layers)
-1. **Permission middleware** (`routes/api.php`): `->middleware('permission:approve-timesheets')`
-2. **Custom middleware**: `->middleware(['can.edit.timesheets'])` (accepts edit-own OR edit-all)
-3. **Policy** (in controller): `$this->authorize('update', $timesheet)` - checks ownership, status, project role
+### Key Tenancy Files
+- `config/tenancy.php`: Central configuration with DatabaseTenancyBootstrapper **DISABLED** (manual connection pattern)
+- `app/Tenancy/Bootstrappers/SanctumTenancyBootstrapper.php`: Custom Sanctum integration
+- `routes/api.php`: Central routes (registration, health checks)
+- `routes/tenant.php`: Tenant-scoped business routes
+- `app/Http/Middleware/InitializeTenancyBy*.php`: Custom tenant resolution middleware
 
-### Project Roles (Triple System)
-- `project_members` table has 3 independent role columns per user per project:
-  - `project_role`: timesheet approvals (member|manager)
-  - `expense_role`: expense approvals (member|manager)
-  - `finance_role`: finance approvals (none|member|manager)
-- **Manager Segregation**: Managers CANNOT view/edit/approve other managers' records (filtered in backend queries via `whereHas('user.memberRecords')`)
-- **Self-approval**: Managers CAN approve their own records
+**Modern Tenancy Pattern** (2025):
+- Controllers NO LONGER need manual `->on($connection)` calls
+- Middleware `InitializeTenancyByRequestData` automatically resolves tenant context
+- Simply use Eloquent models directly: `Project::get()` instead of `Project::on($connection)->get()`
+- Tenant context is maintained automatically throughout request lifecycle
 
-## Key Commands
+### Testing Tenants
+- **slugcheck**: Development tenant
+- **test-company**: Demo tenant with sample data (`admin@testcompany.test` / `admin123`)
 
-```bash
-# Development
-docker-compose up --build                    # Rebuild after dependency changes
-docker exec -it timesheet_app bash           # Backend shell
-docker exec -it timesheet_app php artisan migrate
-docker exec -it timesheet_app php artisan test
+**⚠️ CRITICAL**: Modern controllers use Stancl's automatic tenant resolution via middleware. The manual `$connection = tenancy()->initialized ? 'tenant' : config('database.default')` pattern is DEPRECATED. Simply use Eloquent models normally - tenant context is handled by `InitializeTenancyByRequestData` middleware.
 
-# Database check
-docker exec -it timesheet_mysql mysql -u timesheet -psecret -e "SHOW DATABASES;"
-```
+## 🔐 Authorization System (17 Permissions)
 
-## Critical Business Rules
+### Triple-Role Architecture (Non-Standard)
+Each user has **3 independent roles per project** in `project_members` table:
+- `project_role`: Controls timesheet permissions (`member` | `manager` | `none`)
+- `expense_role`: Controls expense permissions (`member` | `manager` | `none`)  
+- `finance_role`: Controls finance approval stage (`member` | `manager` | `none`)
 
-1. **Time Overlap Prevention**: `StoreTimesheetRequest::hasTimeOverlap()` checks ALL technician timesheets on same date (cross-project)
-2. **Status Immutability**: `approved`/`closed` timesheets/expenses cannot be edited (except by Admin)
-3. **Audit Fields**: EVERY migration MUST include `created_by`/`updated_by` FKs to users table
-4. **Owner Protection**: ONE Owner per tenant, cannot be deleted, self-edit only (name field)
-5. **Travel Direction**: NEVER manually set - auto-classified by `TravelSegment::classifyDirection()` based on contract country
+**Example**: User can be timesheet manager but expense member on same project.
 
-## Common Pitfalls
-
-- ❌ Missing Policy check in controllers
-- ❌ Manual auth/tenant headers (use `api` service)
-- ❌ Local snackbar state (use `NotificationContext`)
-- ❌ Container port confusion (external :8082/:80 vs internal :80/:3306)
-- ❌ Manually setting travel `direction`, `travel_date`, or `duration_minutes` (auto-calculated)
-- ❌ Creating migrations without `created_by`/`updated_by` columns
-- ❌ Duplicate validation in controller (belongs in FormRequest)
-
-## Key Files Reference
-
-- **Audit Trait**: `backend/app/Traits/HasAuditFields.php`
-- **Tenant Model**: `backend/app/Models/Tenant.php` (ULID generation + DB config)
-- **API Client**: `frontend/src/services/api.ts` (tenant header injection)
-- **Notifications**: `frontend/src/contexts/NotificationContext.tsx`
-- **Routes**: `backend/routes/api.php` (permission + throttle middleware)
-- **Policies**: `backend/app/Policies/TimesheetPolicy.php` (3-layer auth logic)
-
-## Documentation
-
-See `/docs/` for detailed specs:
-- `MULTI_DATABASE_TENANCY_FIXES.md` - ULID tenant DB architecture
-- `EXPENSE_WORKFLOW_SPEC.md` - Multi-stage approval flow
-- `TRAVEL_TASKS_SPEC.md` - Travel segment management
-- `OWNER_PROTECTION_SYSTEM.md` - Owner role constraints
-
----
-
-# Authorization Architecture (Three-Layer System)
-
-## System Roles (Global to Tenant)
-**Spatie Laravel Permission package - applies tenant-wide:**
-- **Owner**: Supreme tenant admin (created during registration), ALL 21 permissions, CANNOT be deleted, self-edit only (name field)
-- **Admin**: Full access with all 21 permissions (manageable by Owner)
-- **Manager**: System-level role (rarely used - project roles more important)
-- **Technician**: Base user role
-- **Viewer**: Read-only access
-
-**⚠️ IMPORTANT**: NO "finance" permissions at system level - finance is project-scoped!
-
-## Project Roles (Per-Project in project_members table)
-**Triple-role system for granular project-level permissions:**
-
+### Critical Authorization Rules
 ```php
-// Database schema: project_members table
-Schema::create('project_members', function (Blueprint $table) {
-    $table->foreignId('project_id')->constrained()->onDelete('cascade');
-    $table->foreignId('user_id')->constrained()->onDelete('cascade');
-    $table->enum('project_role', ['member', 'manager'])->default('member');  // Timesheets
-    $table->enum('expense_role', ['member', 'manager'])->default('member');  // Expenses
-    $table->enum('finance_role', ['none', 'member', 'manager'])->default('none'); // Finance
-    $table->unique(['project_id', 'user_id']);
-});
-```
-
-**What each role controls:**
-- `project_role`: Timesheet approval workflow (manager can approve member timesheets)
-- `expense_role`: Expense manager approval (manager can approve member expenses)
-- `finance_role`: Finance approval workflow (`finance_review` → `finance_approved` → `paid`)
-
-**Key Helpers** (`backend/app/Models/Project.php`):
-- `isUserProjectManager(User $user)`: Checks `manager_id` FK OR `project_role = 'manager'`
-- `isUserExpenseManager(User $user)`: Checks `manager_id` FK OR `expense_role = 'manager'`
-- `isUserFinanceManager(User $user)`: Checks `finance_role = 'manager'`
-- `getUserProjectRole(User $user)`: Returns `'member'` | `'manager'` | `null`
-
-## Three-Layer Authorization Flow
-**Order matters - checks cascade from general to specific:**
-
-```php
-// routes/api.php
-// Layer 1: Permission gate middleware (system-level permission check)
-Route::middleware('permission:approve-timesheets')->group(function () {
-    // Layer 2: Custom middleware (accepts edit-own OR edit-all)
-    Route::middleware(['can.edit.timesheets'])->group(function () {
-        Route::patch('/timesheets/{id}', [TimesheetController::class, 'update']);
-    });
-});
-
-// Layer 3: Policy authorization (in controller - most granular)
-// TimesheetController::update()
-public function update(UpdateTimesheetRequest $request, Timesheet $timesheet) {
-    $this->authorize('update', $timesheet); // Calls TimesheetPolicy::update()
-    // ... proceed with update
-}
-```
-
-**Policy Implementation** (`backend/app/Policies/TimesheetPolicy.php`):
-```php
-public function update(User $user, Timesheet $timesheet): bool {
-    // Check 1: Status immutability (throws exception if violated)
-    if (in_array($timesheet->status, ['approved', 'closed']) && !$user->hasRole('Admin')) {
-        throw new UnauthorizedException('Approved/closed timesheets cannot be edited...');
+// Manager Segregation: Managers cannot view/edit/approve other managers' records
+// Implementation in Policies (TimesheetPolicy, ExpensePolicy):
+if ($record->technician && $record->technician->user) {
+    $ownerProjectRole = $record->project->getUserProjectRole($record->technician->user);
+    if ($ownerProjectRole === 'manager') {
+        return false; // Block access to other managers' records
     }
-    
-    // Check 2: Ownership (technician can edit own draft/submitted/rejected)
-    if ($timesheet->technician && $timesheet->technician->user_id === $user->id) {
-        return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
-    }
-    
-    // Check 3: Project manager (can edit members' records, NOT other managers)
-    if ($timesheet->project->isUserProjectManager($user)) {
-        if ($timesheet->technician && $timesheet->technician->user) {
-            $ownerRole = $timesheet->project->getUserProjectRole($timesheet->technician->user);
-            if ($ownerRole === 'manager' && $timesheet->technician->user_id !== $user->id) {
-                throw new UnauthorizedException('Managers cannot edit other managers\' timesheets.');
-            }
-        }
-        return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
-    }
-    
-    throw new UnauthorizedException('No permission to edit this timesheet.');
 }
 ```
 
-## Manager Segregation Rules (NON-OBVIOUS)
-**Managers CANNOT view/edit/approve other managers' records:**
+### Key Permission Patterns
+- **Spatie Laravel Permission**: Used for system-level roles (Admin, Manager, Technician)
+- **Laravel Policies**: `TimesheetPolicy`, `ExpensePolicy` for resource authorization
+- **API Responses**: Always include permission metadata for frontend UI control
+- **Status Protection**: Cannot edit/delete `approved` or `closed` records (Admin override)
 
-### Backend Query Filtering
-**Location:** `backend/app/Http/Controllers/Api/TimesheetController.php::index()`
-
+### Form Requests (Validation)
 ```php
-// Managers only receive timesheets from technicians with project_role='member'
-elseif ($request->user()->isProjectManager()) {
-    $query->where(function ($q) use ($allManagedProjectIds, $managerTechnician) {
-        // Include manager's own timesheets
-        if ($managerTechnician) {
-            $q->where('technician_id', $managerTechnician->id);
-        }
-        // Include timesheets from 'member' technicians ONLY
-        $q->orWhere(function ($projectQuery) use ($allManagedProjectIds) {
-            $projectQuery->whereIn('project_id', $allManagedProjectIds)
-                ->whereHas('technician', function ($techQuery) use ($allManagedProjectIds) {
-                    $techQuery->whereNotNull('user_id')
-                        ->whereHas('user.memberRecords', function ($memberQuery) use ($allManagedProjectIds) {
-                            $memberQuery->whereIn('project_id', $allManagedProjectIds)
-                                ->where('project_role', 'member'); // BLOCKS other managers
-                        });
-                });
-        });
-    });
-}
+// app/Http/Requests/StoreTimesheetRequest.php
+// app/Http/Requests/UpdateExpenseRequest.php
+// Use these for professional validation instead of inline validate()
 ```
 
-### Frontend Verification
-**Location:** `frontend/src/components/Timesheets/TimesheetCalendar.tsx`
+## 🗂️ Backend Architecture Patterns
 
-```tsx
-const canViewTimesheet = useCallback((timesheet: Timesheet): boolean => {
-    if (userIsAdmin) return true;
-    if (isTimesheetOwnedByUser(timesheet)) return true;
-    
-    // Managers: trust backend filtering (already excludes other managers)
-    if (userIsManager && user.managed_projects?.includes(timesheet.project_id)) {
-        return true;
-    }
-    return false;
-}, [user, userIsAdmin, userIsManager, isTimesheetOwnedByUser]);
+### Directory Structure
+```
+app/
+├── Http/
+│   ├── Controllers/Api/          # Tenant-scoped API endpoints
+│   ├── Middleware/               # Tenancy + auth middleware
+│   └── Requests/                 # Form validation classes
+├── Models/                       # Eloquent models with tenant scopes
+├── Policies/                     # Authorization policies
+├── Services/                     # Business logic (TimesheetAIService, etc.)
+├── Tenancy/                      # Custom tenancy bootstrappers
+└── Traits/                       # Reusable model traits
 ```
 
-**Self-approval exception**: Managers CAN approve/reject their own timesheets/expenses (no conflict of interest in this domain).
-
----
-
-# Travel Management System (Updated Nov 2025)
-
-## Overview
-**Travel Segments** track technician travel independent from timesheets, with automatic direction classification based on contract country. **Now supports datetime fields** for precise departure/arrival tracking.
-
-## Database Schema
+### Critical Models & Relationships
 ```php
-// travel_segments table (updated with datetime support)
-'technician_id' => FK to technicians (required)
-'project_id' => FK to projects (required - travel always belongs to project)
-'travel_date' => date (auto-populated from start_at)
-'start_at' => dateTime (departure datetime - nullable for backward compatibility)
-'end_at' => dateTime (arrival datetime - nullable)
-'duration_minutes' => unsigned integer (auto-calculated from start_at/end_at)
-'origin_country', 'origin_city' => ISO 3166-1 alpha-2 codes
-'destination_country', 'destination_city'
-'direction' => enum: departure|arrival|project_to_project|internal|other
-'classification_reason' => text explanation
-'status' => enum: planned|completed|cancelled
-'linked_timesheet_entry_id' => nullable (future use)
+User → hasMany(ProjectMember) → belongsTo(Project)
+Timesheet → belongsTo(Technician) → belongsTo(User)
+Expense → belongsTo(Project), belongsTo(User)
+Project → hasMany(ProjectMember) // with project_role, expense_role, finance_role
 ```
 
-## Auto-Calculation Logic (Model Boot)
-**Location:** `backend/app/Models/TravelSegment.php::booted()`
+### Service Classes (Business Logic)
+- `TimesheetAIService`: AI-powered insights and pattern analysis
+- `TimesheetValidationService`: Overlap detection and validation rules
+- `TenantDomainProvisioner`: Automatic domain provisioning
+- `TenantFeatures`: Laravel Pennant feature flag management (see `Modules/README.md`)
+- `PriceCalculator`, `PlanManager`: Billing services (see `docs/Requirements/TASK LIST BILLING.md`)
 
+### Modular Architecture
+**Modules/** directory contains self-contained feature modules with independent routes, controllers, and migrations:
+- `Timesheets/`, `Expenses/`: Core modules (always enabled)
+- `Travels/`, `Planning/`, `AI/`: Conditional modules (plan-based or addon)
+- `Billing/`: Subscription and payment management (Phase 1 only - see .cursorrules)
+
+**Key Rule**: NO direct cross-module dependencies. Communication via billing services or feature flags only.
+
+### Rate Limiting Strategy
 ```php
-protected static function booted() {
-    static::saving(function (TravelSegment $segment) {
-        // Auto-populate travel_date from start_at
-        if ($segment->start_at) {
-            $segment->travel_date = $segment->start_at->toDateString();
-        }
-        
-        // Auto-calculate duration_minutes
-        if ($segment->start_at && $segment->end_at) {
-            $segment->duration_minutes = $segment->end_at->diffInMinutes($segment->start_at);
-        }
-    });
-}
+// routes/api.php throttle groups:
+'throttle:read'     // 200/min - GET requests
+'throttle:create'   // 30/min  - POST requests
+'throttle:edit'     // 20/min  - PUT/PATCH
+'throttle:critical' // 10/min  - Approvals, deletions
+'throttle:login'    // 5/min   - Authentication
 ```
 
-## Direction Classification Logic
-**Auto-classifies based on technician's `worker_contract_country`:**
-- **departure**: Leaving contract country (origin=contract, dest≠contract)
-- **arrival**: Returning to contract country (dest=contract, origin≠contract)
-- **project_to_project**: Between two project countries (both≠contract, different)
-- **internal**: Within contract country (both=contract)
-- **other**: All other cases
+## ⚛️ Frontend Architecture
 
-**Implementation:** `TravelSegment::classifyDirection(origin, destination, contractCountry)`
+### Key Technologies
+- **React Router DOM v6**: Client-side routing
+- **Axios**: API calls with auto-injected `X-Tenant` header
+- **Material-UI v6**: Component library with DataGrid
+- **FullCalendar**: Timesheet calendar interface
+- **Recharts**: Dashboard visualizations
 
-## API Service Pattern
-**Location:** `frontend/src/services/travels.ts`
+### Critical Files
+```
+src/
+├── services/api.ts              # Axios instance with tenant headers
+├── contexts/AuthContext.tsx     # Auth state + permissions
+├── components/
+│   ├── Auth/                    # Login, TenantRegistration
+│   ├── Timesheets/              # TimesheetCalendar (main interface)
+│   ├── Expenses/                # ExpenseManager with approval workflow
+│   ├── Admin/                   # Admin panel (Projects, Tasks, Locations, Users)
+│   └── Approvals/               # ApprovalManager for managers
+└── types/index.ts               # TypeScript interfaces
+```
 
+### Tenant Header Injection (Critical)
 ```typescript
-export const travelsApi = {
-  getAll: (filters: TravelSegmentFilters) => api.get('/travels', { params }),
-  create: (data) => api.post('/travels', data),
-  update: (id, data) => api.put(`/travels/${id}`, data),
-  delete: (id) => api.delete(`/travels/${id}`),
-  getSuggestions: (techId, projectId) => api.get('/travels/suggestions', { params }),
-  getTravelsByDate: (date, techId?) => api.get('/travels/by-date', { params }) // Timesheet integration
+// src/services/api.ts
+const getTenantSlug = (): string | null => {
+  // 1. Try subdomain (e.g., "acme" from "acme.app.timeperk.com")
+  const host = window.location.hostname;
+  const parts = host.split('.');
+  if (parts.length > 2 && parts[0] !== 'app' && parts[0] !== 'www') {
+    return parts[0];
+  }
+  // 2. Fallback to localStorage (set during login)
+  return localStorage.getItem('tenant_slug');
 };
-```
 
-## Backend Validation (Updated)
-**Location:** `backend/app/Http/Requests/StoreTravelSegmentRequest.php`
-
-```php
-public function rules(): array {
-    return [
-        'technician_id' => ['required', 'integer', 'exists:technicians,id'],
-        'project_id' => ['required', 'integer', 'exists:projects,id'],
-        'start_at' => ['required', 'date'], // Primary field (replaces travel_date)
-        'end_at' => ['nullable', 'date', 'after_or_equal:start_at'],
-        'origin_country' => ['required', 'string', 'size:2'], // ISO alpha-2
-        'destination_country' => ['required', 'string', 'size:2'],
-        'origin_city' => ['nullable', 'string', 'max:255'],
-        'destination_city' => ['nullable', 'string', 'max:255'],
-        'status' => ['nullable', 'in:planned,completed,cancelled'],
-    ];
-}
-
-// Conditional: If status = 'completed', end_at is required
-```
-
-## AI Suggestions
-**Endpoint:** `GET /travels/suggestions?technician_id={id}&project_id={id}`
-- Suggests origin/destination based on recent travel history
-- Uses statistical analysis (most frequent routes for tech+project)
-- Graceful degradation if AI service unavailable
-
-## Authorization
-- Uses same permissions as timesheets: `create-timesheets`, `edit-own-timesheets`
-- Policies apply ownership rules (technician can only edit own travels)
-- Managers can view/edit team travels (same project role logic)
-
-## Common Pitfalls
-1. **DateTime fields**: Use `start_at` (required) and `end_at` (optional) - `travel_date` auto-populated
-2. **Country codes**: MUST be 2-letter ISO 3166-1 alpha-2 (e.g., 'PT', 'ES', 'FR')
-3. **Project requirement**: Travel ALWAYS needs a project_id (use internal/department projects)
-4. **Contract country**: Stored in `technicians.worker_contract_country`, not users table
-5. **Direction auto-classification**: Don't manually set `direction` - let backend classify via model method
-6. **Duration calculation**: Don't manually set `duration_minutes` - auto-calculated on save
-7. **AI suggestions**: Button disabled until both technician AND project selected
-8. **Status 'completed'**: Requires `end_at` to be set (enforced by validation)
-
----
-
-# Development Workflows
-
-## Critical Developer Commands
-
-```bash
-# Container operations
-docker-compose up --build              # REQUIRED after backend/frontend dependency changes
-docker-compose down                    # Stop all services
-docker exec -it timesheet_app bash     # Enter backend container shell
-
-# Backend operations (run inside container OR prefix with docker exec)
-php artisan migrate                    # Run pending migrations
-php artisan migrate:fresh --seed       # Reset DB + seed demo data
-php artisan test                       # Run PHPUnit test suite
-php artisan db:seed --class=AdminUserSeeder  # Seed admin user only
-
-# Check tenant databases
-docker exec -it timesheet_mysql mysql -u timesheet -psecret -e "SHOW DATABASES;"
-# Should see: timesheet (central), timesheet_01K9X... (tenant DBs)
-
-# Frontend (from host machine)
-cd frontend && npm run dev             # Vite dev server on :3000
-cd frontend && npm run build           # Production build
-cd frontend && npx cypress open        # E2E tests (if configured)
-
-# Access URLs
-# Frontend:  http://localhost:3000
-# Backend:   http://localhost:8080/api
-# Health:    http://localhost:8080/api/health
-```
-
-## Testing Multi-Tenant Access
-```bash
-# Login and get token (returns tenant_slug + auth_token)
-curl -X POST http://localhost:8080/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"acarvalho@upg2ai.com","password":"password","tenant":"upg-to-ai"}'
-
-# Use token + tenant header
-TOKEN="<token_from_login>"
-curl -H "X-Tenant: upg-to-ai" -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/api/projects
-```
-
-## Debugging Common Issues
-1. **Port conflicts**: Check `:8080`, `:3000`, `:3307`, `:6379` not in use
-2. **Tenant not found**: Verify `tenant_slug` exists in central `tenants` table
-3. **Permission denied**: Check user has required role AND permission (use `/api/user` endpoint)
-4. **Time overlap errors**: Check `StoreTimesheetRequest::hasTimeOverlap()` logic
-5. **Missing audit fields**: Ensure model uses `HasAuditFields` trait
-
----
-
-## Audit Fields (MANDATORY FOR ALL TABLES)
-**Every migration MUST include `created_by` and `updated_by` fields:**
-
-```php
-// Migration pattern
-$table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
-$table->foreignId('updated_by')->nullable()->constrained('users')->onDelete('set null');
-
-// Model pattern - use HasAuditFields trait
-use App\Traits\HasAuditFields;
-
-class YourModel extends Model {
-    use HasAuditFields;  // Auto-populates created_by/updated_by on save
-    
-    protected $fillable = ['created_by', 'updated_by', /* ... */];
-}
-```
-
-**Reference:** `backend/app/Traits/HasAuditFields.php`
-
----
-
-# Backend Patterns
-
-## Controller Template (STRICT)
-**Every mutation controller method MUST follow this pattern:**
-
-```php
-// backend/app/Http/Controllers/Api/TimesheetController.php
-public function store(StoreTimesheetRequest $request): JsonResponse {
-    // 1. Policy check FIRST
-    $this->authorize('create', Timesheet::class);
-    
-    // 2. FormRequest validation (includes business rules like time overlap)
-    $validated = $request->validated();
-    
-    // 3. Auto-resolve technician_id if not provided
-    if (!isset($validated['technician_id'])) {
-        $validated['technician_id'] = Technician::where('user_id', auth()->id())->first()->id;
-    }
-    
-    // 4. Create model (HasAuditFields auto-sets created_by/updated_by)
-    $timesheet = Timesheet::create($validated);
-    
-    return response()->json($timesheet, 201);
-}
-```
-
-**NEVER:**
-- Skip `$this->authorize()` calls in mutation methods
-- Manually set `created_by`/`updated_by` (trait handles it)
-- Return raw `$model->toArray()` (use JsonResponse or ApiResource)
-- Duplicate validation logic between FormRequest and Controller
-
-## FormRequest Validation Pattern
-**Location:** `backend/app/Http/Requests/StoreTimesheetRequest.php`
-
-```php
-class StoreTimesheetRequest extends FormRequest {
-    public function rules(): array {
-        return [
-            'project_id' => 'required|exists:projects,id',
-            'date' => 'required|date',
-            'start_time' => 'nullable|date_format:H:i',
-            'end_time' => 'nullable|date_format:H:i|after:start_time',
-            'hours_worked' => 'required|numeric|min:0.25|max:24',
-            'description' => 'required|string|max:1000',
-        ];
-    }
-
-    // Business rule validation (runs AFTER standard rules)
-    public function withValidator($validator) {
-        $validator->after(function ($validator) {
-            if ($this->hasTimeOverlap()) {
-                $validator->errors()->add('time_overlap', 
-                    'Time overlap detected...');
-            }
-        });
-    }
-    
-    private function hasTimeOverlap(): bool {
-        // CRITICAL: Checks if new_start < existing_end AND existing_start < new_end
-        // Applies to ALL technician's timesheets on same date (cross-project)
-    }
-}
-```
-
-## Rate Limiting (Granular per Operation Type)
-**All routes have specific throttle middleware:**
-
-```php
-// backend/routes/api.php
-Route::get('/timesheets', [TimesheetController::class, 'index'])
-    ->middleware('throttle:read'); // 200 requests/min
-
-Route::post('/timesheets', [TimesheetController::class, 'store'])
-    ->middleware('throttle:create'); // 30 requests/min
-
-Route::patch('/timesheets/{id}', [TimesheetController::class, 'update'])
-    ->middleware('throttle:edit'); // 20 requests/min
-
-Route::post('/timesheets/{id}/approve', [TimesheetController::class, 'approve'])
-    ->middleware('throttle:critical'); // 10 requests/min
-```
-
-**Rate Limits:**
-- `read`: 200/min (GET operations)
-- `create`: 30/min (POST operations)
-- `edit`: 20/min (PUT/PATCH operations)
-- `delete`: 10/min (DELETE operations)
-- `critical`: 10/min (approve/reject workflows)
-- `login`: 5/min (authentication)
-
-**Defined in:** `backend/app/Providers/RouteServiceProvider.php::configureRateLimiting()`
-
----
-
-# Frontend Patterns
-
-```php
-// 1. Permission gate (routes/api.php middleware)
-Route::middleware('permission:approve-timesheets')->group(function () { /* ... */ });
-
-// 2. Custom middleware (routes/api.php) - verifies EITHER edit-own OR edit-all permissions
-Route::middleware(['can.edit.timesheets'])->group(function () { /* ... */ });
-
-// 3. Policy authorization (in controller method)
-$this->authorize('update', $timesheet);  // Calls TimesheetPolicy::update()
-
-// 4. Policy implementation - THREE checks (backend/app/Policies/TimesheetPolicy.php)
-public function update(User $user, Timesheet $timesheet): bool {
-    // a) Status immutability check FIRST (throws UnauthorizedException)
-    if (in_array($timesheet->status, ['approved', 'closed']) && !$user->hasRole('Admin')) {
-        throw new UnauthorizedException('Approved or closed timesheets cannot be edited...');
-    }
-    
-    // b) Ownership check (technician.user_id === $user->id)
-    if ($timesheet->technician && $timesheet->technician->user_id === $user->id) {
-        return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
-    }
-    
-    // c) Project manager check (uses project_members.project_role + isUserProjectManager())
-    // IMPORTANTE: Manager PODE editar próprios registos
-    //             Manager NÃO PODE editar registos de OUTROS managers
-    if ($timesheet->project->isUserProjectManager($user)) {
-        // Verificar role do owner antes de permitir edição
-        if ($timesheet->technician && $timesheet->technician->user) {
-            $ownerProjectRole = $timesheet->project->getUserProjectRole($timesheet->technician->user);
-            // Bloqueia se owner for manager E não for o próprio user
-            if ($ownerProjectRole === 'manager' && $timesheet->technician->user_id !== $user->id) {
-                throw new UnauthorizedException('Project Managers cannot edit timesheets from other Project Managers.');
-            }
-        }
-        return in_array($timesheet->status, ['draft', 'submitted', 'rejected']);
-    }
-    
-    throw new UnauthorizedException('You do not have permission to edit this timesheet...');
-}
-```
-
-**Middleware Logic (CanEditTimesheets.php):**
-- Accepts users with **ANY** of: `edit-own-timesheets` OR `edit-all-timesheets`
-- Policy then enforces granular ownership/project membership rules
-- **DO NOT** duplicate permission checks in policies - middleware handles them
-
-### Approval/Rejection Rules (CRÍTICO)
-**Managers PODEM aprovar/rejeitar:**
-- ✅ Os **próprios** timesheets/expenses (self-approval permitido)
-- ✅ Timesheets/expenses de **members** do projeto (via `project_role: 'member'`)
-
-**Managers NÃO PODEM aprovar/rejeitar/visualizar:**
-- ❌ Timesheets/expenses de **outros managers** do mesmo projeto (`project_role: 'manager'`)
-
-**IMPORTANTE:** A segregação entre managers é aplicada em **dois níveis**:
-
-1. **Backend Filtering** (`TimesheetController::index()` - linhas 33-65):
-```php
-// Managers só recebem timesheets de technicians com project_role='member'
-->whereHas('technician', function ($techQuery) use ($allManagedProjectIds) {
-    $techQuery->whereNotNull('user_id')
-        ->whereHas('user.memberRecords', function ($memberQuery) use ($allManagedProjectIds) {
-            $memberQuery->whereIn('project_id', $allManagedProjectIds)
-                ->where('project_role', 'member'); // Bloqueia outros managers
-        });
-});
-```
-
-2. **Frontend Verification** (`TimesheetCalendar.tsx`):
-```tsx
-// canViewTimesheet - Confiar no filtro do backend + verificação local
-const canViewTimesheet = useCallback((timesheet: Timesheet): boolean => {
-    if (userIsAdmin) return true;
-    if (isTimesheetOwnedByUser(timesheet)) return true;
-    
-    // Managers: backend já filtrou, se chegou aqui pode ver
-    if (userIsManager && user.managed_projects?.includes(timesheet.project_id)) {
-        return true;
-    }
-    return false;
-}, [user, userIsAdmin, userIsManager, isTimesheetOwnedByUser]);
-
-// handleEventClick - Verificar se pode EDITAR
-const managesProject = Boolean(userIsManager && user?.managed_projects?.includes(timesheet.project_id));
-const canEdit = isOwner || userIsAdmin || managesProject;
-```
-
-# Frontend Patterns
-
-## Global Notification System (MANDATORY)
-**ALL components MUST use NotificationContext** instead of local snackbar state.
-
-**Component Usage:**
-```tsx
-import { useNotification } from '../../contexts/NotificationContext';
-
-const MyComponent: React.FC = () => {
-  const { showSuccess, showError, showWarning, showInfo } = useNotification();
-  
-  // NO local snackbar state needed - Context handles it!
-  
-  const handleSave = async () => {
-    try {
-      await api.post('/endpoint', data);
-      showSuccess('Item saved successfully');  // ✅ One line
-    } catch (error) {
-      showError('Failed to save item');        // ✅ One line
-    }
-  };
-  
-  // NO <Snackbar> or <AlertSnackbar> in JSX!
-  return <Box>...</Box>;
-};
-```
-
-**Benefits:**
-- ✅ Consistent positioning (top-right, avoids header)
-- ✅ Uniform styling (filled variant, custom colors)
-- ✅ One line of code per notification
-- ✅ Automatic message cleanup
-
-**Migration from Legacy Pattern:**
-1. Import: `import { useNotification } from '../../contexts/NotificationContext';`
-2. Hook: `const { showSuccess, showError } = useNotification();`
-3. Remove: `const [snackbar, setSnackbar] = useState({ ... });`
-4. Replace: `setSnackbar({ ... })` → `showSuccess('...')`
-5. Remove: `<AlertSnackbar>` or `<Snackbar>` from JSX
-
-## API Service Pattern
-**Location:** `frontend/src/services/api.ts`
-
-```tsx
-// Axios instance with auto-authentication and tenant headers
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
-
+// Auto-injected in axios interceptor
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
-  const tenant = getTenantSlug(); // Subdomain OR localStorage
-  
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (tenant) config.headers['X-Tenant'] = tenant;
-  
+  const tenantSlug = getTenantSlug();
+  if (tenantSlug) {
+    config.headers['X-Tenant'] = tenantSlug;
+  }
   return config;
 });
-
-// ALL API calls use this instance - NEVER manually add auth/tenant headers
-export const timesheetsApi = {
-  getAll: () => api.get('/timesheets').then(res => res.data),
-  create: (data) => api.post('/timesheets', data).then(res => res.data)
-};
 ```
 
-## Form Validation UX Pattern
-**Save button ALWAYS enabled - validation shows on blur/submit:**
-
+### Permission-Based UI Rendering
 ```tsx
-const [submitted, setSubmitted] = useState(false);
-
-const handleSave = (e: React.FormEvent) => {
-  e.preventDefault();
-  setSubmitted(true);
-
-  if (!project || !description) {
-    return; // Stop if required fields missing
-  }
-
-  // Proceed with API call
-};
-
-<TextField
-  required
-  label="Description"
-  value={description}
-  onChange={(e) => setDescription(e.target.value)}
-  error={submitted && !description}
-  helperText={submitted && !description ? "Preencha este campo." : ""}
-/>
-
-<Button variant="contained" onClick={handleSave}>
-  SAVE
-</Button>
+// Components must hide/disable actions based on permissions from API
+const { permissions } = timesheet; // Returned from API
+{permissions.canApprove && (
+  <Button onClick={handleApprove}>Approve</Button>
+)}
 ```
 
-**Rules:**
-- Button enabled from the start
-- Show `error` and `helperText` only after user interaction
-- Backend FormRequest still validates as fallback
+## 🚀 Development Workflows
 
----
-
-# Critical Business Rules
-
-## Time Overlap Prevention
-**Location:** `backend/app/Http/Requests/StoreTimesheetRequest.php::hasTimeOverlap()`
-
-```php
-// Checks if new_start < existing_end AND existing_start < new_end
-// Applies to ALL technician's timesheets on same date (cross-project)
-// Returns 409 Conflict: 'time_overlap' => 'Time overlap detected...'
-```
-
-## Status Immutability
-**Timesheets/Expenses with `approved` or `closed` status CANNOT be edited/deleted** (except Admins).
-
-**Status Flow:**
-```
-draft → submitted → approved → closed (manual)
-                 ↓
-              rejected (can return to draft)
-```
-
-**Status `closed`**: Payroll processed (only Admin/Manager can close via `/close` endpoint)
-
-## Auto-increment Time (Frontend UX)
-**Location:** `frontend/src/components/Timesheets/TimesheetCalendar.tsx`
-
-```tsx
-// When start_time selected, end_time auto-increments by 1 hour
-const endTime = startTime.add(1, 'hour');
-// Duration field is readonly (calculated from start/end times)
-```
-
----
-
-# Owner Protection System
-
-## Core Rules
-1. **ONE Owner per tenant** - Created during `/api/tenants/register`
-2. **Cannot be deleted** - 403 error on attempts
-3. **Self-edit only** - Owner can only edit themselves (name field only)
-4. **Hidden from others** - Owners only visible to themselves in user lists
-5. **All permissions** - Owner has every system permission
-
-## Backend Implementation
-**Location:** `backend/app/Http/Controllers/Api/TechnicianController.php`
-
-```php
-// index() - Visibility filtering
-if ($user->hasRole('Owner')) {
-    $technicians = Technician::with(['user.roles'])->get(); // See all
-} else {
-    // Non-Owners don't see Owners
-    $technicians = Technician::whereDoesntHave('user.roles', fn($q) => 
-        $q->where('name', 'Owner')
-    )->get();
-}
-
-// destroy() - Delete protection
-if ($technician->user && $technician->user->hasRole('Owner')) {
-    return response()->json(['message' => 'Owner users cannot be deleted.'], 403);
-}
-```
-
-## Frontend UI
-- **Owner badge**: Gold `#fbbf24`, brown text `#78350f`
-- **Edit disabled**: Except for Owner editing themselves (name only)
-- **Delete disabled**: All Owners (no exceptions)
-- **Location**: `frontend/src/components/Admin/UsersManager.tsx`
-
----
-
-## Key Files Reference
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| Audit Trait | `backend/app/Traits/HasAuditFields.php` | Auto-populates created_by/updated_by |
-| Overlap Validation | `backend/app/Http/Requests/StoreTimesheetRequest.php` | hasTimeOverlap() method |
-| Auth Policies | `backend/app/Policies/TimesheetPolicy.php` | Three-layer authorization logic |
-| Route Protection | `backend/routes/api.php` | Permission + throttle middleware |
-| Auth Hook | `frontend/src/components/Auth/AuthContext.tsx` | isAdmin(), hasPermission() |
-| **Notification Context** | `frontend/src/contexts/NotificationContext.tsx` | **Global notification system (showSuccess, showError, showWarning)** |
-| Time Auto-increment | `frontend/src/components/Timesheets/TimesheetCalendar.tsx:438` | end_time = start.add(1, 'hour') |
-| Calendar Component | `frontend/src/components/Timesheets/TimesheetCalendar.tsx` | FullCalendar with badge system + AI suggestions |
-| Dashboard Component | `frontend/src/components/Dashboard/Dashboard.tsx` | Analytics dashboard with 6 Recharts visualizations |
-| Dashboard Controller | `backend/app/Http/Controllers/Api/DashboardController.php` | Statistics and metrics aggregation |
-| Dashboard Types | `frontend/src/types/index.ts` | DashboardStatistics, ProjectStats, StatusStats, DailyTrend |
-| **Travel Service** | `frontend/src/services/travels.ts` | **Travel API client (getAll, create, update, delete, getSuggestions, getTravelsByDate)** |
-| **Travel Form** | `frontend/src/components/Travels/TravelForm.tsx` | **Travel segment dialog with datetime + AI suggestions** |
-| **Travel Controller** | `backend/app/Http/Controllers/Api/TravelSegmentController.php` | **Travel CRUD + suggestions + by-date endpoint** |
-| **Travel Model** | `backend/app/Models/TravelSegment.php` | **Direction classification + auto-calculate travel_date/duration** |
-| **Travel Request** | `backend/app/Http/Requests/StoreTravelSegmentRequest.php` | **Travel validation rules (ISO country codes, datetime validation)** |
-| Project Helpers | `backend/app/Models/Project.php` | isUserProjectManager, getUserProjectRole, etc. |
-
-## Calendar Features (TimesheetCalendar.tsx)
-### Three-Scope Visibility System
-**Toggle buttons: Mine / Others / All**
-
-**Implementation:**
-```tsx
-// State management
-const [timesheetScope, setTimesheetScope] = useState<'mine' | 'others' | 'all'>('mine');
-
-// Filter logic in visibleTimesheets
-if (timesheetScope === 'mine') {
-  return timesheets.filter(ts => isTimesheetOwnedByUser(ts));
-}
-if (timesheetScope === 'others') {
-  return timesheets.filter(ts => !isTimesheetOwnedByUser(ts));
-}
-return timesheets; // 'all'
-```
-
-### Badge System (Technician Initials)
-**All calendar views show colored badges with technician initials:**
-
-
-**Badge Colors:**
-
-**Implementation (eventDidMount callback):**
-```tsx
-// Extract initials
-const initials = technicianName.split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2);
-
-// Create badge
-const badge = document.createElement('span');
-badge.style.backgroundColor = isOwner ? '#1976d2' : '#757575';
-badge.textContent = initials;
-
-// Insert at appropriate location based on view type
-fcTitle.parentNode.insertBefore(badge, fcTitle); // Month view
-fcContent.appendChild(badge); // Week view
-```
-
-### AI Suggestion System
-**Collapsible AI-powered entry suggestions with localStorage persistence:**
-
-
-**Features:**
-
-**Location:** Lines 211-217 (state), Lines 1200-1250 (UI rendering)
-
-## Dashboard Features (Dashboard.tsx)
-### Analytics & Visualizations
-**Full-featured dashboard with Recharts library for data visualization:**
-
-**Components:**
-- **4 Summary Cards**: Total Hours, Total Expenses, Pending Items, Approved Items
-- **6 Interactive Charts**:
-  1. Hours by Project (Bar Chart)
-  2. Expenses by Project (Bar Chart)
-  3. Timesheets by Status (Pie Chart)
-  4. Expenses by Status (Pie Chart)
-  5. Daily Hours Trend (Line Chart)
-  6. Daily Expenses Trend (Line Chart)
-
-**Data Formatting:**
-```tsx
-// Truncate long project names in charts
-truncateLabel(label, maxLength=20)  // "Mobile App Development" → "Mobile App Dev..."
-
-// Format dates from YYYY-MM-DD to DD/MM
-formatDate(dateString)  // "2025-11-10" → "10/11"
-```
-
-**Custom Tooltips:**
-- **Project charts**: Show full project name + value on hover
-- **Trend charts**: Display formatted date + metric value
-- All monetary values formatted as €X.XX
-
-**Backend Integration:**
-- `GET /api/dashboard/statistics`: Returns 30-day aggregated stats
-- `GET /api/dashboard/top-projects`: Top N projects by hours/expenses
-- **Controller**: `backend/app/Http/Controllers/Api/DashboardController.php`
-- **Role-based data filtering**: Technicians see own data, Managers see team + own, Admins see all
-
-**Location:** `frontend/src/components/Dashboard/Dashboard.tsx`
-
-## Finance Role System (Phase 1 Complete)
-### Overview
-**Finance Role** is the third independent role dimension in the `project_members` table, enabling granular finance approval permissions per project.
-
-### Architecture
-**Triple-Role System:**
-- `project_role`: Controls timesheet approvals ('member' | 'manager')
-- `expense_role`: Controls expense manager approvals ('member' | 'manager')
-- `finance_role`: Controls finance approvals ('none' | 'member' | 'manager')
-
-**Key Characteristics:**
-- **Independent Assignment**: Each user can have different roles for timesheets, expenses, and finance
-- **Project-Level Scope**: Finance role is per-project, not global
-- **Finance Workflow Integration**: Finance managers can approve expenses in `finance_review` and `finance_approved` stages
-
-### Backend Implementation
-
-**Database Schema** (Migration `2025_11_10_211807_add_finance_role_to_project_members_table.php`):
-```php
-$table->enum('finance_role', ['none', 'member', 'manager'])
-      ->default('none')
-      ->after('expense_role');
-```
-
-**AuthController** (`backend/app/Http/Controllers/Api/AuthController.php`):
-```php
-// Added to login() and user() methods
-$projectMemberships = $user->memberRecords()
-    ->select('project_id', 'project_role', 'expense_role', 'finance_role')
-    ->get()
-    ->map(function ($membership) {
-        return [
-            'project_id' => $membership->project_id,
-            'project_role' => $membership->project_role,
-            'expense_role' => $membership->expense_role,
-            'finance_role' => $membership->finance_role,
-        ];
-    });
-// Returns in user object: 'project_memberships' => $projectMemberships
-```
-
-**ProjectController** (`backend/app/Http/Controllers/ProjectController.php`):
-```php
-// addMember() and updateMember() validation
-'finance_role' => 'required|in:member,manager,none'
-
-// Payload includes finance_role for create/update operations
-```
-
-### Frontend Implementation
-
-**User Type Extension** (`frontend/src/components/Auth/AuthContext.tsx`):
-```tsx
-interface User {
-  // ... existing fields
-  project_memberships?: Array<{
-    project_id: number;
-    project_role: 'member' | 'manager';
-    expense_role: 'member' | 'manager';
-    finance_role: 'none' | 'member' | 'manager';
-  }>;
-}
-```
-
-**Project Members Dialog** (`frontend/src/components/Admin/ProjectMembersDialog.tsx`):
-- **3-column role selection**: Timesheet Role | Expense Role | Finance Role
-- Each member card displays 3 independent TextField selects
-- Add member form includes all 3 role dropdowns
-
-**Approval Manager** (`frontend/src/components/Approvals/ApprovalManager.tsx`):
-```tsx
-// Finance role detection logic
-const hasFinanceRoleInProjects = user?.project_memberships?.some(
-  membership => membership.finance_role === 'manager'
-);
-
-const expenseUserRole = isAdmin() 
-  ? 'admin' 
-  : (hasFinancePermissions || isFinanceRole || hasFinanceRoleInProjects ? 'finance' : 'manager');
-```
-
-**Expense Approval Panel** (`frontend/src/components/Approvals/ExpenseApprovalPanel.tsx`):
-- Finance users (`userRole: 'finance'`) can select/approve expenses in:
-  - `finance_review` stage (after expense manager approval)
-  - `finance_approved` stage (before marking as paid)
-
-### User Experience
-
-**Collapsed Sidebar Fix** (`frontend/src/components/Layout/SideMenu.tsx`):
-- Management and Administration sections now show icons when sidebar is collapsed
-- Conditional rendering: `{collapsed ? (show icons) : (show collapsible list)}`
-- All nested items (Team, Projects, Tasks, Admin Dashboard, etc.) remain accessible
-
-**Finance Manager Workflow:**
-1. User assigned `finance_role: 'manager'` in Project Members dialog
-2. User logs in → `project_memberships` loaded with finance role
-3. ApprovalManager detects `hasFinanceRoleInProjects === true`
-4. ExpenseApprovalPanel recognizes `userRole: 'finance'`
-5. Kanban cards in `finance_review` and `finance_approved` columns become selectable
-6. User can approve/reject finance stages and mark expenses as paid
-
-### Testing Checklist
-- [ ] Assign finance_role via Project Members dialog
-- [ ] Verify `project_memberships` in `/api/user` response
-- [ ] Confirm finance manager can select expenses in finance stages
-- [ ] Test collapsed sidebar shows all icons
-- [ ] Verify finance role persists after logout/login
-
----
-
-# Owner Protection System
-
-## Core Rules
-1. **ONE Owner per tenant** - Created during `/api/tenants/register`
-2. **Cannot be deleted** - 403 error on attempts
-3. **Self-edit only** - Owner can only edit themselves (name field only)
-4. **Hidden from others** - Owners only visible to themselves in user lists
-5. **All permissions** - Owner has every system permission
-
-## Backend Implementation
-**Location:** `backend/app/Http/Controllers/Api/TechnicianController.php`
-
-```php
-// index() - Visibility filtering
-if ($user->hasRole('Owner')) {
-    $technicians = Technician::with(['user.roles'])->get(); // See all
-} else {
-    // Non-Owners don't see Owners
-    $technicians = Technician::whereDoesntHave('user.roles', fn($q) => 
-        $q->where('name', 'Owner')
-    )->get();
-}
-
-// destroy() - Delete protection
-if ($technician->user && $technician->user->hasRole('Owner')) {
-    return response()->json(['message' => 'Owner users cannot be deleted.'], 403);
-}
-```
-
-## Frontend UI
-- **Owner badge**: Gold `#fbbf24`, brown text `#78350f`
-- **Edit disabled**: Except for Owner editing themselves (name only)
-- **Delete disabled**: All Owners (no exceptions)
-- **Location**: `frontend/src/components/Admin/UsersManager.tsx`
-
-## Seeder Pattern (CRITICAL)
-**CompleteTenantSeeder MUST use existing Owner, NEVER create new one:**
-
-```php
-private function createUsers(): array
-{
-    // Get existing Owner (created during tenant registration)
-    $owner = User::whereHas('roles', function($q) {
-        $q->where('name', 'Owner');
-    })->first();
-
-    if (!$owner) {
-        throw new \Exception('Owner user not found. Run this seeder only after tenant registration.');
-    }
-
-    // Continue with other users (Admin, Manager, Technician...)
-}
-```
-
-**See full docs:** `docs/OWNER_PROTECTION_SYSTEM.md`
-
----
-
-## Common Pitfalls
-1. **Missing Policy check**: Controllers MUST call `$this->authorize()` before mutations
-2. **Duplicate validation**: Don't re-implement `hasTimeOverlap()` - it's in FormRequest
-3. **Manager segregation**: Managers **CANNOT** view/edit/approve other managers' records - backend filters via `whereHas('user.memberRecords')` + frontend verifies with `canViewTimesheet()`
-4. **Container ports**: Backend external `:8080` (nginx internal `:80`), MySQL `:3307` (internal `:3306`)
-5. **Auth headers**: Frontend uses `api` service from `services/api.ts` - NEVER manually add auth headers
-6. **Status checks**: Always verify timesheet/expense status before allowing edits
-7. **Technician lookup**: Use `where('user_id', auth()->id())` not `where('email', ...)`
-8. **Environment mismatch**: Frontend `VITE_API_URL=http://localhost:8080` from host browser, internal container uses `:80`
-9. **FullCalendar DOM manipulation**: Use `eventDidMount` callback, not `eventContent` - preserve native positioning by inserting elements (don't replace innerHTML)
-10. **Calendar view types**: Different views have different DOM structures (timeGrid vs dayGrid vs list) - always check `info.view.type`
-11. **Self-approval**: Managers CAN approve/reject their own timesheets/expenses (no conflict of interest)
-12. **Role verification order**: Always verify ownership FIRST (`user_id === $user->id`), THEN check role to block managers
-13. **Expense workflow**: Multi-step approval flow uses `finance_review` and `finance_approved` (not plain `approved`) - see `docs/EXPENSE_WORKFLOW_SPEC.md`
-14. **AI Service graceful degradation**: AI suggestion service falls back to statistical analysis if OpenAI unavailable - always handle both modes
-15. **Notification system**: ALWAYS use `NotificationContext` (`showSuccess`, `showError`, `showWarning`) - never create local snackbar state or import Alert/Snackbar from MUI directly
-16. **Manager visibility filtering**: Backend `TimesheetController::index()` filters at query level using `whereHas('technician.user.memberRecords')` - frontend `visibleTimesheets` applies `canViewTimesheet()` as second layer
-17. **Edit permission checks**: Both `handleEventClick` and `handleSubmit` must verify `managesProject` in addition to `isOwner` and `userIsAdmin`
-18. **Finance Role detection**: Finance managers are identified by `project_memberships[].finance_role === 'manager'`, NOT by global permissions or roles
-19. **Sidebar collapsed state**: Management/Administration sections use conditional rendering `{collapsed ? icons : <Collapse>}` - DO NOT rely solely on Collapse component with `in={!collapsed}`
-20. **User object extensions**: Always check `project_memberships` availability before accessing - it's optional and populated on login/auth check
-21. **Tenant header requirement**: All API calls MUST include `X-Tenant` header in local/dev environments - use `api` service from `services/api.ts` which auto-includes it
-22. **Rate limiting**: GET requests limited to 200/min, POST to 30/min, PUT/PATCH to 20/min, DELETE/approve to 10/min - avoid rapid sequential calls, use debouncing for search/filters
-23. **Multi-tenant database**: Each tenant has separate database `timesheet_{slug}` - never hardcode database names, always use tenant context
-24. **System vs Project Roles**: System roles (Owner, Admin, Manager, Technician, Viewer) are GLOBAL tenant-wide via Spatie. Project roles (project_role, expense_role, finance_role) are PER-PROJECT via `project_members` table. NO "finance permissions" at system level!
-25. **Owner Protection**: Owner users CANNOT be deleted or edited by others. Only Owner can edit themselves (name only). Owners are hidden from non-Owner users in lists.
-26. **SideMenu badges**: Only ONE role badge should appear next to user name (Owner or Admin). Remove any duplicate role badge rendering in user info section.
-27. **Travel country codes**: MUST use 2-letter ISO 3166-1 alpha-2 codes (stored in COUNTRIES constant in TravelForm.tsx)
-28. **Travel validation**: TravelForm MUST follow standard validation pattern - button enabled, show errors only after submit/blur
-29. **Direction classification**: NEVER manually set `direction` field - backend auto-classifies via `TravelSegment::classifyDirection()`
-30. **Form validation**: ALWAYS use HTML5 native validation (`component="form"`, `required`, `type="submit"`) - NO manual `submitted` state or conditional `error`/`helperText` (see Validation UX Standard section)
-31. **Button styling**: Use MUI default `color="primary"` - NO gradient backgrounds except in special cases (matches ProjectsManager pattern)
-32. **Attachment downloads**: NEVER use direct storage URLs - use API endpoints with authentication (e.g., `/api/expenses/{id}/attachment`)
-33. **Travel datetime fields**: Use `start_at` (required) and `end_at` (optional) - `travel_date` and `duration_minutes` auto-calculated by model
-34. **Travel status 'completed'**: Requires `end_at` to be set - validation enforced in FormRequest
-35. **Travel integration**: Use `/api/travels/by-date` endpoint for timesheet integration (NOT regular index endpoint)
-
----
-
-# Key Features & Components
-
-## Calendar System (TimesheetCalendar.tsx)
-**FullCalendar-based timesheet entry with AI suggestions**
-
-### Three-Scope Visibility
-```tsx
-// Toggle buttons: Mine / Others / All
-const [timesheetScope, setTimesheetScope] = useState<'mine' | 'others' | 'all'>('mine');
-```
-
-### Technician Badge System
-**Colored badges with initials in all calendar views:**
-```tsx
-// Extract initials and create badge
-const initials = technicianName.split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2);
-badge.style.backgroundColor = isOwner ? '#1976d2' : '#757575';
-```
-
-### AI Suggestion System
-**Collapsible AI-powered entry suggestions with localStorage persistence:**
-- Toggle: `timesheet_ai_suggestions_enabled` (boolean in localStorage)
-- Service: `backend/app/Services/TimesheetAIService.php`
-- Endpoint: `GET /api/suggestions/timesheet?project_id={id}&date={date}`
-- **Graceful degradation**: Falls back to statistical analysis if OpenAI unavailable
-
-## Dashboard (Dashboard.tsx)
-**Analytics with Recharts visualizations:**
-
-**Components:**
-- 4 Summary Cards: Total Hours, Expenses, Pending, Approved
-- 6 Charts: Hours/Expenses by Project (Bar), Status (Pie), Daily Trends (Line)
-
-**Data Formatting:**
-```tsx
-truncateLabel(label, 20)  // "Long Project Name..." 
-formatDate("2025-11-10")  // "10/11"
-```
-
-**Backend:** `GET /api/dashboard/statistics` (30-day aggregated, role-filtered)
-
-## Finance Role System
-**Triple-role per project** (`project_members` table):
-- `project_role`: Timesheet approvals
-- `expense_role`: Expense manager approvals
-- `finance_role`: Finance approvals (`none` | `member` | `manager`)
-
-**Finance Workflow:**
-1. Expense Manager → `finance_review`
-2. Finance Team → `finance_approved`
-3. Payment → `paid`
-
-**Detection:** `user.project_memberships[].finance_role === 'manager'`
-
----
-
-# Common Pitfalls (AVOID THESE)
-
-1. **Missing Policy check**: Controllers MUST call `$this->authorize()` before mutations
-2. **Duplicate validation**: Don't re-implement `hasTimeOverlap()` - it's in FormRequest
-3. **Manager segregation**: Managers CANNOT view/edit/approve other managers' records - backend filters via `whereHas('user.memberRecords')`, frontend uses `canViewTimesheet()`
-4. **Container ports**: Backend external `:8080` (internal `:80`), MySQL `:3307` (internal `:3306`)
-5. **Manual auth headers**: Use `api` service from `services/api.ts` - NEVER manually add headers
-6. **Status checks**: Always verify status before allowing edits (`approved`/`closed` are immutable)
-7. **Technician lookup**: Use `where('user_id', auth()->id())` not `where('email', ...)`
-8. **FullCalendar DOM**: Use `eventDidMount` callback, not `eventContent` - preserve native positioning
-9. **Self-approval**: Managers CAN approve/reject their own records (no conflict)
-10. **Local snackbars**: ALWAYS use `NotificationContext` - never create local snackbar state
-11. **Tenant header**: All API calls need `X-Tenant` (auto-added by `api` service)
-12. **Rate limiting**: GET 200/min, POST 30/min, PATCH 20/min, approve 10/min - use debouncing
-13. **System vs Project Roles**: System roles (Owner, Admin) are GLOBAL via Spatie. Project roles (project_role, expense_role, finance_role) are PER-PROJECT via `project_members` table
-14. **Owner Protection**: Owner CANNOT be deleted or edited by others. Self-edit limited to name only
-15. **Finance permissions**: NO finance permissions at system level - only at project level via `finance_role`
-
----
-
-# Documentation Resources
-
-- **Expense Workflow**: `docs/EXPENSE_WORKFLOW_SPEC.md`
-- **Admin Panel**: `docs/ADMIN_PANEL_IMPLEMENTATION.md`
-- **Permissions Matrix**: `docs/PERMISSION_MATRIX.md`
-- **Development Guide**: `docs/DEVELOPMENT_GUIDELINES.md`
-- **Multi-Tenancy**: `docs/MULTI_DATABASE_TENANCY_FIXES.md`
-- **Travel Timesheets**: `docs/TRAVEL_TIMESHEETS_FEATURE.md`
-
-## Testing & Seeding
+### Docker Commands
 ```bash
-# Run backend tests
-docker exec -it timesheet_app php artisan test
+# Start environment
+docker-compose up -d
 
-# Seed demo data
-docker exec -it timesheet_app php artisan db:seed --class=AdminUserSeeder
+# ⚠️ CRITICAL: Setup database permissions (REQUIRED after first start or down -v)
+docker-compose exec app php artisan db:setup-permissions
 
-# Fresh migration with seeders
-docker exec -it timesheet_app php artisan migrate:fresh --seed
+# Access backend container
+docker-compose exec app bash
+
+# Run migrations (central database)
+docker-compose exec app php artisan migrate
+
+# Run tenant-specific migrations
+docker-compose exec app php artisan tenants:migrate <slug>
+
+# Seed tenant database
+docker-compose exec app php artisan tenants:seed <slug> --class=RolePermissionSeeder
+
+# List all tenants
+docker-compose exec app php artisan tenants:list
 ```
 
----
+### Database Permissions (Multi-Tenancy)
+⚠️ **PROBLEMA RECORRENTE**: Erro "Access denied to database 'timesheet_01XYZ...'" ao criar tenant.
 
-# Quick Reference
+**Causa**: User `timesheet` precisa de permissão `CREATE` para criar tenant databases.
 
-## Key Files
-| Purpose | Location |
-|---------|----------|
-| Audit Trait | `backend/app/Traits/HasAuditFields.php` |
-| Time Overlap | `backend/app/Http/Requests/StoreTimesheetRequest.php::hasTimeOverlap()` |
-| Policies | `backend/app/Policies/TimesheetPolicy.php` |
-| Routes | `backend/routes/api.php` |
-| Notification System | `frontend/src/contexts/NotificationContext.tsx` |
-| API Service | `frontend/src/services/api.ts` |
-| Calendar | `frontend/src/components/Timesheets/TimesheetCalendar.tsx` |
-| Dashboard | `frontend/src/components/Dashboard/Dashboard.tsx` |
-| Project Helpers | `backend/app/Models/Project.php` (isUserProjectManager, getUserProjectRole, etc.) |
-
-## Critical Commands
+**Solução automática** (rodar após `docker-compose up -d` ou após `down -v`):
 ```bash
-# Container rebuild (after dependencies change)
-docker-compose up --build
-
-# Backend shell
-docker exec -it timesheet_app bash
-
-# Run migrations
-docker exec -it timesheet_app php artisan migrate
-
-# Test suite
-docker exec -it timesheet_app php artisan test
-
-# Check tenant databases
-docker exec -it timesheet_mysql mysql -u timesheet -psecret -e "SHOW DATABASES;"
+docker-compose exec app php artisan db:setup-permissions
 ```
 
----
-
-# Validation UX Standard (CRITICAL)
-
-## Form Validation Pattern - HTML5 Native Validation
-**ALWAYS use HTML5 native validation with `required` attribute and form submission:**
-
-### Frontend Pattern (React + MUI)
-```tsx
-const handleSave = async (e?: React.FormEvent) => {
-  if (e) {
-    e.preventDefault(); // Prevent default form submission
-  }
-
-  try {
-    const cleanData = {
-      name: formData.name,
-      description: formData.description || null,
-      // ... other fields
-    };
-
-    if (editingItem) {
-      await api.put(`/items/${editingItem.id}`, cleanData);
-      showSuccess('Item updated successfully');
-    } else {
-      await api.post('/items', cleanData);
-      showSuccess('Item created successfully');
-    }
-    fetchItems();
-    handleCloseDialog();
-  } catch (error: any) {
-    showError(error.response?.data?.message || 'Failed to save item');
-  }
-};
-
-// Form structure
-<Box 
-  component="form" 
-  onSubmit={handleSave}
-  id="item-form"
-  sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}
->
-  <TextField
-    label="Name"
-    fullWidth
-    required  // HTML5 validation - no error/helperText needed
-    value={formData.name}
-    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-  />
-  <TextField
-    label="Description"
-    fullWidth
-    multiline
-    rows={3}
-    value={formData.description}
-    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-  />
-</Box>
-
-// Button in DialogActions
-<DialogActions sx={{ p: 2 }}>
-  <Button onClick={handleCloseDialog}>Cancel</Button>
-  <Button
-    type="submit"
-    form="item-form"
-    variant="contained"
-    color="primary"
-  >
-    {editingItem ? 'Update' : 'Save'}
-  </Button>
-</DialogActions>
+**Solução manual** (se comando falhar):
+```bash
+docker-compose exec database mysql -u root -proot < docker/mysql/init.sql
 ```
 
-### Backend Pattern (Laravel FormRequest)
+**Documentação completa**: `docs/DATABASE_PERMISSIONS.md`
+
+### Artisan Commands (Custom)
+```bash
+# Tenant management
+php artisan tenants:list --status=active
+php artisan tenants:migrate acme --fresh --seed
+php artisan tenants:seed --all
+php artisan tenants:verify {slug}  # Comprehensive tenant health check
+php artisan tenants:delete {slug} --force
+
+# Testing & seeding
+php artisan bootstrap:demo-tenant  # Creates demo tenant with sample data
+php artisan test:email-verification  # Test email flows
+
+# Generate ER diagram
+php artisan generate:erd
+```
+
+### Testing Credentials
+```
+Tenant: test-company
+Email: admin@testcompany.test
+Password: admin123
+```
+
+### Local URLs
+- Frontend: `http://localhost:8082`
+- API: `http://api.localhost` (or `http://localhost:80`)
+- Database: `localhost:3307`
+
+## 📋 Development Guidelines
+
+### Before Modifying Code
+1. **Read spec files first**: `docs/Requirements/`, `docs/*.md`
+2. **Check DEVELOPMENT_GUIDELINES.md**: Avoid common pitfalls
+3. **Verify .cursorrules restrictions**: Protected strategic code areas
+
+### Common Pitfalls (Must Avoid)
 ```php
-class StoreItemRequest extends FormRequest
-{
-    public function authorize(): bool
-    {
-        return true; // Authorization handled in controller via Policy
-    }
+// ❌ WRONG: Duplicate fields in $fillable
+protected $fillable = ['status', 'status']; // Always check existing fields
 
-    public function rules(): array
-    {
-        return [
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'date' => ['required', 'date'],
-            'amount' => ['required', 'numeric', 'min:0'],
-        ];
-    }
-}
+// ❌ WRONG: Conflicting foreign key constraints
+$table->foreignId('task_id')->nullable()->constrained()->onDelete('restrict');
+
+// ✅ CORRECT: Match constraint to nullability
+$table->foreignId('task_id')->constrained()->onDelete('restrict'); // Required
+$table->foreignId('category_id')->nullable()->constrained()->onDelete('set null'); // Optional
 ```
 
-## Validation Rules (MANDATORY)
-
-### Frontend
-1. ✅ **Use `component="form"` on Box** - Enables HTML5 validation
-2. ✅ **Use `onSubmit={handleSave}` on form** - Form submission handler
-3. ✅ **Add `id="form-name"` to form** - For button to reference
-4. ✅ **Use `required` attribute** - Shows native browser tooltips
-5. ✅ **Button `type="submit"`** - Triggers form validation
-6. ✅ **Button `form="form-id"`** - Links button to form (even outside form)
-7. ❌ **NO manual validation** - No `submitted` state, no `error`/`helperText` based on state
-8. ❌ **NO `onClick={handleSave}` on button** - Use form submission instead
-
-### Backend
-1. ✅ **FormRequest validation** - All fields validated in dedicated Request class
-2. ✅ **Controller uses FormRequest** - `store(StoreItemRequest $request)`
-3. ✅ **Policy authorization** - `$this->authorize('create', Item::class)`
-4. ✅ **Consistent error messages** - Simple messages without "!"
-
-## Button Styling (Consistent Across All Forms)
-
-**Standard button style:**
-```tsx
-<Button
-  type="submit"
-  form="item-form"
-  variant="contained"
-  color="primary"
->
-  {editingItem ? 'Update' : 'Save'}
-</Button>
+### Frontend-Backend Validation Sync
+```typescript
+// Frontend validation MUST match backend rules
+// Backend: required|exists:tasks,id
+// Frontend: Must show required field without "None" option
+<TextField select label="Task *" required>
+  <MenuItem value={0}>Select a task</MenuItem> {/* Placeholder, not "None" */}
+  {tasks.map((task) => <MenuItem key={task.id} value={task.id}>{task.name}</MenuItem>)}
+</TextField>
 ```
 
-**NO gradient backgrounds** - Use MUI default `color="primary"`
+### Migration Patterns
+```php
+// For tenant-specific tables: database/migrations/tenant/
+// For central tables: database/migrations/
 
-## Reference Implementations
-- ✅ **ProjectsManager.tsx** - Perfect example (lines 110-140, 330-380)
-- ✅ **ExpenseManager.tsx** - Correct pattern with MUI DatePicker
-- ✅ **TravelForm.tsx** - Updated with DatePicker and HTML5 validation
+// Always include tenant_id in central-referenced tables
+Schema::table('project_members', function (Blueprint $table) {
+    $table->char('tenant_id', 26)->after('id'); // ULID
+    $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
+});
+```
 
-Goal: make all API calls tenant-aware and improve UX safety, without refactoring auth or login.
+## 🔒 Protected Code Areas (from .cursorrules)
 
-### 1) API helper (must use everywhere except login)
-Create `src/lib/apiClient.ts`:
+### Strategic Files (Modify Only When Explicitly Instructed)
+- `backend/app/Models/**`
+- `backend/app/Http/Controllers/**`
+- `backend/app/Providers/**`
+- `backend/config/**`
+- `backend/routes/**`
+- `frontend/src/**`
 
-export type ApiOptions = {
-  method?: string;
-  headers?: Record<string, string>;
-  body?: any;
-  json?: boolean; // default true
-};
+**Exception**: New billing code allowed in:
+- `backend/app/Modules/Billing/**`
+- `backend/app/Services/Billing/**`
+- `frontend/src/api/billing.ts`
+- `frontend/src/contexts/BillingContext.tsx`
+- `frontend/src/components/Billing/**`
 
-export async function api(path: string, opts: ApiOptions = {}) {
-  const base = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
-  const token = localStorage.getItem("token") ?? "";
-  const tenant = localStorage.getItem("tenant_slug") ?? "";
-  const url = `${base}${path}`;
+### New Billing Architecture (Phase Control)
+- **Allowed**: `backend/app/Modules/Billing/**`, `backend/app/Services/Billing/**`
+- **Denied**: `backend/app/OldBilling/**`, `backend/app/Legacy/**`
+- **Spec**: `docs/Requirements/TASK LIST BILLING.md` (authoritative source)
+- **Phase**: Only Phase 1 tasks (core billing) - NO Phase 2 (migration/cleanup)
 
-  const headers: Record<string, string> = {
-    ...(opts.json !== false ? { "Content-Type": "application/json" } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(tenant ? { "X-Tenant": tenant } : {}),
-    ...opts.headers,
-  };
+## 📚 Key Documentation Files
 
-  let body: BodyInit | undefined = undefined;
-  if (opts.json !== false && opts.body && !(opts.body instanceof FormData)) {
-    // For JSON endpoints that require tenant in body, callers pass it explicitly.
-    body = JSON.stringify(opts.body);
-  } else if (opts.body instanceof FormData) {
-    body = opts.body; // Let browser set multipart boundary
-    delete headers["Content-Type"];
-  }
+### Architecture & Specs
+- `docs/MULTITENANCY_IMPLEMENTATION_SUMMARY.md`: Complete tenancy guide
+- `docs/PERMISSION_MATRIX.md`: Authorization rules and role matrix
+- `docs/DEVELOPMENT_GUIDELINES.md`: Common errors and patterns
+- `docs/TENANT_DEPLOYMENT.md`: Deployment and troubleshooting
 
-  const res = await fetch(url, { method: opts.method ?? "GET", headers, body });
-  if (!res.ok) {
-    // Bubble up structured error
-    let detail: any = null;
-    try { detail = await res.json(); } catch {}
-    const err = new Error(`HTTP ${res.status} on ${path}`);
-    (err as any).status = res.status;
-    (err as any).detail = detail;
-    throw err;
-  }
-  const ct = res.headers.get("content-type") || "";
-  return ct.includes("application/json") ? res.json() : res.text();
-}
+### Feature Implementation Guides
+- `docs/ADMIN_PANEL_IMPLEMENTATION.md`: Admin panel structure
+- `docs/EXPENSE_WORKFLOW_SPEC.md`: Multi-stage expense approval
+- `docs/TIMESHEET_VALIDATION_SPEC.md`: Overlap detection rules
+- `docs/PLANNING_MODULE_IMPLEMENTATION.md`: Gantt chart planning
+- `docs/PENNANT_INTEGRATION_IMPLEMENTATION.md`: Feature flag system
+- `docs/OWNER_PROTECTION_SYSTEM.md`: Owner role security patterns
 
-### 2) Replace native fetch calls
-- Replace all `fetch('/api/...')` usages with `api('/api/...', { method, body })`.
-- Keep login using the existing call so it can put `tenant_slug` in the body.
+### Testing & QA
+- `docs/FRONTEND_TENANT_TESTING_GUIDE.md`: Manual testing procedures
+- `docs/tenant_onboarding_tests.md`: Onboarding flow validation
 
-### 3) Expenses & Approvals empty-states
-- Add friendly “No expenses yet” / “No approvals pending” states.
-- Show inline error banners for 4xx/5xx with action hints (“Retry”, “Back to list”).
+## 🎨 Code Style Conventions
 
-### 4) Tenant guard
-- On protected pages, if `localStorage.tenant_slug` is missing, redirect to `/login?reason=missing-tenant`.
+### Laravel Backend
+- Use Form Requests for validation, not inline `validate()`
+- Always authorize with Policies: `$this->authorize('update', $timesheet)`
+- Use explicit database connections in tenant context: `Model::on($connection)`
+- Return permission metadata in API responses for frontend authorization
 
-### 5) Quick E2E
-- Add a Cypress spec: login → create expense (POST /api/expenses) → list → approve/reject (PATCH /api/approvals/:id).
-- Fail the test if any request lacks `X-Tenant`.
+### React Frontend
+- TypeScript strict mode enabled
+- Use functional components with hooks
+- API responses typed in `src/types/index.ts`
+- Material-UI theming in `src/App.tsx`
+- Use `api.ts` instance for all HTTP calls (auto-injects tenant header)
 
-Constraints:
-- Do NOT modify the login POST payload.
-- Do NOT change backend routes or controllers.
-- Keep FormData uploads using getAuthHeaders().
+### Database
+- ULID for tenant IDs (26 chars)
+- Auto-incrementing IDs for business tables
+- Soft deletes not used (hard deletes only)
+- Enum columns for status fields (not string lookup tables)
 
+## 🐛 Debugging Tips
 
-Quick smoke checklist:
-# Frontend
-cd frontend && npm run dev
+### ⚠️ CRITICAL: Docker Container File Sync Issues
 
-# Backend up (Docker already running), API at http://localhost:8080
+**⚠️ REGRA DE OURO: Após qualquer alteração de código, SEMPRE rebuildar containers!**
 
-# UI flow
-# 1) Login as demo admin (ensure tenant_slug persisted)
-# 2) Expenses: create → list → edit → delete
-# 3) Approvals: approve/reject
-# 4) Check DevTools console and network for any request missing X-Tenant
-# 5) Tail backend logs for 4xx/5xx
+**NÃO perder tempo** tentando "consertar" ou "recarregar" - vai direto para rebuild:
 
-
-
-Perfeito 👏 — entendi exatamente o que queres:
-Há um ecrã onde não aplicaram a validação obrigatória (required) no frontend, nem a validação no backend.
-Queres dar instruções claras ao Copilot para ele seguir o padrão existente (como nos teus outros formulários — por exemplo, Timesheets e Expenses).
-
-Aqui tens o texto ideal para colocares no .copilot-instructions.md (ou colar no topo do ficheiro do componente em causa).
-Ele faz o Copilot detetar e aplicar o padrão de validação correto, tanto no frontend como no backend, sem inventar ou mudar o comportamento global.
-
-⸻
-
-
-# 🧭 Validation Standard Instructions (Frontend + Backend)
-
-## Goal
-Apply **consistent validation rules** to all data-entry forms (Timesheets, Expenses, etc.), both **client-side (required fields)** and **server-side (Laravel FormRequest validation)**.
-
-The missing screen must **follow the exact same pattern** already used in:
-- `/frontend/src/components/Timesheets/TimesheetCalendar.tsx`
-- `/frontend/src/components/Expenses/ExpenseManager.tsx`
-- `/backend/app/Http/Requests/StoreTimesheetRequest.php`
-
----
-
-## ✅ Frontend Rules
-Perfeito 👏 — sim, as imagens que mostraste (do formulário Timesheet) estão exatamente corretas e são o comportamento que as instruções deviam garantir.
-Ou seja, o botão “Save” sempre ativo, e os campos obrigatórios só mostram erro quando o utilizador tenta guardar ou sai do campo — tal como na captura que mostraste.
-
-⸻
-
-✅ Confirmação: o padrão certo é este
-	•	Botão ativo desde o início (não desativado preventivamente)
-	•	Campos obrigatórios com required e tooltip "Preencha este campo."
-	•	A validação só aparece depois de tentar submeter ou perder o foco
-	•	A experiência é idêntica nas telas de Timesheets e Expenses
-
-Exatamente como se vê na tua primeira imagem:
-
-o botão azul ativo, o tooltip laranja a dizer “Preencha este campo.”, e o campo com borda destacada.
-
-⸻
-
-⚙️ O que aconteceu com o Copilot
-
-O Copilot interpretou mal o trecho onde dizíamos “disable save until required fields are valid” — ele aplicou literalmente, deixando o botão desativado de início (o que não é o comportamento do projeto).
-
-⸻
-
-🧠 A correção — coloca isto nas tuas instruções (Copilot/Docs)
-
-Substitui o bloco anterior de validação no .copilot-instructions.md por este: 👇
-
-⸻
-
-
-# 🧭 Validation UX Standard (Timesheet / Expense Forms)
-
-## Goal
-Ensure the same validation behavior across all forms:
-✅ Save button is **enabled by default**  
-⚠️ Validation errors appear **only after user interaction (blur or submit)**  
-
----
-
-## Rules
-
-1. **Do NOT disable the Save button at form load.**
-   - The button must remain active from the start.
-   - Validation occurs only on submit or when a required field loses focus.
-
-2. **Show validation messages dynamically:**
-   - On empty required field → show `"Preencha este campo."` (PT) or `"This field is required."` (EN)
-   - Use MUI `error` and `helperText` properties only when the user has interacted.
-
-3. **Frontend code example (MUI + React):**
-```tsx
-const [submitted, setSubmitted] = useState(false);
-
-const handleSave = (e: React.FormEvent) => {
-  e.preventDefault();
-  setSubmitted(true);
-
-  if (!project || !task || !description) {
-    // stop if required fields missing
-    return;
-  }
-
-  // proceed with API call
-};
-
-<TextField
-  required
-  label="Description"
-  value={description}
-  onChange={(e) => setDescription(e.target.value)}
-  error={submitted && !description}
-  helperText={submitted && !description ? "Preencha este campo." : ""}
-/>
-
-<Button
-  variant="contained"
-  color="primary"
-  onClick={handleSave}
->
-  SAVE
-</Button>
-
-	4.	Backend validation must still exist in Laravel FormRequest (as fallback for API calls).
-	5.	Visual pattern must match the Timesheet modal:
-	•	Blue “SAVE” button always visible and enabled
-	•	Tooltip or inline red text only after failed validation
-	•	Input borders highlighted in red for invalid required fields
-
-⸻
-
-Summary for Copilot
-	•	Always keep the Save button enabled.
-	•	Use error and helperText logic — never disable submit.
-	•	Use the same UX as the Timesheet “New Entry” modal shown in design references.
-	•	Backend FormRequest must continue validating the same fields.
-
-
----
-
-# Quick Reference Summary
-
-## Essential Workflows
 ```bash
-# Start development
-docker-compose up --build              # Rebuild containers
-cd frontend && npm run dev             # Frontend on :3000
-
-# Backend operations
-docker exec -it timesheet_app bash     # Enter container
-php artisan migrate                    # Run migrations
-php artisan test                       # Run tests
-
-# Check tenant databases
-docker exec -it timesheet_mysql mysql -u timesheet -psecret -e "SHOW DATABASES;"
+# COMANDO ÚNICO - Use isto SEMPRE após mudanças de código:
+docker-compose down -v && docker-compose up -d --build
 ```
 
-## Access Points
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080/api
-- **MySQL**: localhost:3307 (user: `timesheet`, pass: `secret`)
-- **Demo Login**: `acarvalho@upg2ai.com` / tenant: `upg-to-ai` / password: `password`
+**Sintomas de cache (quando ignorar tentativas de fix):**
+- Mudanças no frontend não aparecem no browser
+- Botões não funcionam após alteração de código
+- API retorna 404 em rotas recém-criadas
+- CORS errors após atualizar `cors.php`
+- Middleware não executa após registro
+- Variáveis `.env` não atualizam
+- 500 errors sem logs após modificações
 
-## Key Patterns to Follow
-1. **Multi-tenancy**: All API calls need `X-Tenant` header (auto-added by `api` service)
-2. **Notifications**: Use `NotificationContext` (`showSuccess`, `showError`) - never local snackbar
-3. **Validation**: Button always enabled, errors show after submit/blur
-4. **Authorization**: Permission middleware → Custom middleware → Policy (3 layers)
-5. **Audit fields**: Use `HasAuditFields` trait (auto-populates `created_by`/`updated_by`)
-6. **Travel Direction**: Never manually set - auto-classified by backend via `TravelSegment::classifyDirection()`
+**Por que acontece:**
+- **Frontend**: Nginx serve build estático em `/usr/share/nginx/html` (não atualiza automaticamente)
+- **Backend**: PHP-FPM com opcache + Laravel config cache
+- **Volumes**: Docker pode cachear arquivos mesmo com bind mounts
+- **Build**: Vite/npm build não é executado em hot-reload
 
-## Common Mistakes to Avoid
-- ❌ Skipping `$this->authorize()` in controllers
-- ❌ Manually adding auth/tenant headers (use `api` service)
-- ❌ Creating local snackbar state (use `NotificationContext`)
-- ❌ Managers editing other managers' records (backend filters this)
-- ❌ Using wrong container ports (external :8080, internal :80)
-- ❌ Hardcoding database names (use tenant context)
-- ❌ Manually setting travel `direction` field (auto-classified)
-- ❌ Manually setting travel `travel_date` or `duration_minutes` (auto-calculated from `start_at`/`end_at`)
+**WORKFLOW CORRETO:**
+1. Editar código (backend ou frontend)
+2. **IMEDIATAMENTE** rodar: `docker-compose down -v && docker-compose up -d --build`
+3. Aguardar 15 segundos (MySQL init)
+4. Testar mudanças
 
-## Documentation
-- **Expense Workflow**: `docs/EXPENSE_WORKFLOW_SPEC.md`
-- **Admin Panel**: `docs/ADMIN_PANEL_IMPLEMENTATION.md`
-- **Permissions**: `docs/PERMISSION_MATRIX.md`
-- **Multi-Tenancy**: `docs/MULTI_DATABASE_TENANCY_FIXES.md`
-- **Travel Tasks**: `docs/TRAVEL_TASKS_SPEC.md`
+**❌ NÃO fazer:**
+- `docker-compose restart` (não rebuilda)
+- Apenas `npm run build` sem rebuild de containers
+- Tentar limpar cache manualmente
+- Modificar mais código antes de validar com rebuild
 
-# 🧭 TimePerk Cortex — Copilot Project Instructions  
-**Tenant-based Timesheet, Expense & Travel Platform**  
-Laravel 11 API • React 18 SPA • Docker Compose • Stancl Tenancy ULID Database Model
+**✅ FAZER:**
+- Rebuild completo após CADA mudança
+- Validar que funcionou antes de próxima alteração
+- Aceitar que rebuild é parte do workflow
 
----
+### Tenant Context Issues
+```php
+// Check current tenant
+dd(tenancy()->initialized, tenant()?->id);
 
-# 1) GLOBAL PRINCIPLES
-
-Copilot must always follow these rules:
-
-1. **Analyze before modifying** — check existing code before suggesting new code.  
-2. **Avoid duplication** — reuse existing FormRequests, Policies, Traits, front‑end components.  
-3. **Respect Multi‑Tenancy** — using the NEW 2025 ULID‑based architecture.  
-4. **Authorization Pipeline** — Permissions → Custom Middleware → Policies.  
-5. **Maintain consistency** — match patterns in `backend/app/…` and `frontend/src/…`.  
-6. **Use NotificationContext** — never create local snackbars.  
-7. **Owner Protection** — Owner cannot be deleted and can only edit their own name.  
-8. **Clean, predictable code** — no inline hacks, no partial patterns.  
-9. **All API calls (except login) must be tenant‑aware**.  
-10. **Validation UX standard** — Save button always enabled, validation only on submit/blur.
-
----
-
-# 2) MULTI‑TENANCY (NEW ARCHITECTURE 2025)
-
-## 2.1 Overview
-
-- **Main DB**: `timesheet`  
-- **Tenant DBs**: `timesheet_{ULID}`  
-- **Tenant resolution**:
-  - Local: via `X-Tenant: {slug}` header  
-  - Production: subdomain `{slug}.domain.tld`  
-
-Copilot must always generate code compatible with this pattern.
-
----
-
-## 2.2 Tenant Registration (Mandatory Pattern)
-
-### Required flow for Copilot suggestions:
-
-1. **Validate request** (slug, admin user, plan, timezone, etc.)  
-2. **Reject reserved slugs** (admin, api, system, app, www, etc.)  
-3. **Create Tenant** in central DB:
-   ```php
-   $tenant = Tenant::create([
-       'name'         => $request->company_name,
-       'slug'         => $request->slug,
-       'owner_email'  => $request->admin_email,
-       'status'       => 'active',
-       'plan'         => $request->plan ?? 'trial',
-       'timezone'     => $request->timezone ?? 'UTC',
-       'trial_ends_at'=> now()->addDays(14),
-       // NO 'data' key - Tenant model's booted() method handles it automatically
-   ]);
-   ```
-   - ULID auto-generated by model  
-   - `booted()` method automatically calls:
-     - `setInternal('db_name', 'timesheet_' . $tenant->id)` → stored as `tenancy_db_name`
-     - `setInternal('db_driver', 'mysql')` → stored as `tenancy_db_driver`
-
-4. **Get database name** from tenant (auto-set by model):
-   ```php
-   $databaseName = $tenant->getInternal('db_name');
-   // getInternal() automatically strips 'tenancy_' prefix
-   // Returns: 'timesheet_01KABC123XYZ...'
-   ```
-
-5. **Create tenant database** manually:
-   ```php
-   DB::statement("CREATE DATABASE IF NOT EXISTS `{$databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-   ```
-   ⚠️ **CRITICAL**: This must happen BEFORE `$tenant->run()`  
-   ⚠️ **DO NOT** manually set config or purge DB - Stancl handles this automatically
-
-6. **Create Company record** in central DB (while still in central context)
-
-7. **Boot tenant context** and seed:
-   ```php
-   $tenant->run(function () use ($request, $tenant, &$adminToken) {
-       // Stancl automatically connects to tenant DB here
-       
-       // Run tenant migrations
-       Artisan::call('migrate', ['--path' => 'database/migrations/tenant', '--force' => true]);
-       
-       // Seed roles & permissions
-       Artisan::call('db:seed', ['--class' => 'RolesAndPermissionsSeeder', '--force' => true]);
-       
-       // Create Owner user
-       $owner = User::create([...]);
-       $owner->assignRole('Owner');
-       
-       // Create Owner technician
-       Technician::create([...]);
-       
-       // Generate API token
-       $adminToken = $owner->createToken('onboarding-token')->plainTextToken;
-   });
-   ```
-
-8. **Return success response** with tenant info, DB name, Owner token, next steps  
-
-### Copilot must NEVER:
-- Create tenant DB based on slug (always use ULID from tenant->id)  
-- Use `Domain::create()` (domains managed automatically)  
-- Manually set `tenant->data` in controller (model's booted() handles it)  
-- Call `config()->set('database.connections.tenant.database', ...)` (Stancl manages this)  
-- Call `DB::purge('tenant')` manually (Stancl bootstrapper handles it)  
-- Use `setInternal('tenancy_db_name', ...)` (duplicates prefix - use `setInternal('db_name', ...)`)  
-
----
-
-# 3) API MULTI‑TENANT RULES (CRITICAL)
-
-All API calls (except login) must include:
-
-```
-X-Tenant: {slug}
-Authorization: Bearer {token}
+// Force tenant context in Tinker
+php artisan tenants:migrate <slug>
+php artisan tinker
+tenancy()->initialize(Tenant::find('01ABC...'));
 ```
 
-Frontend MUST use the shared `api()` client.  
-Copilot must **never** suggest raw fetch/axios calls with manual headers.
-
----
-
-# 4) BACKEND STANDARDS
-
-## 4.1 Controllers
-
-Copilot must:
-
-- Use **FormRequests** for validation  
-- Call `$this->authorize()` before store/update/delete  
-- Never set `created_by` or `updated_by` manually (use `HasAuditFields`)  
-- Always return `JsonResponse`  
-- Never duplicate validation logic already handled in FormRequests  
-
-## 4.2 Policies (Layer 3)
-
-Must enforce:
-
-- Status immutability  
-- Ownership rules  
-- Manager vs member segregation  
-- Finance roles (phase 1 implementation)  
-
-## 4.3 DB Migrations
-
-Every tenant table must include:
-
-```
-created_by
-updated_by
+### API Authentication Errors
+```bash
+# Check Sanctum tokens table (in tenant DB!)
+docker-compose exec database mysql -u timesheet -psecret -e "USE timesheet_slugcheck; SELECT * FROM personal_access_tokens;"
 ```
 
-Use the `HasAuditFields` trait.
-
----
-
-# 5) FRONTEND STANDARDS
-
-## 5.1 API Client Usage
-
-Copilot must use:
-
-```ts
-import { api } from '../lib/apiClient';
-```
-
-Never:
-
-- fetch()
-- Axios without tenant headers
-- Manual Authorization headers
-
-## 5.2 Notification System
-
-Always use:
-
-```ts
-const { showSuccess, showError } = useNotification();
-```
-
-Never create local snackbar state.
-
----
-
-## 5.3 Validation UX (Mandatory)
-
-### Pattern:
-- Save button always enabled  
-- Validation errors appear ONLY after the user submits or blurs  
-
-### Example Copilot MUST follow:
-
-```tsx
-const [submitted, setSubmitted] = useState(false);
-
-<TextField
-  required
-  value={description}
-  onChange={(e) => setDescription(e.target.value)}
-  error={submitted && !description}
-  helperText={submitted && !description ? 'Preencha este campo.' : ''}
-/>
-
-<Button type="submit" variant="contained" color="primary">
-  Save
-</Button>
-```
-
-Copilot must not propose disabled save buttons.
-
----
-
-# 6) ROLE SYSTEM (PROJECT‑SCOPED)
-
-Each project member has:
-
-```
-project_role   = member | manager
-expense_role   = member | manager
-finance_role   = none | member | manager
-```
-
-Managers:
-
-- Can manage members  
-- Cannot see/edit/approve other managers  
-- Can approve their own entries  
-
-Frontend receives memberships via:
-`user.project_memberships`.
-
----
-
-# 7) OWNER PROTECTION SYSTEM
-
-Copilot must enforce:
-
-- Only 1 Owner per tenant  
-- Owner created during tenant registration  
-- Cannot be deleted  
-- Cannot be edited except self‑name  
-- Invisible to non‑owners in lists  
-- Has all permissions  
-
----
-
-# 8) TRAVEL MANAGEMENT (2025)
-
-Copilot must follow updated schema:
-
-- `start_at` (required datetime)  
-- `end_at` (nullable, after or equal)  
-- `travel_date` auto-generated  
-- `duration_minutes` auto-calculated  
-- `direction` auto-classified (never manually set)  
-- ISO 3166‑1 alpha‑2 country codes  
-
----
-
-# 9) DOCKER / DEVELOPMENT
-
-Copilot must align with existing setup:
-
-```
-timesheet_app       (Laravel)
-timesheet_nginx_api (nginx)
-timesheet_mysql     (MySQL, port 3307)
-timesheet_frontend  (React)
-timesheet_redis     (Redis)
-```
-
-Primary commands:
-
-```
-docker-compose up --build
-docker exec -it timesheet_app bash
-php artisan migrate
-php artisan test
+### Frontend Tenant Header Missing
+```javascript
+// Check browser DevTools Network tab → Request Headers
+// Must see: X-Tenant: slugcheck (or tenant from subdomain)
 ```
 
 ---
 
-# 10) COPILOT MUST NEVER:
+## 📝 Quick Reference
 
-- Ignore tenant header requirements  
-- Suggest non‑tenant‑aware DB queries  
-- Create migrations without audit fields  
-- Create local snackbars  
-- Add finance permissions at system level  
-- Bypass Policies  
-- Suggest disabled save buttons  
-- Modify Owner behavior  
-- Break the ULID‑based DB creation model  
+| Task | Command |
+|------|---------|
+| **⚠️ SEMPRE após mudanças** | `docker-compose down -v && docker-compose up -d --build` |
+| Start dev environment | `docker-compose up -d` |
+| View logs | `docker-compose logs -f app` |
+| Run backend tests | `docker-compose exec app php artisan test` |
+| Clear Laravel cache | `docker-compose exec app php artisan optimize:clear` |
+| Register new tenant | `POST /api/tenants/register` (see docs/TENANT_DEPLOYMENT.md) |
 
----
+**⚠️ WORKFLOW OBRIGATÓRIO:**
+1. Editar código
+2. `docker-compose down -v && docker-compose up -d --build`
+3. Aguardar 15s
+4. Testar
 
-# 11) WHEN COPILOT SHOULD ASK FOR CONTEXT
-
-If missing:
-
-- Expected tenant slug  
-- Which role applies in ambiguous cases  
-- Whether environment is local or production  
-
----
-
-# ✔️ END OF FILE — FINALIZED
+**Remember**: Docker cache é o problema #1. Não perder tempo debuggando - rebuildar SEMPRE!

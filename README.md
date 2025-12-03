@@ -175,6 +175,52 @@ curl http://test-company.timeperk.app/api/projects
 
 ---
 
+## 🚀 Quick Start
+
+### Prerequisites
+- Docker & Docker Compose
+- Git
+
+### Initial Setup
+
+```bash
+# 1. Clone and start containers
+git clone <repository-url>
+cd timesheet
+docker-compose up -d
+
+# 2. Setup database permissions (REQUIRED for multi-tenancy)
+docker-compose exec app php artisan db:setup-permissions
+
+# 3. Run migrations
+docker-compose exec app php artisan migrate --seed
+
+# 4. Create first tenant (optional)
+docker-compose exec app php artisan tenants:create
+
+# 5. Access the application
+# Frontend: http://app.localhost:8082
+# API: http://api.localhost
+```
+
+### Common Commands
+
+```bash
+# Check database permissions
+docker-compose exec app php artisan db:setup-permissions
+
+# Force permission reconfiguration
+docker-compose exec app php artisan db:setup-permissions --force
+
+# Create tenant database
+docker-compose exec app php artisan tenants:migrate <tenant-slug>
+
+# Rebuild containers after code changes (IMPORTANT!)
+docker-compose down -v && docker-compose up -d --build
+```
+
+---
+
 ## ⚙️ Technical Architecture
 
 ### Docker Services
@@ -193,6 +239,25 @@ curl http://test-company.timeperk.app/api/projects
 - MySQL: `localhost:3307` (user: `timesheet`, pass: `secret`)
   - Central DB: `timesheet`
   - Tenant DBs: `timesheet_slugcheck`, `timesheet_test-company`
+
+### Database Permissions (Multi-Tenancy)
+
+**Critical**: The `timesheet` MySQL user needs special permissions to create tenant databases:
+
+```bash
+# Automated setup (recommended)
+docker-compose exec app php artisan db:setup-permissions
+
+# Manual setup (if command fails)
+docker-compose exec database mysql -u root -proot < docker/mysql/init.sql
+```
+
+**Permissions granted**:
+- ✅ `CREATE ON *.*` - Create new tenant databases
+- ✅ `ALL ON timesheet_%.*` - Full access to tenant databases
+- ✅ `ALL ON timesheet.*` - Full access to central database
+
+These permissions are automatically applied on first container start via `docker/mysql/init.sql`.
 
 goals:
   - "Generate backend in /backend with Laravel 11 + Sanctum + MySQL"
@@ -651,6 +716,7 @@ GitHub Actions workflow at .github/workflows/build.yml:
 - **[Technical Specifications](docs/ai/TECHNICAL_SPECIFICATIONS.md)** - Detailed technical documentation
 
 ### Multi-Tenancy
+- **[Database Permissions](docs/DATABASE_PERMISSIONS.md)** - ⚠️ **CRITICAL** Setup guide for multi-tenant database permissions (recurring issue)
 - **[Multi-Database Tenancy Fixes](docs/MULTI_DATABASE_TENANCY_FIXES.md)** - ✅ **NEW** Critical fixes for multi-DB tenancy (3/3 tests passing)
 - **[Local Tenancy](docs/local_tenancy.md)** - Header/query-based tenant resolution for local development
 

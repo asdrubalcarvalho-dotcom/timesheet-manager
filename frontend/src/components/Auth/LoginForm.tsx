@@ -216,30 +216,6 @@ export const LoginForm: React.FC = () => {
                 </Box>
               </Box>
 
-              {/* Demo Account */}
-              <Box sx={{ mt: 2, display: 'flex', gap: 1, flexDirection: 'column' }}>
-                <Typography variant="caption" color="text.secondary" align="center">
-                  Demo Account:
-                </Typography>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => {
-                    setEmail('admin@success.com');
-                    setTenantSlug('success1763470193');
-                    setPassword('password123');
-                  }}
-                  disabled={loading}
-                  sx={{ 
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    fontWeight: 'bold',
-                    py: 1
-                  }}
-                >
-                  Owner (Success Demo)
-                </Button>
-              </Box>
-
               {/* Sign up link */}
               <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">

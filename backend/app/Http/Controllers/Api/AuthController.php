@@ -33,7 +33,8 @@ class AuthController extends Controller
         // Initialize tenant context and execute login within tenant database
         return $tenant->run(function () use ($request, $tenant) {
             // MANUAL DATABASE CONNECTION (DatabaseTenancyBootstrapper disabled)
-            $databaseName = $tenant->getInternal('db_name');
+            // Calculate database name from slug (format: timesheet_{slug})
+            $databaseName = 'timesheet_' . str_replace('-', '-', $tenant->id);
             config(['database.connections.tenant.database' => $databaseName]);
             DB::purge('tenant');
             DB::reconnect('tenant');

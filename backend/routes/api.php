@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\TenantDataController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TravelSegmentController;
+use App\Http\Controllers\StripeWebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,9 +36,18 @@ Route::get('health', function () {
 Route::get('healthz', fn() => response()->json(['status' => 'healthy']));
 Route::get('readyz', fn() => response()->json(['status' => 'ready']));
 
+// Stripe webhook (public - signature verified internally)
+Route::post('stripe/webhook', [StripeWebhookController::class, 'handleWebhook']);
+
 // Tenant onboarding (no tenant context required)
 Route::post('tenants/register', [TenantController::class, 'register'])
-    ->middleware('throttle:10,1'); // 10 registrations per minute
+    ->middleware('throttle:10,1'); // 10 registrations per minute (LEGACY - will be deprecated)
+
+Route::post('tenants/request-signup', [TenantController::class, 'requestSignup'])
+    ->middleware('throttle:10,1'); // 10 signup requests per minute
+
+Route::get('tenants/verify-signup', [TenantController::class, 'verifySignup'])
+    ->middleware('throttle:30,1'); // 30 verification attempts per minute
 
 Route::get('tenants/check-slug', [TenantController::class, 'checkSlug'])
     ->middleware('throttle:30,1'); // 30 checks per minute
@@ -61,6 +71,11 @@ Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::get('tenants/{slug}', [TenantController::class, 'show']);
 });
 
+// Public Billing Routes (No auth/tenant required - used by frontend before login)
+Route::prefix('billing')->group(function () {
+    Route::get('gateway', [\App\Modules\Billing\Controllers\BillingController::class, 'getGatewayConfig']);
+});
+
 /*
 |--------------------------------------------------------------------------
 | Tenant-Scoped API Routes
@@ -79,6 +94,32 @@ Route::middleware(['tenant.initialize'])->group(function () {
     Route::middleware(['tenant.initialize', 'auth:sanctum', 'tenant.auth'])->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('user', [AuthController::class, 'user']);
+
+        // Billing Module Routes (New Architecture - Phase 1)
+        Route::prefix('billing')->group(function () {
+            Route::get('summary', [\App\Modules\Billing\Controllers\BillingController::class, 'summary']);
+            Route::post('upgrade-plan', [\App\Modules\Billing\Controllers\BillingController::class, 'upgradePlan']);
+            Route::post('schedule-downgrade', [\App\Modules\Billing\Controllers\BillingController::class, 'scheduleDowngrade']);
+            Route::post('cancel-scheduled-downgrade', [\App\Modules\Billing\Controllers\BillingController::class, 'cancelScheduledDowngrade']);
+            Route::post('toggle-addon', [\App\Modules\Billing\Controllers\BillingController::class, 'toggleAddon']);
+            // DEPRECATED: Direct license increase without payment - now uses checkout flow
+            // Route::post('licenses/increase', [\App\Modules\Billing\Controllers\BillingController::class, 'increaseLicenses'])->middleware('throttle:edit');
+            Route::post('checkout/start', [\App\Modules\Billing\Controllers\BillingController::class, 'checkoutStart']);
+            Route::post('checkout/confirm', [\App\Modules\Billing\Controllers\BillingController::class, 'checkoutConfirm']);
+            
+            // Phase 4: Customer Portal (self-service billing management)
+            Route::get('portal', [\App\Modules\Billing\Controllers\BillingController::class, 'createPortalSession']);
+            
+            // Payment Methods (Stripe card management)
+            Route::get('payment-methods/setup-intent', [\App\Modules\Billing\Controllers\PaymentMethodController::class, 'setupIntent'])->middleware('throttle:read');
+            Route::get('payment-methods', [\App\Modules\Billing\Controllers\PaymentMethodController::class, 'index'])->middleware('throttle:read');
+            Route::post('payment-methods/add', [\App\Modules\Billing\Controllers\PaymentMethodController::class, 'add'])->middleware('throttle:edit');
+            Route::post('payment-methods/default', [\App\Modules\Billing\Controllers\PaymentMethodController::class, 'setDefault'])->middleware('throttle:edit');
+            Route::delete('payment-methods/{paymentMethodId}', [\App\Modules\Billing\Controllers\PaymentMethodController::class, 'destroy'])->middleware('throttle:delete');
+
+            // Phase 3: ERP Invoice Tracking
+            Route::get('invoices/pending-erp', [\App\Modules\Billing\Controllers\BillingController::class, 'getPendingErpInvoices'])->middleware('throttle:read');
+        });
 
         // Protected routes (require authentication) with general rate limiting
         Route::middleware('throttle:api')->group(function () {
@@ -178,8 +219,8 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::delete('locations/{location}', [\App\Http\Controllers\LocationController::class, 'destroy'])->middleware('throttle:delete');
     });
 
-    // AI Suggestions
-    Route::prefix('ai')->group(function () {
+    // AI Suggestions - Requires Enterprise plan + AI addon
+    Route::prefix('ai')->middleware('module:ai')->group(function () {
         Route::get('suggestions/timesheet', [\App\Http\Controllers\SuggestionController::class, 'getTimesheetSuggestions'])->middleware('throttle:read');
         Route::get('suggestions/access', [\App\Http\Controllers\SuggestionController::class, 'getAccessSuggestions'])->middleware('throttle:read');
         Route::post('suggestions/feedback', [\App\Http\Controllers\SuggestionController::class, 'submitFeedback'])->middleware('throttle:create');
@@ -217,8 +258,8 @@ Route::middleware(['tenant.initialize'])->group(function () {
     // Events - CRUD for planning events
     Route::apiResource('events', EventController::class);
 
-    // Travel Segments - Travel management with permissions
-    Route::prefix('travels')->group(function () {
+    // Travel Segments - Requires Team/Enterprise plan or Starter with >2 users
+    Route::prefix('travels')->middleware('module:travels')->group(function () {
         Route::get('/', [TravelSegmentController::class, 'index'])->middleware('throttle:read');
         Route::post('/', [TravelSegmentController::class, 'store'])->middleware(['permission:create-timesheets', 'throttle:create']);
         Route::get('/by-date', [TravelSegmentController::class, 'getTravelsByDate'])->middleware('throttle:read'); // Timesheet integration
@@ -228,7 +269,8 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::delete('/{travelSegment}', [TravelSegmentController::class, 'destroy'])->middleware(['permission:edit-own-timesheets', 'throttle:delete']);
     });
 
-    Route::prefix('planning')->group(function () {
+    // Planning Module - Requires Team/Enterprise plan + Planning addon
+    Route::prefix('planning')->middleware('module:planning')->group(function () {
         Route::get('projects', [\App\Http\Controllers\PlanningController::class, 'indexProjects'])->middleware('throttle:read');
         Route::get('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'showProject']);
         Route::post('projects', [\App\Http\Controllers\PlanningController::class, 'storeProject']);

@@ -30,6 +30,34 @@ Route::middleware([
     Route::post('/logout', [App\Http\Controllers\Api\AuthController::class, 'logout'])->middleware('auth:sanctum');
     Route::get('/user', [App\Http\Controllers\Api\AuthController::class, 'user'])->middleware('auth:sanctum');
 
+    // Feature flags status (Pennant)
+    Route::get('/features', function () {
+        $tenant = App\Services\TenantResolver::resolve();
+        if (!$tenant) {
+            return response()->json(['error' => 'Tenant not found'], 404);
+        }
+        
+        return response()->json([
+            'tenant' => [
+                'id' => $tenant->id,
+                'slug' => $tenant->slug,
+                'name' => $tenant->name,
+                'plan' => $tenant->billing_plan,
+                'subscription' => $tenant->subscription ? [
+                    'plan' => $tenant->subscription->plan,
+                    'user_limit' => $tenant->subscription->user_limit,
+                    'addons' => $tenant->subscription->addons ?? [],
+                ] : null,
+            ],
+            'features' => App\Services\TenantFeatures::all($tenant),
+            'features_database' => \DB::connection('tenant')->table('features')
+                ->where('scope', 'App\\Models\\Tenant|' . $tenant->id)
+                ->get()
+                ->pluck('value', 'name')
+                ->toArray(),
+        ]);
+    });
+
     // Protected tenant routes
     Route::middleware(['auth:sanctum'])->group(function () {
         
@@ -48,6 +76,8 @@ Route::middleware([
 
         // Technicians
         Route::apiResource('technicians', App\Http\Controllers\Api\TechnicianController::class);
+        Route::post('/technicians/{technician}/reactivate', [App\Http\Controllers\Api\TechnicianController::class, 'reactivate'])
+            ->middleware(['role:Owner|Admin', 'throttle:edit']);
 
         // Timesheets
         Route::apiResource('timesheets', App\Http\Controllers\Api\TimesheetController::class);

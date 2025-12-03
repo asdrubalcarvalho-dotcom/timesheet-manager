@@ -13,10 +13,14 @@ dayjs.locale('pt');
 
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { BillingProvider } from './contexts/BillingContext';
+import { FeatureProvider } from './contexts/FeatureContext';
+import RequireFeature from './components/Guards/RequireFeature';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SideMenu from './components/Layout/SideMenu';
 import { LoginForm } from './components/Auth/LoginForm';
 import TenantRegistration from './components/Auth/TenantRegistration';
+import VerifyEmail from './components/Auth/VerifyEmail';
 const TimesheetCalendar = React.lazy(() => import('./components/Timesheets/TimesheetCalendar'));
 const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
 const PlanningGantt = React.lazy(() => import('./components/Planning/PlanningGantt'));
@@ -30,6 +34,8 @@ const LocationsManager = React.lazy(() => import('./components/Admin/LocationsMa
 const UsersManager = React.lazy(() => import('./components/Admin/UsersManager'));
 const AdminAccessManagerPage = React.lazy(() => import('./pages/AdminAccessManager'));
 const TravelsList = React.lazy(() => import('./components/Travels/TravelsList'));
+const BillingPage = React.lazy(() => import('./components/Billing/BillingPage'));
+const PaymentMethodsPage = React.lazy(() => import('./pages/Billing/PaymentMethodsPage'));
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -62,7 +68,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-users' | 'planning' | 'admin-access' | 'travels';
+type Page = 'timesheets' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-users' | 'planning' | 'admin-access' | 'travels' | 'billing' | 'payment-methods';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -75,6 +81,8 @@ const pageToPath: Record<Page, string> = {
   team: '/team',
   planning: '/planning',
   travels: '/travels',
+  billing: '/billing',
+  'payment-methods': '/settings/billing/payment-methods',
   admin: '/admin',
   'admin-projects': '/admin/projects',
   'admin-tasks': '/admin/tasks',
@@ -88,8 +96,15 @@ const pathToPage = (pathname: string): Page => {
     return DEFAULT_PAGE;
   }
 
-  const entry = Object.entries(pageToPath).find(([, path]) => path === pathname);
-  return (entry?.[0] as Page) || DEFAULT_PAGE;
+  // Exact match first
+  const exactMatch = Object.entries(pageToPath).find(([, path]) => path === pathname);
+  if (exactMatch) {
+    return exactMatch[0] as Page;
+  }
+
+  // Partial match for nested routes (e.g., /settings/billing/payment-methods)
+  const partialMatch = Object.entries(pageToPath).find(([, path]) => pathname.startsWith(path));
+  return (partialMatch?.[0] as Page) || DEFAULT_PAGE;
 };
 
 const ModuleLoader: React.FC<{ label?: string }> = ({ label = 'A carregar módulo...' }) => (
@@ -125,6 +140,10 @@ const AppContent: React.FC = () => {
 
   // Handle authentication and routing
   if (!user) {
+    // Show VerifyEmail on /verify-signup route (public route)
+    if (location.pathname === '/verify-signup') {
+      return <VerifyEmail />;
+    }
     // Show TenantRegistration ONLY on /register route
     if (location.pathname === '/register') {
       return <TenantRegistration />;
@@ -144,7 +163,11 @@ const AppContent: React.FC = () => {
       case 'dashboard':
         return <Dashboard />;
       case 'ai-insights':
-        return <AIInsights />;
+        return (
+          <RequireFeature feature="ai">
+            <AIInsights />
+          </RequireFeature>
+        );
       case 'team':
         return (
           <Box sx={{ p: 3 }}>
@@ -153,9 +176,17 @@ const AppContent: React.FC = () => {
           </Box>
         );
       case 'planning':
-        return <PlanningGantt />;
+        return (
+          <RequireFeature feature="planning">
+            <PlanningGantt />
+          </RequireFeature>
+        );
       case 'travels':
-        return <TravelsList />;
+        return (
+          <RequireFeature feature="travels">
+            <TravelsList />
+          </RequireFeature>
+        );
       case 'admin':
         return <AdminDashboard />;
       case 'admin-projects':
@@ -168,6 +199,10 @@ const AppContent: React.FC = () => {
         return <UsersManager />;
       case 'admin-access':
         return <AdminAccessManagerPage />;
+      case 'billing':
+        return <BillingPage />;
+      case 'payment-methods':
+        return <PaymentMethodsPage />;
       default:
         return <TimesheetCalendar />;
     }
@@ -216,7 +251,11 @@ const App: React.FC = () => {
           <CssBaseline />
           <AuthProvider>
             <NotificationProvider>
-              <AppContent />
+              <BillingProvider>
+                <FeatureProvider>
+                  <AppContent />
+                </FeatureProvider>
+              </BillingProvider>
             </NotificationProvider>
           </AuthProvider>
         </LocalizationProvider>

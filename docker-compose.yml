@@ -3,8 +3,8 @@ version: '3.8'
 services:
   app:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: timesheet_app
     restart: unless-stopped
     working_dir: /var/www/html
@@ -63,6 +63,7 @@ services:
       MYSQL_USER: timesheet
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - timesheet-network
 

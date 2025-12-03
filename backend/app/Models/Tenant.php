@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
+use Modules\Billing\Models\Subscription;
 use Stancl\Tenancy\Database\Models\Tenant as BaseTenant;
 use Stancl\Tenancy\Database\Models\Domain;
 use Stancl\Tenancy\Database\Concerns\HasDatabase;
@@ -19,7 +20,16 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     protected $fillable = [
         'id',
         'name',
+        'billing_plan',
         'slug',
+        'stripe_customer_id',
+        'stripe_subscription_id',
+        'active_addons',
+        'subscription_renews_at',
+        'subscription_status',
+        'subscription_last_event',
+        'subscription_last_status_change_at',
+        'is_paused',
         'status',
         'plan',
         'timezone',
@@ -28,13 +38,27 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'deactivated_at',
         'settings',
         'data',
+        // Stripe Tax fields
+        'billing_country',
+        'billing_address',
+        'billing_postal_code',
+        'billing_vat_number',
     ];
 
     protected $casts = [
         'settings' => 'array',
         'data' => 'array',
+        'active_addons' => 'array',
         'trial_ends_at' => 'datetime',
+        'subscription_renews_at' => 'datetime',
+        'subscription_last_status_change_at' => 'datetime',
         'deactivated_at' => 'datetime',
+        'is_paused' => 'boolean',
+        // Stripe Tax fields
+        'billing_country' => 'string',
+        'billing_address' => 'string',
+        'billing_postal_code' => 'string',
+        'billing_vat_number' => 'string',
     ];
 
     /**
@@ -86,6 +110,16 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         return $this->hasOne(Company::class);
     }
 
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class);
+    }
+
+    public function billingProfile(): HasOne
+    {
+        return $this->hasOne(BillingProfile::class, 'tenant_id');
+    }
+
     public function domains(): HasMany
     {
         return $this->hasMany(Domain::class, 'tenant_id');
@@ -96,6 +130,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         return array_merge(parent::getCustomColumns(), [
             'slug',
             'name',
+            'billing_plan',
             'status',
             'plan',
             'timezone',
@@ -104,5 +139,17 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'deactivated_at',
             'settings',
         ]);
+    }
+
+    /**
+     * Billing plan accessor falls back to legacy `plan` column for backward compatibility.
+     */
+    public function getBillingPlanAttribute(?string $value): string
+    {
+        if (! empty($value)) {
+            return $value;
+        }
+
+        return $this->plan ?? 'starter';
     }
 }

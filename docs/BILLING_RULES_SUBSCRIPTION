@@ -1,0 +1,402 @@
+You are working on the TimePerk multi-tenant SaaS (Laravel + React).
+I need you to adjust the billing logic and UI around add-ons and plans.
+Do NOT refactor unrelated code. Do NOT change database schema or routes.
+Only touch what is necessary to implement the rules below.
+
+⸻
+
+1. Current architecture (for context)
+    •	Backend:
+    •	App\Services\Billing\PriceCalculator
+    •	App\Services\Billing\PlanManager
+    •	Modules\Billing\Controllers\BillingController
+    •	config/billing.php
+    •	Frontend:
+    •	BillingPage.tsx
+    •	BillingContext.tsx
+    •	billing.ts (BillingSummary type)
+
+PriceCalculator::calculate(Tenant $tenant) internally calls calculateForTenant($tenant) and returns a structure like:
+
+[
+  'plan'             => 'starter' | 'team' | 'enterprise' | 'trial_enterprise',
+  'is_trial'         => bool,
+  'user_count'       => int,
+  'base_subtotal'    => float,
+  'addons'           => ['planning' => float, 'ai' => float],
+  'total'            => float,
+  'requires_upgrade' => bool,
+  'features'         => [
+      'timesheets' => bool,
+      'expenses'   => bool,
+      'travels'    => bool,
+      'planning'   => bool,
+      'ai'         => bool,
+  ],
+  // plus optional trial + subscription metadata
+]
+
+BillingController::summary() calls PlanManager::getSubscriptionSummary($tenant), which uses PriceCalculator as the single source of truth for pricing.
+
+⸻
+
+2. Business rules to implement
+
+I want the following rules enforced consistently in both backend and frontend:
+
+Rule A – Starter: no add-ons allowed
+    •	Starter plan includes:
+    •	✅ Timesheets
+    •	✅ Expenses
+    •	❌ No Travels
+    •	❌ No Planning
+    •	❌ No AI
+    •	Starter cannot have add-ons (planning or ai).
+    •	If the user is on Starter and clicks on an add-on toggle:
+    •	The toggle should NOT change state.
+    •	No API request should be sent.
+    •	A clear message should be shown, e.g.:
+"Your current plan does not support add-ons. Please upgrade to enable this feature."
+    •	Backend must also enforce this: calling POST /api/billing/toggle-addon on a Starter subscription should return HTTP 400 with a clear error code and message (see section 3).
+
+⸻
+
+Rule B – Team: planning and AI as optional add-ons
+    •	Team base plan includes:
+    •	✅ Timesheets
+    •	✅ Expenses
+    •	✅ Travels
+    •	❌ Planning (only via addon)
+    •	❌ AI (only via addon)
+    •	Pricing:
+    •	price_per_user is already updated to 44€/user in config/billing.php.
+    •	Planning add-on: +18% over base subtotal.
+    •	AI add-on: +18% over (base subtotal + planning amount), same as original logic.
+    •	When planning/ai add-ons are enabled for Team:
+    •	They must be reflected in:
+    •	addons['planning'] and addons['ai']
+    •	features['planning'] and features['ai']
+    •	total
+
+So effectively we are reverting the previous change where Planning was included by default in Team, and going back to "Planning as addon" behavior, but keeping the new prices (Team 44€, Enterprise 59€, Starter 0€ with up to 2 users).
+
+⸻
+
+Rule C – Enterprise: no add-on toggles
+    •	Enterprise includes everything:
+    •	✅ Timesheets
+    •	✅ Expenses
+    •	✅ Travels
+    •	✅ Planning
+    •	✅ AI
+    •	On the frontend there must be no add-on toggles for Enterprise:
+    •	Either completely hide the add-ons section
+    •	Or render a simple "All features included in this plan" message.
+    •	No /api/billing/toggle-addon calls should be possible on Enterprise from the UI.
+
+⸻
+
+3. Backend changes (Laravel)
+
+3.1. config/billing.php – ensure consistent plan definitions
+
+Open config/billing.php and make sure the plans are defined like this (only adjust the relevant parts, don't touch unrelated config):
+    •	Starter (0€/month, up to 2 users, no addons):
+
+'starter' => [
+    'name'           => 'Starter',
+    'flat_monthly'   => 0,
+    'price_per_user' => 0,
+    'included_users' => 2,
+    'features' => [
+        'timesheets' => true,
+        'expenses'   => true,
+        'travels'    => false,
+        'planning'   => false,
+        'ai'         => false,
+    ],
+    'addons' => [
+        // Starter does NOT allow add-ons. Keep this empty.
+    ],
+],
+
+    •	Team (44€/user, planning + ai as ADD-ONS):
+
+'team' => [
+    'name'           => 'Team',
+    'flat_monthly'   => null,
+    'price_per_user' => 44, // €44 per user
+    'included_users' => null,
+    'features' => [
+        'timesheets' => true,
+        'expenses'   => true,
+        'travels'    => true,
+        'planning'   => false, // planning NOT included by default
+        'ai'         => false, // via add-on
+    ],
+    'addons' => [
+        'planning' => 0.18, // +18%
+        'ai'       => 0.18, // +18%
+    ],
+],
+
+    •	Enterprise (59€/user, all features included, NO addons):
+
+'enterprise' => [
+    'name'           => 'Enterprise',
+    'flat_monthly'   => null,
+    'price_per_user' => 59, // €59 per user
+    'included_users' => null,
+    'features' => [
+        'timesheets' => true,
+        'expenses'   => true,
+        'travels'    => true,
+        'planning'   => true,
+        'ai'         => true,
+    ],
+    'addons' => [], // everything included, no addons
+],
+
+Please make sure addons for Enterprise is an empty array.
+
+⸻
+
+3.2. PriceCalculator – Team plan billing logic
+
+In App\Services\Billing\PriceCalculator, update buildTeamResult() to:
+    •	Treat planning as an optional addon again
+    •	Calculate AI addon over (baseSubtotal + planningAmount) (original behavior)
+    •	Keep features['planning'] enabled only if planning addon is active
+
+Something like:
+
+protected function buildTeamResult(Subscription $subscription, int $userCount, array $planConfig): array
+{
+    $basePricePerUser = $planConfig['price_per_user'] ?? 44;
+    $baseSubtotal     = $basePricePerUser * $userCount;
+
+    $addonsConfig = $planConfig['addons'] ?? [];
+    $activeAddons = $subscription->addons ?? [];
+
+    // Planning addon
+    $planningAmount = 0.0;
+    if (in_array('planning', $activeAddons)) {
+        $planningPct   = $addonsConfig['planning'] ?? 0.18;
+        $planningAmount = $baseSubtotal * $planningPct;
+    }
+
+    // AI addon (calculated over base + planning)
+    $aiAmount = 0.0;
+    if (in_array('ai', $activeAddons)) {
+        $aiPct   = $addonsConfig['ai'] ?? 0.18;
+        $aiAmount = ($baseSubtotal + $planningAmount) * $aiPct;
+    }
+
+    $total = $baseSubtotal + $planningAmount + $aiAmount;
+
+    return [
+        'plan'              => 'team',
+        'is_trial'          => false,
+        'user_count'        => $userCount,
+        'base_subtotal'     => round($baseSubtotal, 2),
+        'addons'            => [
+            'planning' => round($planningAmount, 2),
+            'ai'       => round($aiAmount, 2),
+        ],
+        'total'             => round($total, 2),
+        'requires_upgrade'  => false,
+        'features'          => [
+            'timesheets' => true,
+            'expenses'   => true,
+            'travels'    => true,
+            'planning'   => in_array('planning', $activeAddons),
+            'ai'         => in_array('ai', $activeAddons),
+        ],
+    ];
+}
+
+Do NOT change the Starter or Enterprise builders here.
+
+⸻
+
+3.3. BillingController – enforce "no addons on Starter"
+
+In Modules/Billing/Controllers/BillingController.php, in toggleAddon():
+    •	After resolving the tenant, fetch its subscription (via PlanManager or directly).
+    •	If plan is 'starter', return HTTP 400 with a clear error code and message.
+
+Example (adapt to existing code style and how you access subscription):
+
+public function toggleAddon(Request $request): JsonResponse
+{
+    $validated = $request->validate([
+        'addon' => 'required|in:planning,ai',
+    ]);
+
+    $tenant = TenantResolver::resolveOrFail();
+
+    // Get current subscription (use PlanManager or relation, depending on current architecture)
+    $subscription = $this->planManager->getOrCreateSubscriptionForTenant($tenant); 
+    // If you already have a different method for this, reuse it.
+
+    if ($subscription->plan === 'starter') {
+        return response()->json([
+            'success' => false,
+            'code'    => 'starter_no_addons',
+            'message' => 'The Starter plan does not allow add-ons. Please upgrade your plan to enable additional features.',
+        ], 400);
+    }
+
+    try {
+        $result = $this->planManager->toggleAddon($tenant, $validated['addon']);
+
+        $summary = $this->planManager->getSubscriptionSummary($tenant);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Addon '{$result['addon']}' has been {$result['action']}.",
+            'data'    => $summary,
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 400);
+    } catch (\RuntimeException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 400);
+    }
+}
+
+If there is already a clean way to access $subscription (e.g. $tenant->subscription), use that instead of getOrCreateSubscriptionForTenant().
+
+⸻
+
+4. Frontend changes (React)
+
+4.1. BillingSummary type
+
+In billing.ts, keep BillingSummary aligned with backend (don't change the structure). We're only adjusting behavior in the UI based on:
+    •	billingSummary.plan
+    •	billingSummary.features
+    •	billingSummary.addons
+    •	billingSummary.user_count
+
+No type-level changes should be needed.
+
+⸻
+
+4.2. BillingPage – add UI rules for Starter / Team / Enterprise
+
+In BillingPage.tsx (or wherever the add-on cards/toggles are rendered):
+    1.	Compute plan helpers:
+
+const plan = billingSummary?.plan;
+
+const isStarter = plan === 'starter';
+const isTeam = plan === 'team';
+const isEnterprise = plan === 'enterprise';
+
+    2.	Starter: block toggles locally
+
+Where you handle add-on toggle click (e.g. onToggleAddon('planning')):
+
+const handleToggleAddon = async (addon: 'planning' | 'ai') => {
+  if (!billingSummary) return;
+
+  // Starter cannot use addons
+  if (billingSummary.plan === 'starter') {
+    // show toast / banner instead of toggling
+    toast.error("Your current plan does not support add-ons. Please upgrade to enable this feature.");
+    return; // IMPORTANT: do not call API, do not change local state
+  }
+
+  // Enterprise should not show addons at all
+  if (billingSummary.plan === 'enterprise') {
+    return; // Should not even be reachable if UI hides section
+  }
+
+  // Normal flow for Team (or other supported plans)
+  await toggleAddon(addon); // whatever you currently use to call the API
+};
+
+Make sure the toggle component uses handleToggleAddon and does NOT change checked state optimistically for Starter. It should remain bound to billingSummary.features.planning / billingSummary.features.ai.
+    3.	Enterprise: hide add-ons section
+
+Around the add-ons section/card, wrap with:
+
+if (!billingSummary) return null;
+
+if (billingSummary.plan === 'enterprise') {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Add-ons</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p>All add-ons are already included in your Enterprise plan.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+Or simply:
+
+if (billingSummary.plan === 'enterprise') {
+  return null; // completely hide addons
+}
+
+Choose whichever matches the UX you want (I slightly prefer the "included in your plan" message).
+    4.	Team: show both planning + ai as toggles
+
+Ensure the Team view renders TWO toggles:
+    •	Planning:
+    •	checked based on billingSummary.features.planning
+    •	AI:
+    •	checked based on billingSummary.features.ai
+
+and both call handleToggleAddon('planning' | 'ai').
+
+⸻
+
+5. Validation
+
+After applying the changes, please ensure:
+    1.	Starter plan
+    •	Billing summary shows:
+    •	plan: 'starter'
+    •	features.planning === false
+    •	features.ai === false
+    •	Clicking Planning/AI add-on toggles:
+    •	❌ UI toggle does NOT change state
+    •	❌ No network request to /api/billing/toggle-addon
+    •	✔ Toast/error message appears
+    2.	Team plan
+    •	Billing summary:
+    •	plan: 'team'
+    •	features.travels === true
+    •	features.planning depends on add-on
+    •	addons.planning and addons.ai computed as per percentages
+    •	Toggling planning/ai:
+    •	Sends POST /api/billing/toggle-addon
+    •	Response updates BillingContext and UI.
+    3.	Enterprise plan
+    •	Billing summary:
+    •	plan: 'enterprise'
+    •	All features true
+    •	Add-ons section:
+    •	Either hidden completely
+    •	Or shows message "All add-ons are included"
+    •	No toggle interaction available.
+
+⸻
+
+Please implement all of the above, showing me the diffs for:
+    •	config/billing.php
+    •	App\Services\Billing\PriceCalculator
+    •	Modules\Billing\Controllers\BillingController
+    •	BillingPage.tsx (and any related UI component you touch)
+
+Do not change any other files unless strictly necessary.

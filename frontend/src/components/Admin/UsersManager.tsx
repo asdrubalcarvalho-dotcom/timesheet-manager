@@ -27,6 +27,7 @@ import api from '../../services/api';
 import { Link } from 'react-router-dom';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../Auth/AuthContext';
+import { useBilling } from '../../contexts/BillingContext';
 
 interface UserRecord {
   id: number;
@@ -55,6 +56,7 @@ const extractRows = (payload: any): UserRecord[] => {
 const UsersManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const { user: currentUser } = useAuth();
+  const { billingSummary, loading: billingLoading } = useBilling();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -99,6 +101,20 @@ const UsersManager: React.FC = () => {
     if (user?.is_owner && user.user_id !== currentUser?.id) {
       showError('Owner users can only be edited by themselves');
       return;
+    }
+    
+    // Check license limit when creating NEW user (not editing)
+    if (!user && billingSummary && !billingLoading) {
+      const { user_count, user_limit, plan } = billingSummary;
+      
+      // If limit is defined and we're at or above it, block creation
+      if (user_limit && user_limit > 0 && user_count >= user_limit) {
+        const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+        showError(
+          `License limit reached: Your ${planName} plan allows ${user_limit} users maximum. You currently have ${user_count}. Please upgrade your plan in the Billing page to add more users.`
+        );
+        return;
+      }
     }
     
     if (user) {
@@ -176,8 +192,16 @@ const UsersManager: React.FC = () => {
       }
       fetchUsers();
       handleCloseDialog();
-    } catch (error) {
-      showError('Failed to save user');
+    } catch (error: any) {
+      // Handle license limit error specifically
+      if (error.response?.data?.code === 'user_limit_reached') {
+        showError(
+          error.response.data.message || 
+          'User limit reached. Purchase more licenses in Billing before adding new users.'
+        );
+      } else {
+        showError(error.response?.data?.message || 'Failed to save user');
+      }
     }
   };
 

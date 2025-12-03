@@ -55,4 +55,18 @@ return [
         'tenant' => env('AZURE_TENANT', 'common'),
     ],
 
+    'stripe' => [
+        // Dynamically load keys based on STRIPE_MODE (test or live)
+        // Uses env() directly to avoid circular config dependencies
+        'secret' => env('STRIPE_MODE', 'test') === 'live' 
+            ? env('STRIPE_LIVE_SECRET_KEY') 
+            : env('STRIPE_TEST_SECRET_KEY'),
+        'public' => env('STRIPE_MODE', 'test') === 'live' 
+            ? env('STRIPE_LIVE_PUBLISHABLE_KEY') 
+            : env('STRIPE_TEST_PUBLISHABLE_KEY'),
+        'webhook_secret' => env('STRIPE_MODE', 'test') === 'live' 
+            ? env('STRIPE_WEBHOOK_SECRET_LIVE') 
+            : env('STRIPE_WEBHOOK_SECRET_TEST'),
+    ],
+
 ];
