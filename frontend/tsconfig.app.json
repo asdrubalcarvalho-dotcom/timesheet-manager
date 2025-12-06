@@ -29,6 +29,10 @@
     "src/**/backup/**",
     "src/**/*.backup",
     "src/**/*.enhanced.*",
-    "src/**/*.clean.*"
+    "src/**/*.clean.*",
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/TenantRegistrationBACK.tsx"
   ]
 }

@@ -98,6 +98,7 @@ export interface Task {
   created_at: string;
   updated_at: string;
   project?: Project;
+  locations?: Location[];
 }
 
 export interface Location {

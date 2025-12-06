@@ -298,6 +298,13 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::delete('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'destroyLocation']);
     });
 
+    // Task-Location Management (outside planning middleware - available for all)
+    Route::prefix('tasks/{task}/locations')->group(function () {
+        Route::get('/', [\App\Http\Controllers\PlanningController::class, 'getTaskLocations'])->middleware('throttle:read');
+        Route::post('/', [\App\Http\Controllers\PlanningController::class, 'attachLocations'])->middleware('throttle:edit');
+        Route::delete('/{location}', [\App\Http\Controllers\PlanningController::class, 'detachLocation'])->middleware('throttle:delete');
+    });
+
     // Admin-only: Reset tenant data (preserves Owner user)
     Route::post('admin/reset-data', [TenantDataController::class, 'resetData'])
         ->middleware(['role:Owner|Admin', 'throttle:critical']);

@@ -10,10 +10,10 @@
 
 **Core Business Logic**: Track working hours and expenses per project with multi-stage approval workflows and role-based authorization.
 
-**Critical Reading**: Before any code changes, read:
-1. `docs/DEVELOPMENT_GUIDELINES.md` - Common errors and patterns
-2. `.copilot/.cursorrules` - Protected code areas and phase control
-3. Relevant spec in `docs/` for the feature you're working on
+**⚠️ MANDATORY READING BEFORE ANY CODE CHANGES:**
+1. `docs/DEVELOPMENT_GUIDELINES.md` - Common errors and anti-patterns
+2. Relevant spec in `docs/` for the feature (e.g., `EXPENSE_WORKFLOW_SPEC.md`)
+3. `docs/PERMISSION_MATRIX.md` - Authorization rules (if touching auth/policies)
 
 ## 🏗️ Multi-Tenancy Architecture (Critical)
 
@@ -41,12 +41,13 @@
 - Middleware `InitializeTenancyByRequestData` automatically resolves tenant context
 - Simply use Eloquent models directly: `Project::get()` instead of `Project::on($connection)->get()`
 - Tenant context is maintained automatically throughout request lifecycle
+- **Exception**: Raw DB queries still need explicit connection: `DB::connection('tenant')->table('users')->get()`
 
 ### Testing Tenants
-- **slugcheck**: Development tenant
+- **slugcheck**: Development tenant (create if missing: `POST /api/tenants/register`)
 - **test-company**: Demo tenant with sample data (`admin@testcompany.test` / `admin123`)
 
-**⚠️ CRITICAL**: Modern controllers use Stancl's automatic tenant resolution via middleware. The manual `$connection = tenancy()->initialized ? 'tenant' : config('database.default')` pattern is DEPRECATED. Simply use Eloquent models normally - tenant context is handled by `InitializeTenancyByRequestData` middleware.
+**⚠️ CRITICAL ANTI-PATTERN**: The manual `$connection = tenancy()->initialized ? 'tenant' : config('database.default')` pattern is DEPRECATED. Never use `Model::on($connection)` in controllers - middleware handles tenant resolution automatically.
 
 ## 🔐 Authorization System (17 Permissions)
 
@@ -112,15 +113,21 @@ Project → hasMany(ProjectMember) // with project_role, expense_role, finance_r
 - `TimesheetValidationService`: Overlap detection and validation rules
 - `TenantDomainProvisioner`: Automatic domain provisioning
 - `TenantFeatures`: Laravel Pennant feature flag management (see `Modules/README.md`)
-- `PriceCalculator`, `PlanManager`: Billing services (see `docs/Requirements/TASK LIST BILLING.md`)
+- `TenantResolver`: Tenant context resolution from request data
+- `PriceCalculator`, `PlanManager`: Billing services (see billing docs)
 
 ### Modular Architecture
 **Modules/** directory contains self-contained feature modules with independent routes, controllers, and migrations:
 - `Timesheets/`, `Expenses/`: Core modules (always enabled)
 - `Travels/`, `Planning/`, `AI/`: Conditional modules (plan-based or addon)
-- `Billing/`: Subscription and payment management (Phase 1 only - see .cursorrules)
+- `Billing/`: Subscription and payment management
 
-**Key Rule**: NO direct cross-module dependencies. Communication via billing services or feature flags only.
+**Key Rules**: 
+- NO direct cross-module dependencies (communication via billing services or feature flags only)
+- Each module has own `Routes/`, `Controllers/`, `Models/`, `Services/`, `Policies/`, `Database/migrations/`
+- Conditional modules use `EnsureModuleEnabled` middleware
+- Check `TenantFeatures::active($tenant, 'module_name')` for feature flags
+- Autoloaded via `composer.json`: `"Modules\\": "../Modules/"`
 
 ### Rate Limiting Strategy
 ```php
@@ -265,7 +272,7 @@ Password: admin123
 ### Before Modifying Code
 1. **Read spec files first**: `docs/Requirements/`, `docs/*.md`
 2. **Check DEVELOPMENT_GUIDELINES.md**: Avoid common pitfalls
-3. **Verify .cursorrules restrictions**: Protected strategic code areas
+3. **Understand current branch**: Check branch name for feature context (e.g., `feature/planning-ai-reports`)
 
 ### Common Pitfalls (Must Avoid)
 ```php
@@ -320,11 +327,11 @@ Schema::table('project_members', function (Blueprint $table) {
 - `frontend/src/contexts/BillingContext.tsx`
 - `frontend/src/components/Billing/**`
 
-### New Billing Architecture (Phase Control)
-- **Allowed**: `backend/app/Modules/Billing/**`, `backend/app/Services/Billing/**`
-- **Denied**: `backend/app/OldBilling/**`, `backend/app/Legacy/**`
-- **Spec**: `docs/Requirements/TASK LIST BILLING.md` (authoritative source)
-- **Phase**: Only Phase 1 tasks (core billing) - NO Phase 2 (migration/cleanup)
+### Phase Control Strategy
+When working on features, respect the current development phase:
+- Check `CHANGELOG.md` and branch name for phase context
+- Billing features: Follow phase plan in billing documentation
+- New modules: Ensure proper feature flag and middleware setup before implementation
 
 ## 📚 Key Documentation Files
 
@@ -351,7 +358,7 @@ Schema::table('project_members', function (Blueprint $table) {
 ### Laravel Backend
 - Use Form Requests for validation, not inline `validate()`
 - Always authorize with Policies: `$this->authorize('update', $timesheet)`
-- Use explicit database connections in tenant context: `Model::on($connection)`
+- Never use manual `->on($connection)` in controllers (deprecated pattern)
 - Return permission metadata in API responses for frontend authorization
 
 ### React Frontend

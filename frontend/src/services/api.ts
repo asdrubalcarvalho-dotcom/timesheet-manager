@@ -375,4 +375,25 @@ export const tenantApi = {
     api.get(`/api/tenants/${slug}`).then(res => res.data.tenant),
 };
 
+// Task-Location Management API
+export const taskLocationsApi = {
+  /**
+   * Get locations for a specific task
+   */
+  get: (taskId: number) =>
+    api.get(`/api/tasks/${taskId}/locations`),
+  
+  /**
+   * Sync locations for a task (replaces all existing)
+   */
+  sync: (taskId: number, locationIds: number[]) =>
+    api.post(`/api/tasks/${taskId}/locations`, { location_ids: locationIds }),
+  
+  /**
+   * Remove a specific location from a task
+   */
+  detach: (taskId: number, locationId: number) =>
+    api.delete(`/api/tasks/${taskId}/locations/${locationId}`)
+};
+
 export default api;

@@ -210,4 +210,56 @@ class PlanningController extends Controller
         $location->delete();
         return response()->json(['ok' => true]);
     }
+
+    // Task-Location Management
+    /**
+     * Get task locations
+     * GET /api/tasks/{task}/locations
+     */
+    public function getTaskLocations(Task $task)
+    {
+        return response()->json([
+            'task' => $task->load('locations'),
+            'locations' => $task->locations
+        ]);
+    }
+
+    /**
+     * Attach/Sync locations to task
+     * POST /api/tasks/{task}/locations
+     */
+    public function attachLocations(Request $request, Task $task)
+    {
+        $validated = $request->validate([
+            'location_ids' => 'nullable|array',
+            'location_ids.*' => 'exists:locations,id'
+        ]);
+
+        // If empty array, detach all
+        if (empty($validated['location_ids'])) {
+            $task->locations()->detach();
+        } else {
+            // Sync locations (replace all existing with new ones)
+            $task->locations()->sync($validated['location_ids']);
+        }
+
+        return response()->json([
+            'message' => 'Locations updated successfully',
+            'task' => $task->load('locations')
+        ]);
+    }
+
+    /**
+     * Detach specific location from task
+     * DELETE /api/tasks/{task}/locations/{location}
+     */
+    public function detachLocation(Task $task, Location $location)
+    {
+        $task->locations()->detach($location->id);
+
+        return response()->json([
+            'message' => 'Location removed successfully',
+            'task' => $task->load('locations')
+        ]);
+    }
 }

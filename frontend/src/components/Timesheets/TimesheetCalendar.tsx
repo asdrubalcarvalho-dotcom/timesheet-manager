@@ -389,6 +389,19 @@ const TimesheetCalendar: React.FC = () => {
     }
   }, [dialogOpen, selectedEntry, availableTechnicians, selectedTechnicianId, user]);
 
+  // Reset location when task changes (only if current location is not in task's locations)
+  useEffect(() => {
+    if (taskId && taskId !== 0 && locationId) {
+      const selectedTask = tasks.find(t => t.id === taskId);
+      if (selectedTask?.locations && selectedTask.locations.length > 0) {
+        const taskLocationIds = selectedTask.locations.map(loc => loc.id);
+        const currentLocationId = typeof locationId === 'string' ? parseInt(locationId) : locationId;
+        if (!taskLocationIds.includes(currentLocationId)) {
+          setLocationId(''); // Clear location if not in task's locations
+        }
+      }
+    }
+  }, [taskId, locationId, tasks]);
 
   const loadTimesheets = async () => {
     try {
@@ -1104,6 +1117,25 @@ const TimesheetCalendar: React.FC = () => {
 
   // Filter tasks for selected project
   const filteredTasks = (tasks || []).filter(task => task.project_id === projectId);
+
+  // Filter locations for selected task
+  const filteredLocations = useMemo(() => {
+    if (!taskId || taskId === 0) {
+      // No task selected = no locations (force user to select task first)
+      return [];
+    }
+    
+    // Find the selected task and get its associated locations
+    const selectedTask = tasks.find(t => t.id === taskId);
+    if (!selectedTask || !selectedTask.locations || selectedTask.locations.length === 0) {
+      // Task has no locations = no locations (no valid locations for this task)
+      return [];
+    }
+    
+    // Return only locations associated with the selected task
+    const taskLocationIds = selectedTask.locations.map(loc => loc.id);
+    return (locations || []).filter(loc => taskLocationIds.includes(loc.id));
+  }, [taskId, tasks, locations]);
 
   const handleTimesheetScopeChange = (_event: React.MouseEvent<HTMLElement>, newScope: 'mine' | 'others' | 'all' | null) => {
     if (!newScope) {
@@ -2518,7 +2550,7 @@ const TimesheetCalendar: React.FC = () => {
                             }}
                           >
                             <MenuItem value="">Select a location</MenuItem>
-                            {(locations || []).map((location) => {
+                            {(filteredLocations || []).map((location) => {
                               const latitude = Number(location.latitude);
                               const longitude = Number(location.longitude);
                               const hasCoordinates = !Number.isNaN(latitude) && !Number.isNaN(longitude);

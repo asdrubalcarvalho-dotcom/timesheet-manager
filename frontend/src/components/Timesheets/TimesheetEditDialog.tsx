@@ -62,6 +62,15 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
     return tasks.filter(task => task.project_id === projectId);
   }, [tasks, projectId]);
 
+  // Filter locations by selected task
+  const filteredLocations = useMemo(() => {
+    if (!taskId || taskId === 0) return []; // No task selected = no locations
+    const selectedTask = tasks.find(t => t.id === taskId);
+    if (!selectedTask?.locations?.length) return []; // Task has no locations = no locations
+    const taskLocationIds = selectedTask.locations.map(loc => loc.id);
+    return (locations || []).filter(loc => taskLocationIds.includes(loc.id));
+  }, [taskId, tasks, locations]);
+
   // Populate form when timesheet changes
   useEffect(() => {
     if (timesheet) {
@@ -92,6 +101,20 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
       setDescription('');
     }
   }, [timesheet, open]);
+
+  // Reset location when task changes (only if current location is not in task's locations)
+  useEffect(() => {
+    if (taskId && taskId !== 0 && locationId) {
+      const selectedTask = tasks.find(t => t.id === taskId);
+      if (selectedTask?.locations && selectedTask.locations.length > 0) {
+        const taskLocationIds = selectedTask.locations.map(loc => loc.id);
+        const currentLocationId = typeof locationId === 'string' ? parseInt(locationId) : locationId;
+        if (!taskLocationIds.includes(currentLocationId)) {
+          setLocationId(0); // Clear location if not in task's locations
+        }
+      }
+    }
+  }, [taskId, locationId, tasks]);
 
   const handleSave = async () => {
     if (!projectId || !taskId || !locationId || !selectedDate || !startTimeObj || !endTimeObj) {
@@ -350,7 +373,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                         size="small"
                       >
                         <MenuItem value={0}>Select a location</MenuItem>
-                        {locations.map((location) => (
+                        {filteredLocations.map((location) => (
                           <MenuItem key={location.id} value={location.id}>
                             {location.name} - {location.city}, {location.country}
                           </MenuItem>

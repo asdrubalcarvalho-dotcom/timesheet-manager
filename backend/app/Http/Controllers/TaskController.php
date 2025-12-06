@@ -14,7 +14,7 @@ class TaskController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Task::with('project');
+        $query = Task::with(['project', 'locations']);
 
         // Filter by project if provided
         if ($request->has('project_id')) {
@@ -52,7 +52,7 @@ class TaskController extends Controller
         }
 
         $task = Task::create($validated);
-        $task->load('project');
+        $task->load(['project', 'locations']);
 
         return response()->json([
             'success' => true,
@@ -66,7 +66,7 @@ class TaskController extends Controller
      */
     public function show(Task $task): JsonResponse
     {
-        $task->load('project', 'timesheets');
+        $task->load(['project', 'timesheets', 'locations']);
 
         return response()->json([
             'success' => true,
@@ -97,7 +97,7 @@ class TaskController extends Controller
         }
 
         $task->update($validated);
-        $task->load('project');
+        $task->load(['project', 'locations']);
 
         return response()->json([
             'success' => true,

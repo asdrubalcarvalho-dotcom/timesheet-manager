@@ -9,13 +9,22 @@ import {
   TextField,
   IconButton,
   MenuItem,
-  Fab
+  Fab,
+  Chip,
+  Checkbox,
+  ListItemText,
+  FormControl,
+  InputLabel,
+  Select,
+  FormHelperText,
+  Alert
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Assignment as AssignmentIcon
+  Assignment as AssignmentIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -24,7 +33,7 @@ import dayjs from 'dayjs';
 import AdminLayout from './AdminLayout';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
 import EmptyState from '../Common/EmptyState';
-import api from '../../services/api';
+import api, { taskLocationsApi } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 
 interface Task {
@@ -39,6 +48,14 @@ interface Task {
   progress?: number;
   dependencies?: string[] | null;
   is_active?: boolean;
+  locations?: Location[];
+}
+
+interface Location {
+  id: number;
+  name: string;
+  city: string;
+  country: string;
 }
 
 interface Project {
@@ -79,6 +96,14 @@ const TasksManager: React.FC = () => {
     recordDetails: {} as any,
     action: (() => {}) as () => void | Promise<void>
   });
+  
+  // Location management state
+  const [locationDialog, setLocationDialog] = useState({
+    open: false,
+    task: null as Task | null
+  });
+  const [allLocations, setAllLocations] = useState<Location[]>([]);
+  const [selectedLocationIds, setSelectedLocationIds] = useState<number[]>([]);
   
   const taskTypes = [
     'retrofit',
@@ -131,8 +156,12 @@ const TasksManager: React.FC = () => {
     try {
       const response = await api.get('/api/projects');
       setProjects(normalizeApiResponse<Project>(response.data));
+      
+      // Load all locations for the location management dialog
+      const locationsResponse = await api.get('/api/locations');
+      setAllLocations(normalizeApiResponse<Location>(locationsResponse.data));
     } catch (error) {
-      console.error('Failed to load projects');
+      console.error('Failed to load projects and locations');
     }
   };
 
@@ -172,6 +201,53 @@ const TasksManager: React.FC = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingTask(null);
+  };
+  
+  // Location management handlers
+  const handleManageLocations = async (task: Task) => {
+    try {
+      // Load current locations for this task
+      const response = await taskLocationsApi.get(task.id);
+      const currentLocations = response.data.locations || [];
+      const currentLocationIds = currentLocations.map((loc: Location) => loc.id);
+      
+      setSelectedLocationIds(currentLocationIds);
+      setLocationDialog({ open: true, task });
+    } catch (error) {
+      console.error('Error loading task locations:', error);
+      showError('Failed to load task locations');
+    }
+  };
+  
+  const handleSaveLocations = async () => {
+    if (!locationDialog.task) return;
+    
+    try {
+      setLoading(true);
+      await taskLocationsApi.sync(locationDialog.task.id, selectedLocationIds);
+      
+      // Refresh tasks to show updated location count
+      await fetchTasks();
+      
+      showSuccess(
+        selectedLocationIds.length === 0 
+          ? 'All locations removed from task'
+          : `Task updated with ${selectedLocationIds.length} location(s)`
+      );
+      
+      setLocationDialog({ open: false, task: null });
+      setSelectedLocationIds([]);
+    } catch (error) {
+      console.error('Error updating task locations:', error);
+      showError('Failed to update task locations');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleCloseLocationDialog = () => {
+    setLocationDialog({ open: false, task: null });
+    setSelectedLocationIds([]);
   };
 
   const handleSave = async (e?: React.FormEvent) => {
@@ -293,6 +369,29 @@ const TasksManager: React.FC = () => {
       }
     },
     {
+      field: 'locations',
+      headerName: 'Locations',
+      width: 140,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<Task>) => {
+        const count = params.row.locations?.length || 0;
+        return (
+          <Chip
+            icon={<LocationIcon />}
+            label={count === 0 ? 'No locations' : `${count} location${count > 1 ? 's' : ''}`}
+            size="small"
+            color={count > 0 ? 'primary' : 'default'}
+            variant={count > 0 ? 'filled' : 'outlined'}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleManageLocations(params.row);
+            }}
+            sx={{ cursor: 'pointer' }}
+          />
+        );
+      }
+    },
+    {
       field: 'is_active',
       headerName: 'Status',
       width: 120,
@@ -319,20 +418,37 @@ const TasksManager: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 160,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
         <Box>
           <IconButton
             size="small"
-            onClick={() => handleOpenDialog(params.row as Task)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleManageLocations(params.row as Task);
+            }}
+            sx={{ color: '#2196f3' }}
+            title="Manage Locations"
+          >
+            <LocationIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenDialog(params.row as Task);
+            }}
             sx={{ color: '#43a047' }}
           >
             <EditIcon fontSize="small" />
           </IconButton>
           <IconButton
             size="small"
-            onClick={() => handleDelete(params.row.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(params.row.id);
+            }}
             sx={{ color: '#f44336' }}
           >
             <DeleteIcon fontSize="small" />
@@ -508,6 +624,84 @@ const TasksManager: React.FC = () => {
             color="primary"
           >
             {editingTask ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Location Management Dialog */}
+      <Dialog
+        open={locationDialog.open}
+        onClose={handleCloseLocationDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Manage Locations for Task: {locationDialog.task?.name}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            {allLocations.length === 0 ? (
+              <Alert severity="info">
+                No locations available. Please create locations first in the Locations management page.
+              </Alert>
+            ) : (
+              <FormControl fullWidth>
+                <InputLabel id="location-select-label">Select Locations</InputLabel>
+                <Select
+                  labelId="location-select-label"
+                  id="location-select"
+                  multiple
+                  value={selectedLocationIds}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSelectedLocationIds(
+                      typeof value === 'string' ? [] : value
+                    );
+                  }}
+                  label="Select Locations"
+                  renderValue={(selected) => {
+                    if (selected.length === 0) {
+                      return <em>No locations selected</em>;
+                    }
+                    return `${selected.length} location${selected.length > 1 ? 's' : ''} selected`;
+                  }}
+                >
+                  {allLocations.map((location) => (
+                    <MenuItem key={location.id} value={location.id}>
+                      <Checkbox checked={selectedLocationIds.indexOf(location.id) > -1} />
+                      <ListItemText
+                        primary={location.name}
+                        secondary={`${location.city}, ${location.country}`}
+                      />
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  Select one or more locations to associate with this task. Leave empty to remove all locations.
+                </FormHelperText>
+              </FormControl>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseLocationDialog}>Cancel</Button>
+          {selectedLocationIds.length > 0 && (
+            <Button
+              onClick={() => {
+                setSelectedLocationIds([]);
+              }}
+              color="warning"
+            >
+              Clear All
+            </Button>
+          )}
+          <Button
+            onClick={handleSaveLocations}
+            variant="contained"
+            color="primary"
+            disabled={allLocations.length === 0}
+          >
+            Save
           </Button>
         </DialogActions>
       </Dialog>
