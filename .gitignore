@@ -89,7 +89,28 @@ typings/
 ehthumbs.db
 Thumbs.db
 frontend/tsconfigXback.zip
-
+# === FROM ORIGINAL SERVER ===
 backend/redis/
 backup-*.tar.gz
 
+# === DEV / TEST / TEMP FILES TO IGNORE ===
+.copilot/
+modules.zip
+id
+
+# Developer documents & temp files
+docs/EMAIL_VERIFICATION_COMPLETE_ANALYSIS.md
+STARTUP_CHECKLIST.md
+WEBHOOK_QUICKSTART.md
+changes.txt
+replace.txt
+Admin Test,
+
+# Frontend backups / temp components
+frontend/src/components/TenantRegistrationBACK.tsx
+
+# Shell utilities and test scripts
+test_*.sh
+setup_tenant.sh
+check_users.sh
+delete_user.sh
