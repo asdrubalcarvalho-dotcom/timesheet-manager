@@ -56,6 +56,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend Application URL
+    |--------------------------------------------------------------------------
+    |
+    | This URL points to the frontend application where users access the UI.
+    | Used for email verification links and login redirects in multi-tenant
+    | architecture where API and frontend are on different domains.
+    |
+    */
+    'frontend_url' => env('APP_FRONTEND_URL', env('APP_URL', 'http://localhost')),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Base Domain
+    |--------------------------------------------------------------------------
+    |
+    | The base domain used for multi-tenant subdomains (without protocol).
+    | Example: 'vendaslive.com' generates 'demo.vendaslive.com' for tenants.
+    |
+    */
+    'domain' => env('APP_DOMAIN', parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

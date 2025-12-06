@@ -2,6 +2,12 @@
 
 return [
 
+    // ─────────────────────────────────────────────────────────────
+    // Test Billing Mode (FOR LIVE €0.50 TESTING)
+    // ─────────────────────────────────────────────────────────────
+    'test_mode'     => env('BILLING_TEST_MODE', false),
+    'test_price' => env('BILLING_TEST_PRICE'),
+
     /*
     |--------------------------------------------------------------------------
     | Trial Configuration

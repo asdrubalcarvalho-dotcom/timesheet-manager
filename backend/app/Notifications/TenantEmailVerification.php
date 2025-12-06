@@ -7,7 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class TenantEmailVerification extends Notification implements ShouldQueue
+class TenantEmailVerification extends Notification
 {
     use Queueable;
 

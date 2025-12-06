@@ -562,6 +562,14 @@ class BillingController extends Controller
                 $summary = $this->planManager->getSubscriptionSummary($tenant);
                 $amount = $summary['total'];
             }
+            /**
+            * TEMPORARY LIVE TEST MODE
+            * Forces all live payments to be €0.50 when BILLING_TEST_MODE=true
+            */
+            /*if (config('billing.test_mode') && config('billing.test_price')) {
+                \Log::warning('[Billing] LIVE TEST MODE ACTIVE — overriding amount to €0.50');
+                $amount = 0.50;
+            }*/
 
             // Use gateway abstraction to create payment intent
             $gateway = $this->gatewayFactory->driver();
@@ -1173,9 +1181,19 @@ class BillingController extends Controller
             // Create Stripe portal session
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
+            // Try to detect tenant slug from header (fallback to tenant model)
+            $tenantSlug = $request->header('X-Tenant') ?? $tenant->slug;
+
+            // Build the tenant domain properly
+            $baseDomain = config('app.frontend_base_domain', 'vendaslive.com');
+
+            // Example: demo-perk.vendaslive.com
+            $tenantDomain = "{$tenantSlug}.{$baseDomain}";
+
+            // Create portal session with correct return URL
             $session = \Stripe\BillingPortal\Session::create([
-                'customer' => $tenant->stripe_customer_id,
-                'return_url' => config('billing.portal.return_url') ?: config('app.url') . '/billing',
+                'customer'   => $tenant->stripe_customer_id,
+                'return_url' => "https://{$tenantDomain}/billing",
             ]);
 
             \Log::info('Stripe portal session created', [

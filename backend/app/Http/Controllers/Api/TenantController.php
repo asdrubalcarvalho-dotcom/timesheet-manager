@@ -426,7 +426,7 @@ class TenantController extends Controller
             $frontendUrl = config('app.frontend_url', config('app.url'));
             $verificationUrl = $frontendUrl . '/verify-signup?token=' . $verificationToken;
 
-            // Send verification email
+            // Send /verification email
             $recipient = new EmailRecipient($request->admin_email, $request->admin_name);
             $recipient->notify(new TenantEmailVerification($verificationUrl, $request->company_name));
 
@@ -445,16 +445,25 @@ class TenantController extends Controller
 
         } catch (\Exception $e) {
             \Log::error('Pending tenant signup failed', [
-                'slug' => $request->slug ?? 'unknown',
+                'slug'  => $request->slug ?? 'unknown',
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
+            // Handle SMTP 550 errors (invalid or unrouteable email address)
+            if (str_contains($e->getMessage(), '550')) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'The email address was rejected by the mail server. Please check the email and try again.',
+                ], 422);
+            }
+
+            // Generic fallback for unexpected errors
             return response()->json([
-                'message' => 'Signup request failed',
-                'error' => app()->environment('local')
+                'status'  => 'error',
+                'message' => app()->environment('local')
                     ? $e->getMessage()
-                    : 'An error occurred during signup. Please try again.',
+                    : 'An unexpected error occurred during signup. Please try again.',
             ], 500);
         }
     }

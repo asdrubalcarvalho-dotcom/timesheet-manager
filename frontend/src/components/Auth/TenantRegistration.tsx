@@ -31,48 +31,10 @@ interface RegistrationFormData {
   timezone?: string;
 }
 
-// Temporarily disabled - will be used for direct tenant login after email verification
-// const getTenancyBaseDomain = (): string => {
-//   // Allow override via environment variables
-//   const envBase =
-//     (import.meta as any).env?.VITE_TENANCY_BASE_DOMAIN ||
-//     (import.meta as any).env?.VITE_BASE_DOMAIN;
-//
-//   if (envBase && typeof envBase === 'string') {
-//     return envBase;
-//   }
-//
-//   const host = window.location.hostname;
-//
-//   // In production we expect something like app.vendaslive.com
-//   // We want to extract the "vendaslive.com" part so we can build
-//   // tenant subdomains like "demo.vendaslive.com"
-//   if (host.includes('.')) {
-//     const parts = host.split('.');
-//     if (parts.length >= 2) {
-//       return parts.slice(-2).join('.');
-//     }
-//   }
-//
-//   // Sensible default for local development
-//   return 'vendaslive.localhost';
-// };
-
-// Temporarily disabled - will be used for direct tenant login after email verification
-// const buildTenantLoginUrl = (slug: string, adminEmail: string): string => {
-//   const baseDomain = getTenancyBaseDomain();
-//   const protocol = window.location.protocol || 'http:';
-//   const port = window.location.port ? `:${window.location.port}` : '';
-//   const host = `${slug}.${baseDomain}`;
-//   const emailParam = encodeURIComponent(adminEmail);
-//
-//   return `${protocol}//${host}${port}/login?email=${emailParam}`;
-// };
-
 const TenantRegistration: React.FC = () => {
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
-  
+
   const [formData, setFormData] = useState<RegistrationFormData>({
     company_name: '',
     slug: '',
@@ -88,25 +50,26 @@ const TenantRegistration: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState<string>('');
+  const [expiresInHours, setExpiresInHours] = useState<number>(24);
+
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [slugError, setSlugError] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
-  // Auto-generate slug from company name
+  // Auto-generate slug
   useEffect(() => {
     if (formData.company_name && !formData.slug) {
-      const generatedSlug = formData.company_name
+      const generated = formData.company_name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
         .substring(0, 50);
-      
-      setFormData(prev => ({ ...prev, slug: generatedSlug }));
+      setFormData(prev => ({ ...prev, slug: generated }));
     }
   }, [formData.company_name, formData.slug]);
 
-  // Check slug availability with debounce
+  // Check slug availability
   useEffect(() => {
     if (!formData.slug || formData.slug.length < 3) {
       setSlugAvailable(null);
@@ -114,7 +77,6 @@ const TenantRegistration: React.FC = () => {
       return;
     }
 
-    // Validate slug format
     if (!/^[a-z0-9-]+$/.test(formData.slug)) {
       setSlugAvailable(false);
       setSlugError('Slug can only contain lowercase letters, numbers, and hyphens');
@@ -124,18 +86,15 @@ const TenantRegistration: React.FC = () => {
     const timer = setTimeout(async () => {
       setSlugChecking(true);
       setSlugError('');
-      
       try {
-        const response = await api.get(`/api/tenants/check-slug`, {
-          params: { slug: formData.slug }
+        const res = await api.get('/api/tenants/check-slug', {
+          params: { slug: formData.slug },
         });
-        
-        setSlugAvailable(response.data.available);
-        if (!response.data.available) {
-          setSlugError(response.data.message || 'This slug is not available');
+        setSlugAvailable(res.data.available);
+        if (!res.data.available) {
+          setSlugError(res.data.message || 'This slug is not available');
         }
-      } catch (error) {
-        console.error('Slug check failed:', error);
+      } catch {
         setSlugAvailable(null);
       } finally {
         setSlugChecking(false);
@@ -146,40 +105,34 @@ const TenantRegistration: React.FC = () => {
   }, [formData.slug]);
 
   const handleChange = (field: keyof RegistrationFormData) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } },
   ) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: event.target.value
-    }));
-    
-    // Clear field-specific error
+    setFormData(prev => ({ ...prev, [field]: event.target.value }));
+
     if (errors[field]) {
       setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
+        const updated = { ...prev };
+        delete updated[field];
+        return updated;
       });
     }
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setErrors({});
 
-    // Frontend validation
     const newErrors: Record<string, string[]> = {};
-    
     if (!formData.company_name) newErrors.company_name = ['Company name is required'];
     if (!formData.slug) newErrors.slug = ['Slug is required'];
     if (!slugAvailable) newErrors.slug = ['Please choose an available slug'];
     if (!formData.admin_name) newErrors.admin_name = ['Admin name is required'];
     if (!formData.admin_email) newErrors.admin_email = ['Admin email is required'];
     if (!formData.admin_password) newErrors.admin_password = ['Password is required'];
-    if (formData.admin_password.length < 8) newErrors.admin_password = ['Password must be at least 8 characters'];
-    if (formData.admin_password !== formData.admin_password_confirmation) {
+    if (formData.admin_password.length < 8)
+      newErrors.admin_password = ['Password must be at least 8 characters'];
+    if (formData.admin_password !== formData.admin_password_confirmation)
       newErrors.admin_password_confirmation = ['Passwords do not match'];
-    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -190,7 +143,7 @@ const TenantRegistration: React.FC = () => {
     setLoading(true);
 
     try {
-      await api.post('/api/tenants/request-signup', {
+      const res = await api.post('/api/tenants/request-signup', {
         company_name: formData.company_name,
         slug: formData.slug,
         admin_name: formData.admin_name,
@@ -202,20 +155,27 @@ const TenantRegistration: React.FC = () => {
         timezone: formData.timezone || 'UTC',
       });
 
-      // Show success state
-      setRegistrationComplete(true);
+      // Show confirmation screen instead of redirecting
       setRegisteredEmail(formData.admin_email);
-      showSuccess('Verification email sent! Please check your inbox.');
+      setExpiresInHours(res.data?.expires_in_hours ?? 24);
+      setRegistrationComplete(true);
 
+      showSuccess(res.data?.message || 'Verification email sent! Please check your inbox.');
     } catch (error: any) {
-      console.error('Signup request failed:', error);
-      
+      console.error('Registration failed:', error);
+
       if (error.response?.data?.errors) {
         setErrors(error.response.data.errors);
         showError('Please fix the form errors');
-      } else {
-        showError(error.response?.data?.message || 'Signup request failed. Please try again.');
+        return;
       }
+
+      if (error.response?.data?.message) {
+        showError(error.response.data.message);
+        return;
+      }
+
+      showError(error.message || 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -243,70 +203,72 @@ const TenantRegistration: React.FC = () => {
     { code: 'BR', name: 'Brazil' },
   ];
 
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: 'background.default',
-        py: 4,
-      }}
-    >
-      <Paper
-        elevation={3}
+  if (registrationComplete) {
+    return (
+      <Box
         sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'background.default',
           p: 4,
-          maxWidth: 600,
-          width: '100%',
-          mx: 2,
         }}
       >
-        {registrationComplete ? (
-          // Email verification sent screen
-          <Box sx={{ textAlign: 'center' }}>
-            <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
-            <Typography variant="h5" gutterBottom>
-              Check Your Email
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-              We've sent a verification link to <strong>{registeredEmail}</strong>
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Please click the link in the email to complete your registration and activate your workspace.
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 3 }}>
-              The verification link will expire in 24 hours.
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Didn't receive the email? Check your spam folder or{' '}
-              <Button
-                onClick={() => {
-                  setRegistrationComplete(false);
-                  setRegisteredEmail('');
-                }}
-                sx={{ textTransform: 'none', p: 0, minWidth: 'auto', verticalAlign: 'baseline' }}
-              >
-                try again
-              </Button>
-            </Typography>
-          </Box>
-        ) : (
-          // Registration form
-          <>
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <BusinessIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h4" gutterBottom>
-                Create Your Workspace
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Start your 14-day free trial • No credit card required
-              </Typography>
-            </Box>
+        <Paper sx={{ p: 4, maxWidth: 600, width: '100%', textAlign: 'center' }}>
+          <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
 
-            <Box component="form" onSubmit={handleSubmit} noValidate>
-          {/* Company Information */}
+          <Typography variant="h4" gutterBottom>
+            Check Your Email
+          </Typography>
+
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            We've sent a verification link to:
+          </Typography>
+
+          <Typography variant="h6" sx={{ mb: 3 }}>
+            {registeredEmail}
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Please click the link in the email to activate your workspace.
+          </Typography>
+
+          <Typography variant="caption" display="block" sx={{ mb: 3 }}>
+            The verification link will expire in {expiresInHours} hours.
+          </Typography>
+
+          <Typography variant="caption" display="block">
+            Didn't receive the email? Check your spam folder or{' '}
+            <Button
+              onClick={() => {
+                setRegistrationComplete(false);
+                setRegisteredEmail('');
+              }}
+              sx={{ textTransform: 'none', p: 0 }}
+            >
+              try again
+            </Button>
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 4 }}>
+      <Paper sx={{ p: 4, maxWidth: 600, width: '100%' }}>
+        <Box sx={{ textAlign: 'center', mb: 3 }}>
+          <BusinessIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+          <Typography variant="h4" gutterBottom>
+            Create Your Workspace
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Start your 14-day free trial • No credit card required
+          </Typography>
+        </Box>
+
+        <Box component="form" onSubmit={handleSubmit} noValidate>
           <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
             Company Information
           </Typography>
@@ -327,10 +289,10 @@ const TenantRegistration: React.FC = () => {
             label="Workspace Slug"
             value={formData.slug}
             onChange={handleChange('slug')}
-            error={!!errors.slug || (slugAvailable === false)}
+            error={!!errors.slug || slugAvailable === false}
             helperText={
-              slugError || 
-              errors.slug?.[0] || 
+              slugError ||
+              errors.slug?.[0] ||
               'This will be your unique workspace identifier (e.g., acme.vendaslive.com)'
             }
             required
@@ -354,7 +316,9 @@ const TenantRegistration: React.FC = () => {
             <InputLabel>Industry (Optional)</InputLabel>
             <Select
               value={formData.industry}
-              onChange={(e) => handleChange('industry')(e as any)}
+              onChange={(e) =>
+                handleChange('industry')({ target: { value: e.target.value } })
+              }
               label="Industry (Optional)"
             >
               <MenuItem value="">
@@ -372,7 +336,9 @@ const TenantRegistration: React.FC = () => {
             <InputLabel>Country (Optional)</InputLabel>
             <Select
               value={formData.country}
-              onChange={(e) => handleChange('country')(e as any)}
+              onChange={(e) =>
+                handleChange('country')({ target: { value: e.target.value } })
+              }
               label="Country (Optional)"
             >
               <MenuItem value="">
@@ -386,7 +352,6 @@ const TenantRegistration: React.FC = () => {
             </Select>
           </FormControl>
 
-          {/* Admin Account */}
           <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
             Admin Account
           </Typography>
@@ -438,7 +403,6 @@ const TenantRegistration: React.FC = () => {
             sx={{ mb: 3 }}
           />
 
-          {/* Submit */}
           <Button
             type="submit"
             fullWidth
@@ -468,9 +432,7 @@ const TenantRegistration: React.FC = () => {
               </Button>
             </Typography>
           </Box>
-            </Box>
-          </>
-        )}
+        </Box>
       </Paper>
     </Box>
   );

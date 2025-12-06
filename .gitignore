@@ -89,3 +89,7 @@ typings/
 ehthumbs.db
 Thumbs.db
 frontend/tsconfigXback.zip
+
+backend/redis/
+backup-*.tar.gz
+

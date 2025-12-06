@@ -360,7 +360,7 @@ export const tenantApi = {
    * This endpoint does NOT require X-Tenant header
    */
   register: (data: TenantRegistrationData): Promise<TenantRegistrationResponse> =>
-    api.post('/api/tenants/register', data).then(res => res.data),
+    api.post('/api/tenants/request-signup', data).then(res => res.data),
   
   /**
    * List all tenants (Admin only)

@@ -1,33 +1,84 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'billing/*'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Laravel CORS Paths
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |   Cada endpoint que é chamado pelo frontend deve estar listado aqui,
+    |   caso contrário o browser bloqueia a request por CORS.
+    |
+    */
+
+    'paths' => [
+        'api/*',                  // Todas as APIs
+        'sanctum/csrf-cookie',    // Para autenticação
+        'contact',                // 👈 Necessário para formulário da landing
+        'contact/*',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Allowed Methods
+    |--------------------------------------------------------------------------
+    */
 
     'allowed_methods' => ['*'],
 
-    // Static origins for non-tenant pages (registration, central app)
+    /*
+    |--------------------------------------------------------------------------
+    | Allowed Origins
+    |--------------------------------------------------------------------------
+    |
+    | Domínios autorizados a fazer pedidos à API.
+    |
+    */
+
     'allowed_origins' => [
-        'http://localhost:8082',
+
+        // Desenvolvimento
         'http://localhost:3000',
-        'http://app.localhost:8082',
-        env('FRONTEND_URL', 'http://localhost:8082'),
+        'http://localhost:8082',
+        env('FRONTEND_URL', 'http://localhost:3000'),
+
+        // Produção
+        'https://vendaslive.com',
+        'https://www.vendaslive.com',
+        'https://app.vendaslive.com',
     ],
 
-    // Dynamic tenant subdomains - accepts ANY subdomain matching pattern
-    // Examples: http://acme.app.localhost:8082, http://demo.timeperk.localhost:8082
+    /*
+    |--------------------------------------------------------------------------
+    | Allowed Origins Patterns
+    |--------------------------------------------------------------------------
+    |
+    | Aceitar automaticamente qualquer subdomínio *.vendaslive.com
+    | Necessário para os tenants: demo.vendaslive.com, empresa.vendaslive.com, etc.
+    |
+    */
+
     'allowed_origins_patterns' => [
-        '#^http://[a-z0-9-]+\.localhost:8082$#i',  // ANY subdomain on localhost:8082
-        '#^http://[a-z0-9-]+\.app\.localhost:8082$#i',
-        '#^http://[a-z0-9-]+\.timeperk\.localhost:8082$#i',
-        '#^http://[a-z0-9-]+\.vendaslive\.localhost:8082$#i',  // VendasLive tenants
-        '#^https://[a-z0-9-]+\.app\.timeperk\.com$#i',  // Production pattern
+        '/^https?:\/\/([a-z0-9-]+\.)?vendaslive\.com$/',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Headers
+    |--------------------------------------------------------------------------
+    */
 
     'allowed_headers' => ['*'],
+    'exposed_headers' => [],
 
-    'exposed_headers' => ['X-Tenant'],
+    /*
+    |--------------------------------------------------------------------------
+    | Cache & Credentials
+    |--------------------------------------------------------------------------
+    */
 
     'max_age' => 3600,
-
     'supports_credentials' => true,
 ];

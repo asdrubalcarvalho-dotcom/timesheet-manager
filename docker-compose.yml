@@ -1,21 +1,37 @@
 version: '3.8'
 
 services:
+
   app:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: timesheet_app
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
       - ./backend:/var/www/html
       - ./backend/.env:/var/www/html/.env
+      - ./Modules:/var/www/html/Modules
     networks:
       - timesheet-network
     depends_on:
       - database
       - redis
+
+  nginx_landing:
+    image: nginx:alpine
+    container_name: nginx_landing
+    restart: unless-stopped
+    volumes:
+      - ./docker/nginx/landing/default.conf:/etc/nginx/conf.d/default.conf
+      - ./landing:/var/www/landing
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - timesheet-network
 
   nginx_api:
     image: nginx:alpine
@@ -23,30 +39,31 @@ services:
     restart: unless-stopped
     depends_on:
       - app
+    expose:
+      - "80"
     volumes:
       - ./docker/nginx/api:/etc/nginx/conf.d
       - ./backend:/var/www/html
-    ports:
-      - "80:80"
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
-      - timesheet-network
+      timesheet-network:
+        aliases:
+          - webserver       # 👈 MUITO IMPORTANTE: casa com o proxy_pass http://webserver
 
   nginx_app:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: "http://api.localhost"
-        VITE_APP_URL: "http://localhost:8082"
+        VITE_API_URL: "https://api.vendaslive.com"
+        VITE_APP_URL: "https://vendaslive.com"
     image: timesheet-frontend
     container_name: timesheet_nginx_app
     restart: unless-stopped
     depends_on:
-      - nginx_api
+      - nginx_api          # 👈 frontend só sobe depois do webserver estar pronto
     volumes:
       - ./docker/nginx/app/app.conf:/etc/nginx/conf.d/default.conf
-    ports:
-      - "8082:80"
     networks:
       - timesheet-network
 
@@ -63,7 +80,6 @@ services:
       MYSQL_USER: timesheet
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - timesheet-network
 
@@ -72,9 +88,12 @@ services:
     container_name: timesheet_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     networks:
       - timesheet-network
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./backend/redis/redis.conf:/usr/local/etc/redis/redis.conf
 
 networks:
   timesheet-network:

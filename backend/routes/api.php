@@ -14,7 +14,9 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TravelSegmentController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\PublicContactController;
 
+Route::post('/public/contact', [PublicContactController::class, 'submit']);
 /*
 |--------------------------------------------------------------------------
 | Central API Routes

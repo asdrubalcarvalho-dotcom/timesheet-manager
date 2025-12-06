@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TimePerk – AI-powered timesheets, expenses & field operations</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="description"
+    content="TimePerk is an AI-powered SaaS for service and field teams: timesheets, expenses, travels, dashboards and more – in one place."
+  />
+
+  <!-- Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    :root {
+      --primary: #667eea;
+      --primary-dark: #4c5bd8;
+      --primary-soft: #eef0ff;
+      --bg: #050816;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --accent: #22c55e;
+      --border-soft: #e2e8f0;
+      --card-bg: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f172a;
+      color: var(--text-main);
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: radial-gradient(circle at top left, #1e293b, #020617 55%);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+    }
+
+    /* Top nav */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      background: radial-gradient(circle at 20% 20%, #22c55e, #0f172a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #e5e7eb;
+      font-weight: 700;
+      font-size: 18px;
+      box-shadow: 0 12px 30px rgba(15, 118, 110, 0.45);
+    }
+
+    .logo-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logo-text span:first-child {
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: #e5e7eb;
+    }
+
+    .logo-text span:last-child {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 20px;
+      font-size: 14px;
+      color: #cbd5f5;
+    }
+
+    .nav-links a {
+      opacity: 0.85;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+      color: #ffffff;
+    }
+
+    .nav-cta {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .nav-cta a {
+      font-size: 14px;
+      color: #e5e7eb;
+      opacity: 0.85;
+    }
+
+    .nav-cta a:hover {
+      opacity: 1;
+    }
+
+    .btn-primary {
+      border-radius: 999px;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      box-shadow: 0 14px 35px rgba(79, 70, 229, 0.55);
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary span.chevron {
+      font-size: 16px;
+      margin-top: 1px;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 40px rgba(79, 70, 229, 0.65);
+    }
+
+    .btn-secondary {
+      border-radius: 999px;
+      padding: 7px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #e5e7eb;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-secondary:hover {
+      border-color: rgba(248, 250, 252, 0.8);
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    /* Hero */
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 4fr);
+      gap: 40px;
+      align-items: center;
+      margin-bottom: 48px;
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 999px;
+      padding: 4px 10px 4px 4px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: #e5e7eb;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .hero-kicker-chip {
+      border-radius: 999px;
+      padding: 3px 10px;
+      background: rgba(22, 163, 74, 0.15);
+      color: #bbf7d0;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .hero-title {
+      font-size: clamp(2.4rem, 4vw, 3rem);
+      line-height: 1.1;
+      color: #f9fafb;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+
+    .hero-title span.highlight {
+      background: linear-gradient(135deg, #a5b4fc, #22c55e);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .hero-subtitle {
+      color: #cbd5f5;
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 22px;
+      max-width: 480px;
+    }
+
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .hero-badge {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .hero-note {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .hero-note span {
+      color: #bbf7d0;
+      font-weight: 500;
+    }
+
+    .hero-right {
+      position: relative;
+    }
+
+    .hero-card {
+      border-radius: 22px;
+      padding: 18px 18px 16px;
+      background: radial-gradient(circle at top, rgba(148, 163, 253, 0.45), rgba(15, 23, 42, 0.95));
+      border: 1px solid rgba(148, 163, 253, 0.5);
+      box-shadow: 0 24px 65px rgba(15, 23, 42, 0.85);
+      color: #e5e7eb;
+      backdrop-filter: blur(18px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .hero-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e5e7eb;
+    }
+
+    .hero-card-tag {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      color: #cbd5f5;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      font-size: 12px;
+    }
+
+    .hero-metric {
+      background: rgba(15, 23, 42, 0.85);
+      padding: 10px;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    .hero-metric-label {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+
+    .hero-metric-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f9fafb;
+    }
+
+    .hero-metric-pill {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.1);
+      color: #bbf7d0;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .hero-ai-bubble {
+      position: absolute;
+      right: -10px;
+      bottom: -12px;
+      width: 160px;
+      border-radius: 18px;
+      padding: 10px 12px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(148, 163, 253, 0.65);
+      color: #e5e7eb;
+      font-size: 11px;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.9);
+    }
+
+    .hero-ai-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #a5b4fc;
+      margin-bottom: 4px;
+      display: inline-block;
+    }
+
+    .hero-ai-text {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #e5e7eb;
+    }
+
+    /* Logos / trust */
+    .trust {
+      margin-bottom: 40px;
+    }
+
+    .trust-label {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #9ca3af;
+      margin-bottom: 10px;
+    }
+
+    .trust-logos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      color: #e5e7eb;
+      font-size: 13px;
+    }
+
+    .trust-item {
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(15, 23, 42, 0.7);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .trust-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+    }
+
+    /* Content layout blocks */
+    .section-card {
+      background: #020617;
+      border-radius: 20px;
+      border: 1px solid rgba(30, 64, 175, 0.55);
+      padding: 22px 20px 20px;
+      margin-bottom: 26px;
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.85);
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 14px;
+      gap: 12px;
+    }
+
+    .section-title {
+      color: #e5e7eb;
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .section-subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    .pill {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      color: #cbd5f5;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    /* Features */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      font-size: 13px;
+    }
+
+    .feature {
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: radial-gradient(circle at top left, rgba(79, 70, 229, 0.12), rgba(15, 23, 42, 0.95));
+      padding: 12px;
+      color: #e5e7eb;
+    }
+
+    .feature h3 {
+      margin: 0 0 5px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .feature p {
+      margin: 0;
+      color: #9ca3af;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .feature-list {
+      margin-top: 8px;
+      padding-left: 16px;
+      color: #cbd5f5;
+      font-size: 12px;
+    }
+
+    /* AI section */
+    .ai-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2.4fr);
+      gap: 18px;
+      font-size: 13px;
+      color: #e5e7eb;
+    }
+
+    .ai-callout {
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 253, 0.5);
+      background: radial-gradient(circle at top, rgba(129, 140, 248, 0.2), rgba(15, 23, 42, 0.98));
+      padding: 12px 13px;
+      font-size: 12px;
+    }
+
+    .ai-callout strong {
+      color: #c7d2fe;
+    }
+
+    .ai-list {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12px;
+      color: #cbd5f5;
+      line-height: 1.6;
+    }
+
+    /* Testimonials */
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      font-size: 13px;
+    }
+
+    .testimonial {
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.95);
+      padding: 12px 13px;
+      color: #e5e7eb;
+    }
+
+    .testimonial-quote {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #cbd5f5;
+      margin-bottom: 8px;
+    }
+
+    .testimonial-author {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    /* Pricing highlight */
+    .pricing {
+      display: grid;
+      grid-template-columns: minmax(0, 2.2fr) minmax(0, 2.4fr);
+      gap: 18px;
+      font-size: 13px;
+      color: #e5e7eb;
+      align-items: center;
+    }
+
+    .pricing-card {
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      padding: 14px 14px 13px;
+      background: radial-gradient(circle at top, rgba(22, 163, 74, 0.35), rgba(15, 23, 42, 0.98));
+    }
+
+    .pricing-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .pricing-row span.label {
+      font-size: 12px;
+      color: #cbd5f5;
+    }
+
+    .pricing-row span.value {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .pricing-tagline {
+      font-size: 12px;
+      color: #bbf7d0;
+      margin-top: 6px;
+    }
+
+    .pricing-note {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 6px;
+    }
+
+    /* Contact section */
+    .contact-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2.4fr) minmax(0, 2.6fr);
+      gap: 18px;
+      font-size: 13px;
+      color: #e5e7eb;
+    }
+
+    .contact-info {
+      font-size: 13px;
+      color: #cbd5f5;
+    }
+
+    .contact-info p {
+      margin: 0 0 8px;
+    }
+
+    .contact-list {
+      padding-left: 18px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .contact-form {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      padding: 14px 14px 12px;
+      font-size: 13px;
+    }
+
+    .field-group {
+      margin-bottom: 10px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 12px;
+      color: #e5e7eb;
+      margin-bottom: 4px;
+    }
+
+    .field-label span {
+      color: #f97316;
+      margin-left: 2px;
+    }
+
+    .input, .textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      padding: 7px 9px;
+      font-size: 13px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #e5e7eb;
+      outline: none;
+    }
+
+    .input:focus, .textarea:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.5);
+    }
+
+    .textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .contact-consent {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 10px;
+    }
+
+    .contact-consent input {
+      margin-top: 2px;
+    }
+
+    .contact-status {
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    .contact-status.success {
+      color: #4ade80;
+    }
+
+    .contact-status.error {
+      color: #fda4af;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(30, 64, 175, 0.6);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 11px;
+      color: #6b7280;
+    }
+
+    .footer a {
+      color: #9ca3af;
+    }
+
+    .footer a:hover {
+      color: #e5e7eb;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .hero-right {
+        order: -1;
+      }
+
+      .features-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .ai-grid,
+      .pricing,
+      .contact-grid,
+      .testimonials-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .testimonials-grid {
+        gap: 10px;
+      }
+
+      .section-card {
+        padding: 18px 16px 16px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .nav-links {
+        display: none;
+      }
+
+      .hero-badges {
+        gap: 6px;
+      }
+
+      .features-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- NAV -->
+    <header class="nav">
+      <div class="logo">
+        <div class="logo-mark">T</div>
+        <div class="logo-text">
+          <span>TimePerk</span>
+          <span>Field & service teams</span>
+        </div>
+      </div>
+
+      <nav class="nav-links">
+        <a href="#features">Product</a>
+        <a href="#ai">AI Assistant</a>
+        <a href="#customers">Customers</a>
+        <a href="#contact">Contact</a>
+      </nav>
+
+      <div class="nav-cta">
+        <button
+          class="btn-primary"
+          onclick="window.location.href='https://app.vendaslive.com/register';"
+        >
+          Start Free Trial <span class="chevron">↗</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div>
+        <div class="hero-kicker">
+          <span class="hero-kicker-chip">New</span>
+          <span>AI-powered timesheets & field management</span>
+        </div>
+
+        <h1 class="hero-title">
+          From technicians to managers — one platform to run your
+          <span class="highlight">entire operations</span>.
+        </h1>
+
+        <p class="hero-subtitle">
+          TimePerk centralises timesheets, expenses, travels and dashboards in a single,
+          AI-assisted workspace – designed for real service teams on the road, not for
+          spreadsheets.
+        </p>
+
+        <div class="hero-badges">
+          <span class="hero-badge">Timesheets · Expenses · Travels</span>
+          <span class="hero-badge">AI Assistant for managers & technicians</span>
+          <span class="hero-badge">Multi-tenant · Built in Portugal 🇵🇹</span>
+        </div>
+
+        <div class="hero-actions">
+          <button
+            class="btn-primary"
+            onclick="window.location.href='https://app.vendaslive.com/register';"
+          >
+            Start Free Trial
+            <span class="chevron">→</span>
+          </button>
+
+          <button
+            class="btn-secondary"
+            onclick="document.getElementById('contact').scrollIntoView({ behavior: 'smooth' });"
+          >
+            Talk to us
+          </button>
+        </div>
+
+        <p class="hero-note">
+          <span>14-day free trial.</span> No credit card required. Cancel anytime.
+        </p>
+      </div>
+
+      <div class="hero-right">
+        <div class="hero-card">
+          <div class="hero-card-header">
+            <div>
+              <div class="hero-card-title">Today at a glance</div>
+              <div style="font-size: 11px; color:#cbd5f5; margin-top:3px;">
+                UPG2AI - field team
+              </div>
+            </div>
+            <div class="hero-card-tag">AI Insights • Live</div>
+          </div>
+
+          <div class="hero-grid">
+            <div class="hero-metric">
+              <div class="hero-metric-label">Timesheets</div>
+              <div class="hero-metric-value">
+                28
+                <span class="hero-metric-pill">
+                  ✓ submitted
+                </span>
+              </div>
+            </div>
+
+            <div class="hero-metric">
+              <div class="hero-metric-label">Pending approvals</div>
+              <div class="hero-metric-value">
+                4
+                <span class="hero-metric-pill" style="background: rgba(250, 204, 21, 0.12); color:#facc15;">
+                  • review
+                </span>
+              </div>
+            </div>
+
+            <div class="hero-metric">
+              <div class="hero-metric-label">Expenses this week</div>
+              <div class="hero-metric-value">
+                1 240 €
+              </div>
+            </div>
+
+            <div class="hero-metric">
+              <div class="hero-metric-label">Travel distance</div>
+              <div class="hero-metric-value">
+                3 420 km
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-ai-bubble">
+            <div class="hero-ai-badge">AI assistant</div>
+            <div class="hero-ai-text">
+              “You can approve all Monday expenses in one click.
+              No anomalies detected against your policy.”
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRUST -->
+    <section class="trust">
+      <div class="trust-label">Powered and trusted by</div>
+      <div class="trust-logos">
+        <div class="trust-item">
+          <div class="trust-dot"></div>
+          <span>TryIT · IT & field services</span>
+        </div>
+        <div class="trust-item">
+          <div class="trust-dot"></div>
+          <span>PL2R · Industrial services (Alcobaça)</span>
+        </div>
+        <div class="trust-item">
+          <div class="trust-dot"></div>
+          <span>UPG2AI · SaaS & AI engineering</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="section-card" id="features">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Everything your service team needs in one place</div>
+          <div class="section-subtitle">
+            Simple for technicians in the field, powerful for managers in the back-office.
+          </div>
+        </div>
+        <div class="pill">Core features</div>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature">
+          <h3>Timesheets</h3>
+          <p>
+            Accurate hours without spreadsheets. Technicians log work directly from mobile,
+            managers approve in seconds.
+          </p>
+          <ul class="feature-list">
+            <li>Clock-in / clock-out per job or project</li>
+            <li>Mobile-friendly entry (phone & tablet)</li>
+            <li>Supervisor approval workflow</li>
+            <li>Export-ready for payroll & ERP</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Expenses</h3>
+          <p>
+            Capture receipts in the moment, categorise and approve faster. No more lost paper.
+          </p>
+          <ul class="feature-list">
+            <li>Photo capture of receipts</li>
+            <li>Categories, cost centres & notes</li>
+            <li>Approval flow & reimbursement status</li>
+            <li>Export to accounting or ERP</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Travels & km</h3>
+          <p>
+            Keep all trips, kilometres and per-diem in one structured place, ready for finance.
+          </p>
+          <ul class="feature-list">
+            <li>Trips with origin, destination & purpose</li>
+            <li>Km tracking & per-diem support</li>
+            <li>Link travels to projects or customers</li>
+            <li>Clear audit trail for inspections</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Planning (Roadmap)</h3>
+          <p>
+            Visual scheduling for teams and jobs, connected to timesheets and travels.
+          </p>
+          <ul class="feature-list">
+            <li>Calendar view by technician & project</li>
+            <li>Drag-and-drop assignments</li>
+            <li>Capacity view per team</li>
+            <li><strong>Roadmap:</strong> early access in upcoming releases</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>AI Assistant</h3>
+          <p>
+            Your co-pilot for daily operations. Ask in natural language, get clear answers.
+          </p>
+          <ul class="feature-list">
+            <li>Summarise weekly hours by client or project</li>
+            <li>Spot anomalies in overtime or expenses</li>
+            <li>Generate management summaries instantly</li>
+            <li>Available for both managers and technicians</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Dashboards & multi-tenant</h3>
+          <p>
+            See your operations in real time, with secure isolation per company or business unit.
+          </p>
+          <ul class="feature-list">
+            <li>KPIs by team, project, customer & region</li>
+            <li>Multi-tenant by design</li>
+            <li>Role-based access (technicians, managers, admins)</li>
+            <li>Built to integrate with your existing tools</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI SECTION -->
+    <section class="section-card" id="ai">
+      <div class="section-header">
+        <div>
+          <div class="section-title">AI that understands your operations – not just text</div>
+          <div class="section-subtitle">
+            Built together with UPG2AI for real-world service and field teams.
+          </div>
+        </div>
+        <div class="pill">AI assistant</div>
+      </div>
+
+      <div class="ai-grid">
+        <div>
+          <div class="ai-callout">
+            <p>
+              <strong>Ask questions like:</strong>
+            </p>
+            <ul class="ai-list">
+              <li>“Who worked more than 10 hours yesterday?”</li>
+              <li>“Show me all expenses this week over 200 €.”</li>
+              <li>“Summarise last month per customer in 3 bullet points.”</li>
+              <li>“Which technicians are close to overtime thresholds?”</li>
+            </ul>
+          </div>
+        </div>
+        <div>
+          <p style="font-size: 12px; color:#cbd5f5; margin-top:0;">
+            TimePerk’s AI assistant is integrated directly with your timesheets, expenses and
+            travels. That means:
+          </p>
+          <ul class="ai-list">
+            <li>Answers always reflect your actual, up-to-date operational data.</li>
+            <li>No exports or manual uploads. The data is already there.</li>
+            <li>Helps managers decide faster without creating more work for technicians.</li>
+          </ul>
+          <p style="font-size: 12px; color:#a5b4fc; margin-top:8px;">
+            AI capabilities are developed and maintained by <strong>UPG2AI</strong>,
+            the SaaS and AI engineering team behind TimePerk.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CUSTOMERS / TESTIMONIALS -->
+    <section class="section-card" id="customers">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Built with real operations teams</div>
+          <div class="section-subtitle">
+            Feedback from companies using TimePerk in the field.
+          </div>
+        </div>
+        <div class="pill">Customers</div>
+      </div>
+
+      <div class="testimonials-grid">
+        <article class="testimonial">
+          <div class="testimonial-quote">
+            “TimePerk reduced our administrative workload by more than 40%. Technicians just record
+            their work, managers get clean data out of the box.”
+          </div>
+          <div class="testimonial-author">TryIT – IT & field services</div>
+        </article>
+
+        <article class="testimonial">
+          <div class="testimonial-quote">
+            “Simple for technicians, powerful for management. We finally have timesheets, expenses
+            and kilometres in one structured system.”
+          </div>
+          <div class="testimonial-author">PL2R – Industrial services, Alcobaça</div>
+        </article>
+
+        <article class="testimonial">
+          <div class="testimonial-quote">
+            “A modern SaaS built for real operations teams. The AI assistant gives us insights that
+            normally required days of manual work.”
+          </div>
+          <div class="testimonial-author">UPG2AI – SaaS & AI engineering</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- PRICING / CTA -->
+    <section class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Start small, scale when you’re ready</div>
+          <div class="section-subtitle">
+            From a single team to multiple business units – TimePerk grows with you.
+          </div>
+        </div>
+        <div class="pill">Plans</div>
+      </div>
+
+      <div class="pricing">
+        <div>
+          <p style="font-size:13px; color:#cbd5f5; margin-top:0;">
+            You can start with a small team and expand as your operations grow. Upgrade plans,
+            add licences or activate AI when it makes sense for your business.
+          </p>
+          <ul class="ai-list">
+            <li>Starter plan ideal for very small teams.</li>
+            <li>Team & Enterprise plans for growing and multi-site operations.</li>
+            <li>Add-ons like Planning and AI can be activated when needed.</li>
+          </ul>
+          <p style="font-size:12px; color:#9ca3af; margin-top:8px;">
+            We’ll help you choose the right setup based on your number of technicians,
+            supervisors and locations.
+          </p>
+        </div>
+
+        <div class="pricing-card">
+          <div class="pricing-row">
+            <span class="label">Starter</span>
+            <span class="value">Up to 2 users</span>
+          </div>
+          <div class="pricing-row">
+            <span class="label">Team & Enterprise</span>
+            <span class="value">Flexible licences</span>
+          </div>
+          <p class="pricing-tagline">
+            Full pricing and conditions available during onboarding.
+          </p>
+          <p class="pricing-note">
+            Transparent, subscription-based SaaS – no hidden setup fees.
+          </p>
+          <div style="margin-top: 12px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button
+              class="btn-primary"
+              onclick="window.location.href='https://app.vendaslive.com/register';"
+            >
+              Start Free Trial
+            </button>
+            <button
+              class="btn-secondary"
+              onclick="document.getElementById('contact').scrollIntoView({ behavior: 'smooth' });"
+            >
+              Request pricing call
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section class="section-card" id="contact">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Questions, demo, or partnership?</div>
+          <div class="section-subtitle">
+            Send us a message and we’ll get back to you as soon as possible.
+          </div>
+        </div>
+        <div class="pill">Contact</div>
+      </div>
+
+      <div class="contact-grid">
+        <div class="contact-info">
+          <p>
+            TimePerk is developed by <strong>UPG2AI</strong> with launch customers such as
+            <strong>TryIT</strong> and <strong>PL2R</strong>.
+          </p>
+          <p>
+            Use the form to:
+          </p>
+          <ul class="contact-list">
+            <li>Book a product demo for your company</li>
+            <li>Discuss specific needs (integrations, ERP, etc.)</li>
+            <li>Ask any question about plans or roadmap</li>
+          </ul>
+          <p style="margin-top:10px;">
+            Prefer email? You can also reach us at:
+            <a href="mailto:hello@upg2ai.com">hello@upg2ai.com</a>
+          </p>
+        </div>
+
+        <form class="contact-form" id="contactForm">
+          <div class="field-group">
+            <label class="field-label" for="name">
+              Name<span>*</span>
+            </label>
+            <input class="input" type="text" id="name" name="name" required />
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="email">
+              Work email<span>*</span>
+            </label>
+            <input class="input" type="email" id="email" name="email" required />
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="company">
+              Company
+            </label>
+            <input class="input" type="text" id="company" name="company" />
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="message">
+              How can we help?<span>*</span>
+            </label>
+            <textarea
+              class="textarea"
+              id="message"
+              name="message"
+              required
+              placeholder="Example: We have 25 technicians on the road and want to replace spreadsheets for timesheets and expenses."
+            ></textarea>
+          </div>
+
+          <div class="contact-consent">
+            <input type="checkbox" id="consent" name="consent" required />
+            <label for="consent">
+              I agree to be contacted about TimePerk and related services. We respect your privacy
+              and will not share your details with third parties.
+            </label>
+          </div>
+
+          <button type="submit" class="btn-primary" style="margin-top:4px;">
+            Send message
+          </button>
+          <div id="contactStatus" class="contact-status" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+      <div>© <span id="year"></span> TimePerk · UPG2AI</div>
+      <div>
+        Built in Portugal ·
+        <a href="mailto:hello@upg2ai.com">hello@upg2ai.com</a>
+      </div>
+    </footer>
+  </div>
+  <script>
+    // current year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Contact form submission
+    const contactForm = document.getElementById('contactForm');
+    const contactStatus = document.getElementById('contactStatus');
+
+    contactForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      contactStatus.textContent = 'Sending...';
+      contactStatus.className = 'contact-status';
+
+      const formData = {
+        name: contactForm.name.value.trim(),
+        email: contactForm.email.value.trim(),
+        company: contactForm.company.value.trim(),
+        message: contactForm.message.value.trim(),
+        consent: contactForm.consent.checked,
+      };
+
+      try {
+        const response = await fetch('https://api.vendaslive.com/api/public/contact', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData),
+        });
+
+        if (!response.ok) {
+          throw new Error('Request failed');
+        }
+
+        contactStatus.textContent = 'Thank you! We received your message.';
+        contactStatus.className = 'contact-status success';
+        contactForm.reset();
+      } catch (error) {
+        // fallback – user can still contact via email
+        contactStatus.textContent =
+          'Could not send the form. Please email us at hello@upg2ai.com.';
+        contactStatus.className = 'contact-status error';
+      }
+    });
+  </script>
+</body>
+</html>
