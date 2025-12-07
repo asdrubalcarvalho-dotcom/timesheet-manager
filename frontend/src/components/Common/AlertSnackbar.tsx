@@ -37,12 +37,14 @@ const AlertSnackbar: React.FC<AlertSnackbarProps> = ({
         severity={severity} 
         variant="filled" 
         sx={{ 
-          minWidth: '280px',
-          maxWidth: '400px',
+          minWidth: '300px',
+          maxWidth: '600px', // Increased to accommodate longer license error messages
           boxShadow: 3,
           '& .MuiAlert-message': {
             fontSize: '0.9rem',
-            fontWeight: 500
+            fontWeight: 500,
+            whiteSpace: 'normal', // Allow text wrapping for long messages
+            wordBreak: 'break-word' // Break long words if needed
           },
           // Custom colors
           ...(severity === 'success' && {

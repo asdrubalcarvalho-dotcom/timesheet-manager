@@ -58,10 +58,13 @@ return [
     | Aceitar automaticamente qualquer subdomínio *.vendaslive.com
     | Necessário para os tenants: demo.vendaslive.com, empresa.vendaslive.com, etc.
     |
+    | Desenvolvimento: *.localhost:8082 para tenant subdomains
+    |
     */
 
     'allowed_origins_patterns' => [
         '/^https?:\/\/([a-z0-9-]+\.)?vendaslive\.com$/',
+        '/^http:\/\/[a-z0-9-]+\.localhost:8082$/',  // Dev tenant subdomains
     ],
 
     /*

@@ -192,6 +192,17 @@ export async function scheduleDowngrade(
       plan,
       user_limit: userLimit
     });
+    
+    // Validate success field in response (backend may return 200 with success: false)
+    if (!response.data.success) {
+      throw {
+        response: {
+          status: 400,
+          data: response.data
+        }
+      };
+    }
+    
     return response.data;
   } catch (error: any) {
     throw normalizeBillingError(error);

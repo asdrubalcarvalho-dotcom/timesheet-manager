@@ -79,7 +79,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
           color: '#2196f3',
           description: 'For growing teams that need flexibility',
           features: [
-            'Unlimited users',
+            'Up to 50 licenses',
             'Timesheets included',
             'Expenses included',
             'Travels included',
@@ -99,7 +99,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
           color: '#9c27b0',
           description: 'Everything included - No add-ons required',
           features: [
-            'Unlimited users',
+            'Up to 150 licenses',
             'All features enabled',
             'Timesheets, Expenses & Travels',
             'Planning included',

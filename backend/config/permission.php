@@ -93,7 +93,7 @@ return [
          * foreign key is other than `team_id`.
          */
 
-        'team_foreign_key' => 'tenant_id',
+        'team_foreign_key' => 'team_id',
     ],
 
     /*
@@ -129,9 +129,6 @@ return [
      * If you already did the migration then you must make a new migration to also
      * add 'team_foreign_key' to 'roles', 'model_has_roles', and 'model_has_permissions'
      * (view the latest version of this package's migration file)
-     * 
-     * MULTI-DATABASE TENANCY: Set to FALSE because each tenant has isolated database.
-     * Team isolation is achieved via separate databases, not FK constraints.
      */
 
     'teams' => false,
@@ -139,7 +136,7 @@ return [
     /*
      * The class to use to resolve the permissions team id
      */
-    'team_resolver' => \App\Support\Tenancy\TenantTeamResolver::class,
+    'team_resolver' => \Spatie\Permission\DefaultTeamResolver::class,
 
     /*
      * Passport Client Credentials Grant
@@ -200,6 +197,6 @@ return [
          * file. Using 'default' here means to use the `default` set in cache.php.
          */
 
-        'store' => env('PERMISSION_CACHE_STORE', 'database'),
+        'store' => 'default',
     ],
 ];

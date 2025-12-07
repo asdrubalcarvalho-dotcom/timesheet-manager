@@ -238,6 +238,8 @@ const BillingPage: React.FC = () => {
     
     try {
       await requestDowngrade(targetDowngradePlan);
+      // Show success message for scheduled downgrade
+      showInfo('Downgrade scheduled for next billing cycle.');
     } catch (err: any) {
       showError(err?.message || "Failed to schedule downgrade.");
     } finally {
@@ -255,7 +257,7 @@ const BillingPage: React.FC = () => {
       // Trial → Starter: Free downgrade (no payment)
       if (targetTrialExitPlan === 'starter') {
         await requestDowngrade(targetTrialExitPlan);
-        showInfo(`Your trial has ended. You are now on the ${targetTrialExitPlan} plan.`);
+        // No showInfo needed - requestDowngrade already shows success/error message
       } 
       // Trial → Team/Enterprise: Paid upgrade (requires checkout)
       else {

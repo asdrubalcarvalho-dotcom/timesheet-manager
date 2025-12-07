@@ -49,7 +49,7 @@ class Payment extends Model
         'completed_at',
         // Snapshot fields
         'plan',
-        'user_count',
+        'user_limit',
         'addons',
         'cycle_start',
         'cycle_end',

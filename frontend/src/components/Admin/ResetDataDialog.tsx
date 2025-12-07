@@ -13,11 +13,17 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Paper,
 } from '@mui/material';
 import {
   Warning as WarningIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
+  Delete as DeleteIcon,
+  Science as ScienceIcon,
 } from '@mui/icons-material';
 import { API_URL, getAuthHeaders } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -31,13 +37,20 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
   const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [confirmStep, setConfirmStep] = useState(1); // 1 = warning, 2 = confirm, 3 = success
+  const [resetOption, setResetOption] = useState<'clean' | 'demo'>('demo'); // Default to demo data
 
   const handleReset = async () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/admin/reset-data`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          with_demo_data: resetOption === 'demo'
+        }),
       });
 
       if (!response.ok) {
@@ -69,6 +82,7 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
   const handleClose = () => {
     if (!loading) {
       setConfirmStep(1);
+      setResetOption('demo'); // Reset to default
       onClose();
     }
   };
@@ -172,13 +186,64 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
               </Typography>
             </Alert>
 
-            <Alert severity="success">
-              <Typography variant="body2">
-                <strong>After reset:</strong>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight="medium" gutterBottom>
+                Important:
+              </Typography>
+              <Typography variant="body2" component="div">
+                • Your session will be closed automatically after reset
                 <br />
-                Fresh demo data will be automatically loaded, including sample projects, tasks, and users.
+                • You will need to login again with your Owner account
+                <br />
+                • After reset, you can choose to keep database clean or load demo data
               </Typography>
             </Alert>
+
+            <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                Select your preference:
+              </Typography>
+              
+              <RadioGroup
+                value={resetOption}
+                onChange={(e) => setResetOption(e.target.value as 'clean' | 'demo')}
+              >
+                <FormControlLabel
+                  value="demo"
+                  control={<Radio />}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ScienceIcon fontSize="small" color="primary" />
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          Load demo data (Recommended)
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Create sample projects, tasks, locations, and users for testing
+                        </Typography>
+                      </Box>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="clean"
+                  control={<Radio />}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <DeleteIcon fontSize="small" color="action" />
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          Clean database (No demo data)
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Start with empty database (only Owner account)
+                        </Typography>
+                      </Box>
+                    </Box>
+                  }
+                />
+              </RadioGroup>
+            </Paper>
           </Box>
         )}
 
@@ -194,8 +259,19 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
               </Typography>
             </Alert>
 
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight="medium">
+                Selected option:
+              </Typography>
+              <Typography variant="body2">
+                {resetOption === 'demo' 
+                  ? '✓ Delete all data and load demo data' 
+                  : '✓ Delete all data (clean database)'}
+              </Typography>
+            </Alert>
+
             <Typography variant="body1" color="text.secondary" align="center">
-              This action will immediately delete all existing data and restore demo data.
+              This action will immediately delete all existing data.
               <br /><br />
               <strong>Click "RESET DATA NOW" to confirm.</strong>
             </Typography>
@@ -210,7 +286,9 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
               Data Reset Successful!
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              All tenant data has been reset and demo data has been loaded.
+              {resetOption === 'demo' 
+                ? 'All tenant data has been reset and demo data has been loaded.'
+                : 'All tenant data has been deleted. Database is now clean.'}
               <br />
               You will be logged out automatically in 2 seconds...
             </Typography>

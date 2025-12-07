@@ -567,18 +567,35 @@ class PlanManager
         $currentUserCount = $tenant->run(function () {
             return \App\Models\Technician::where('is_active', 1)->count();
         });
+        
+        // Get current purchased licenses
+        $currentLicenses = $subscription->user_limit ?? 0;
 
-        // Validate user limits for target plan
+        // Validate licenses for target plan (not active users, but purchased licenses)
         if ($targetPlan === 'starter') {
             if ($currentUserCount > 2) {
                 throw new \InvalidArgumentException(
-                    "Cannot downgrade to Starter plan. You have {$currentUserCount} active users, but Starter supports only 2. Please reduce users first."
+                    "Cannot convert to Starter plan. You have {$currentUserCount} active users, but Starter supports only 2. Please reduce users first or select another plan."
                 );
             }
             $targetUserLimit = 2; // Force Starter limit
+        } elseif ($targetPlan === 'team') {
+            if ($currentLicenses > 50) {
+                throw new \InvalidArgumentException(
+                    "Cannot downgrade to Team plan. You currently have {$currentLicenses} licenses, but Team plan supports up to 50 licenses. Please reduce your licenses first or contact support."
+                );
+            }
+            $targetUserLimit = $targetUserLimit ?? min($currentLicenses, 50);
+        } elseif ($targetPlan === 'enterprise') {
+            if ($currentLicenses > 150) {
+                throw new \InvalidArgumentException(
+                    "Cannot downgrade to Enterprise plan. You currently have {$currentLicenses} licenses, but Enterprise plan supports up to 150 licenses. Please reduce your licenses first or contact support."
+                );
+            }
+            $targetUserLimit = $targetUserLimit ?? min($currentLicenses, 150);
         } elseif ($targetUserLimit && $currentUserCount > $targetUserLimit) {
             throw new \InvalidArgumentException(
-                "Cannot downgrade. You have {$currentUserCount} active users, but requested limit is {$targetUserLimit}. Please reduce users first."
+                "Cannot convert to this plan. You have {$currentUserCount} active users, but requested limit is {$targetUserLimit}. Please reduce users first or select another plan."
             );
         }
 
@@ -639,13 +656,13 @@ class PlanManager
         if ($targetPlan === 'starter') {
             if ($currentUserCount > 2) {
                 throw new \InvalidArgumentException(
-                    "Cannot convert to Starter plan. You have {$currentUserCount} active users, but Starter supports only 2. Please reduce users first."
+                    "Cannot convert to Starter plan. You have {$currentUserCount} active users, but Starter supports only 2. Please reduce users first or select another plan."
                 );
             }
             $targetUserLimit = 2; // Force Starter limit
         } elseif ($targetUserLimit && $currentUserCount > $targetUserLimit) {
             throw new \InvalidArgumentException(
-                "Cannot convert. You have {$currentUserCount} active users, but requested limit is {$targetUserLimit}. Please reduce users first."
+                "Cannot convert to this plan. You have {$currentUserCount} active users, but requested limit is {$targetUserLimit}. Please reduce users first or select another plan."
             );
         }
 

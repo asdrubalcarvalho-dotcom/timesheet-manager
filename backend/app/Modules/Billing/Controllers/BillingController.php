@@ -520,8 +520,23 @@ class BillingController extends Controller
                     ], 422);
                 }
                 
-                // Simple calculation: (new - current) × price_per_user
+                // PLAN LIMIT VALIDATION: Enforce maximum users per plan
                 $plan = $subscription->plan;
+                if ($plan === 'team' && $newLimit > 50) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Team plan supports up to 50 licenses. You are trying to set ' . $newLimit . ' licenses.',
+                    ], 422);
+                }
+                
+                if ($plan === 'enterprise' && $newLimit > 150) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Enterprise plan supports up to 150 licenses. You are trying to set ' . $newLimit . ' licenses.',
+                    ], 422);
+                }
+                
+                // Simple calculation: (new - current) × price_per_user
                 $pricePerUser = config("billing.plans.{$plan}.price_per_user") ?? 0;
                 $delta = $newLimit - $currentLimit;
                 $amount = round($pricePerUser * $delta, 2);
@@ -537,6 +552,24 @@ class BillingController extends Controller
                 
             } elseif (!empty($validated['mode']) && $validated['mode'] === 'plan' && !empty($validated['plan'])) {
                 // MODE: plan - Prorated plan upgrade/downgrade
+                
+                // PLAN LIMIT VALIDATION: Validate requested licenses don't exceed plan maximum
+                $requestedUserLimit = $validated['user_limit'] ?? $subscription->user_limit ?? 1;
+                
+                if ($validated['plan'] === 'team' && $requestedUserLimit > 50) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Team plan supports up to 50 licenses. You requested ' . $requestedUserLimit . ' licenses.',
+                    ], 422);
+                }
+                
+                if ($validated['plan'] === 'enterprise' && $requestedUserLimit > 150) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Enterprise plan supports up to 150 licenses. You requested ' . $requestedUserLimit . ' licenses.',
+                    ], 422);
+                }
+                
                 // Uses differential pricing for Starter → Paid (full price) vs Paid → Paid (difference only)
                 $amount = $this->priceCalculator->calculatePlanUpgradePrice(
                     $tenant,
@@ -663,7 +696,7 @@ class BillingController extends Controller
                     
                     // Update gateway payment with snapshot fields
                     $plan = $targetPlan ?? $subscription->plan ?? 'starter';
-                    $userCount = $targetUserLimit ?? $subscription->user_limit ?? 1;
+                    $userLimit = $targetUserLimit ?? $subscription->user_limit ?? 1;
                     
                     // Build addons array
                     $addons = [];
@@ -679,7 +712,7 @@ class BillingController extends Controller
                     
                     // Update payment with snapshot data
                     $gatewayPayment->plan = $plan;
-                    $gatewayPayment->user_count = $userCount;
+                    $gatewayPayment->user_limit = $userLimit;
                     $gatewayPayment->addons = $addons;
                     $gatewayPayment->cycle_start = $cycleStart;
                     $gatewayPayment->cycle_end = $cycleEnd;
@@ -696,7 +729,7 @@ class BillingController extends Controller
                     \Log::info('[BillingController] Payment with snapshot created', [
                         'payment_id' => $payment->id,
                         'plan' => $payment->plan,
-                        'user_count' => $payment->user_count,
+                        'user_limit' => $payment->user_limit,
                         'stripe_payment_intent_id' => $stripePaymentIntentId,
                         'amount' => $amount,
                     ]);
@@ -826,7 +859,7 @@ class BillingController extends Controller
                                 'snapshot_id' => $snapshot->id,
                                 'payment_id' => $confirmedPayment->id,
                                 'snapshot_plan' => $snapshot->plan,
-                                'snapshot_user_count' => $snapshot->user_count,
+                                'snapshot_user_limit' => $snapshot->user_limit,
                                 'final_subscription_plan' => $subscription->plan,
                                 'final_subscription_user_limit' => $subscription->user_limit,
                                 'addons' => $snapshot->addons,

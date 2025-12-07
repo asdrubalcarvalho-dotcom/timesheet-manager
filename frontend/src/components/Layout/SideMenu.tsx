@@ -41,6 +41,7 @@ import {
 import { useAuth } from '../Auth/AuthContext';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
 import { useFeatures } from '../../contexts/FeatureContext';
+import { useBilling } from '../../contexts/BillingContext';
 import ResetDataDialog from '../Admin/ResetDataDialog';
 
 interface SideMenuProps {
@@ -55,6 +56,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const { user, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
   const { hasTravels, hasPlanning, hasAI } = useFeatures(); // Billing-controlled feature flags
+  const { billingSummary } = useBilling(); // Get billing info to check trial status
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -175,7 +177,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       label: 'Reset Data',
       icon: <ResetIcon />,
       path: 'reset-data',
-      show: isOwner(), // Only Owner can see this
+      show: isOwner() && billingSummary?.is_trial === true, // Only Owner in Trial plan
       action: true // Special flag to trigger dialog instead of navigation
     }
   ];

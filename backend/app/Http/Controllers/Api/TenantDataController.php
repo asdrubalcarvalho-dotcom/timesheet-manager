@@ -14,11 +14,13 @@ use Illuminate\Support\Facades\Log;
 class TenantDataController extends Controller
 {
     /**
-     * Reset tenant data: truncate all tables except Owner user, then re-seed.
+     * Reset tenant data: truncate all tables except Owner user, optionally re-seed demo data.
      * 
      * CRITICAL: Only accessible by Owner role.
+     * 
+     * @param Request $request (with_demo_data: boolean)
      */
-    public function resetData(): JsonResponse
+    public function resetData(\Illuminate\Http\Request $request): JsonResponse
     {
         // Authorization: Only Owner can reset tenant data
         if (!auth()->user()->hasRole('Owner')) {
@@ -26,6 +28,20 @@ class TenantDataController extends Controller
                 'message' => 'Unauthorized. Only the Owner can reset tenant data.'
             ], 403);
         }
+
+        // CRITICAL: Only allow reset for Trial plans
+        $tenant = tenancy()->tenant;
+        if ($tenant && $tenant->subscription) {
+            $subscription = $tenant->subscription;
+            if (!$subscription->is_trial) {
+                return response()->json([
+                    'message' => 'Reset Data is only available for Trial plans. This feature is disabled for paid subscriptions (Starter, Team, Enterprise) to protect production data.'
+                ], 403);
+            }
+        }
+
+        // Get option to load demo data (default: true for backwards compatibility)
+        $withDemoData = $request->input('with_demo_data', true);
 
         try {
             // 1. Get Owner user(s) before truncation
@@ -116,33 +132,59 @@ class TenantDataController extends Controller
                 ]);
             }
 
-            // 8. Run demo data seeder (CompleteTenantSeeder)
-            Log::info('Running CompleteTenantSeeder', [
-                'database' => DB::connection()->getDatabaseName(),
-                'default_connection' => DB::getDefaultConnection()
-            ]);
-            
-            try {
-                Artisan::call('db:seed', [
-                    '--class' => 'Database\\Seeders\\CompleteTenantSeeder',
-                    '--force' => true,
+            // 8. Optionally run demo data seeder (CompleteTenantSeeder)
+            if ($withDemoData) {
+                Log::info('Running CompleteTenantSeeder', [
+                    'database' => DB::connection()->getDatabaseName(),
+                    'default_connection' => DB::getDefaultConnection()
                 ]);
                 
-                $seederOutput = Artisan::output();
-                Log::info('Seeder completed', ['output' => $seederOutput]);
-            } catch (\Throwable $seederError) {
-                Log::error('Seeder failed', [
-                    'error' => $seederError->getMessage(),
-                    'trace' => $seederError->getTraceAsString()
+                try {
+                    Artisan::call('db:seed', [
+                        '--class' => 'Database\\Seeders\\CompleteTenantSeeder',
+                        '--force' => true,
+                    ]);
+                    
+                    $seederOutput = Artisan::output();
+                    Log::info('Seeder completed', ['output' => $seederOutput]);
+                } catch (\Throwable $seederError) {
+                    Log::error('Seeder failed', [
+                        'error' => $seederError->getMessage(),
+                        'trace' => $seederError->getTraceAsString()
+                    ]);
+                    // Continue anyway - at least Owner is restored
+                }
+                
+                $message = 'Tenant data has been reset successfully. All demo data has been restored.';
+            } else {
+                $message = 'Tenant data has been reset successfully. Database is now clean (no demo data).';
+            }
+
+            // 9. CRITICAL: Update user_limit for Trial Enterprise subscriptions
+            // Rule: user_limit must ALWAYS equal the number of users (licenses = users)
+            if ($tenant && $tenant->subscription && $tenant->subscription->is_trial) {
+                $userCount = User::count();
+                $subscription = $tenant->subscription;
+                
+                // Update user_limit on central database (subscriptions table is in central DB)
+                DB::connection('mysql')->table('subscriptions')
+                    ->where('tenant_id', $tenant->id)
+                    ->update(['user_limit' => $userCount]);
+                
+                Log::info('Trial subscription user_limit updated after reset', [
+                    'tenant' => $tenant->slug,
+                    'user_count' => $userCount,
+                    'user_limit' => $userCount,
+                    'demo_data' => $withDemoData
                 ]);
-                // Continue anyway - at least Owner is restored
             }
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Tenant data has been reset successfully. All demo data has been restored.',
+                'message' => $message,
                 'owners_preserved' => count($ownerData),
-                'tables_reset' => count($tablesToTruncate)
+                'tables_reset' => count($tablesToTruncate),
+                'demo_data_loaded' => $withDemoData
             ], 200);
 
         } catch (\Throwable $e) {
