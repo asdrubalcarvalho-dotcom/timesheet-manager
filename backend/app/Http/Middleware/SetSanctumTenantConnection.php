@@ -25,6 +25,7 @@ class SetSanctumTenantConnection
                 $request->is('api/tenants/request-signup') ||
                 $request->is('api/tenants/verify-signup') ||
                 $request->is('api/tenants/check-slug') ||
+                $request->is('api/login') ||
                 $request->is('api/public/*') ||
                 $request->is('api/contact') ||
                 $request->is('api/landing/*') ||
