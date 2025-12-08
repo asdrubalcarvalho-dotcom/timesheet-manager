@@ -21,6 +21,7 @@ import SideMenu from './components/Layout/SideMenu';
 import { LoginForm } from './components/Auth/LoginForm';
 import TenantRegistration from './components/Auth/TenantRegistration';
 import VerifyEmail from './components/Auth/VerifyEmail';
+import SuperAdminApp from './components/SuperAdmin/SuperAdminApp';
 const TimesheetCalendar = React.lazy(() => import('./components/Timesheets/TimesheetCalendar'));
 const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
 const PlanningGantt = React.lazy(() => import('./components/Planning/PlanningGantt'));
@@ -129,6 +130,25 @@ const AppContent: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // COPILOT GLOBAL RULES: Detect SuperAdmin host
+    const host = window.location.hostname;
+    const adminHosts = ['management.localhost', 'management.vendaslive.com', 'upg2ai.vendaslive.com'];
+    const isSuperAdminHost = adminHosts.includes(host);  // If SuperAdmin host, render SuperAdmin app ONLY
+  if (isSuperAdminHost) {
+    if (!user) {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="h5">Management Portal</Typography>
+          <Typography variant="body2" color="text.secondary">Please authenticate to continue</Typography>
+          <LoginForm />
+        </Box>
+      );
+    }
+    return <SuperAdminApp />;
+  }
+
+  // Normal tenant app logic below
   const currentPage = pathToPage(location.pathname);
 
   // ✅ ALWAYS call hooks before any conditional returns (Rules of Hooks)

@@ -14,6 +14,9 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # because the build context = backend/
 COPY . /var/www/html
 
+# Custom PHP-FPM pool configuration (increase max_children for concurrent internal API calls)
+COPY docker-php-fpm-www.conf /usr/local/etc/php-fpm.d/zzz-custom.conf
+
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

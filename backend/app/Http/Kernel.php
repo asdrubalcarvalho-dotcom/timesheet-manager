@@ -52,5 +52,7 @@ class Kernel extends HttpKernel
         'tenant.init.domain' => \App\Http\Middleware\InitializeTenancyByDomain::class,
         'tenant.init.request' => \App\Http\Middleware\InitializeTenancyByRequestData::class,
         'tenant.prevent.central' => \App\Http\Middleware\AllowCentralDomainFallback::class,
+
+        'telemetry.internal' => \App\Http\Middleware\TelemetryInternalMiddleware::class,
     ];
 }

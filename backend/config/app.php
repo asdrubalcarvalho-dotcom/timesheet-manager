@@ -91,6 +91,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Telemetry API Key
+    |--------------------------------------------------------------------------
+    |
+    | Internal API key for telemetry endpoints authentication.
+    | Required header: X-Internal-Api-Key
+    |
+    */
+    'telemetry_api_key' => env('TELEMETRY_API_KEY'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

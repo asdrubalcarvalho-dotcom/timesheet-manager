@@ -20,6 +20,12 @@ class SetSanctumTenantConnection
     public function handle(Request $request, Closure $next): Response
     {
         try {
+            // Skip for SuperAdmin telemetry routes (use central DB for management tenant)
+            if ($request->is('api/superadmin/telemetry/*')) {
+                \Log::debug('[SetSanctumTenantConnection] Skipping for SuperAdmin route');
+                return $next($request);
+            }
+            
             $tenantSlug = $request->header('X-Tenant');
             
             if (!$tenantSlug) {
