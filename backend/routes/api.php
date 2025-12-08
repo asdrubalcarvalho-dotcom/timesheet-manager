@@ -63,7 +63,7 @@ Route::get('tenants/ping', function () {
 });
 // Authentication routes (no tenant middleware - tenant identified via request body)
 Route::middleware('throttle:login')->group(function () {
-    Route::post('login', [AuthController::class, 'login']);
+    Route::post('login', [AuthController::class, 'login'])->name('login');
     Route::post('auth/sso/{provider}/token', [SocialAuthController::class, 'exchangeToken']);
 });
 
@@ -311,6 +311,45 @@ Route::middleware(['tenant.initialize'])->group(function () {
     });
     });
 });
+
+// =============================================================================
+// TELEMETRY API ROUTES (Internal - Protected by X-Internal-Api-Key)
+// =============================================================================
+Route::prefix('admin/telemetry')
+    ->middleware(['telemetry.internal'])
+    ->group(function () {
+        Route::get('info', [\App\Http\Controllers\Admin\TelemetryController::class, 'info']);
+        Route::get('tenants', [\App\Http\Controllers\Admin\TelemetryController::class, 'tenants']);
+        Route::get('billing', [\App\Http\Controllers\Admin\TelemetryController::class, 'billing']);
+        Route::get('usage', [\App\Http\Controllers\Admin\TelemetryController::class, 'usage']);
+        Route::get('errors', [\App\Http\Controllers\Admin\TelemetryController::class, 'errors']);
+        Route::get('health', [\App\Http\Controllers\Admin\TelemetryController::class, 'health']);
+        Route::get('ping', [\App\Http\Controllers\Admin\TelemetryController::class, 'ping']);
+    });
+
+// =============================================================================
+// SUPERADMIN TELEMETRY API (Frontend-facing - Sanctum + Domain + Role)
+// =============================================================================
+// CORS preflight for superadmin routes (must be BEFORE authenticated routes)
+Route::match(['options'], 'superadmin/telemetry/info', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/tenants', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/billing', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/usage', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/errors', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/health', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/ping', fn() => response('', 204));
+
+Route::prefix('superadmin/telemetry')
+    ->middleware(['telemetry.superadmin'])
+    ->group(function () {
+        Route::get('info', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'info']);
+        Route::get('tenants', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'tenants']);
+        Route::get('billing', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'billing']);
+        Route::get('usage', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'usage']);
+        Route::get('errors', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'errors']);
+        Route::get('health', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'health']);
+        Route::get('ping', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'ping']);
+    });
 
 // CORS preflight and global headers
 Route::options('{any}', function (Request $request) {

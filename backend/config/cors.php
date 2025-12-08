@@ -42,12 +42,14 @@ return [
         // Desenvolvimento
         'http://localhost:3000',
         'http://localhost:8082',
+        'http://management.localhost:8082',  // SuperAdmin dashboard
         env('FRONTEND_URL', 'http://localhost:3000'),
 
         // Produção
         'https://vendaslive.com',
         'https://www.vendaslive.com',
         'https://app.vendaslive.com',
+        'https://management.vendaslive.com',  // SuperAdmin production
     ],
 
     /*

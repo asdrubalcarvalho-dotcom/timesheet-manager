@@ -25,7 +25,7 @@ Route::middleware([
 ])->prefix('api')->group(function () {
     
     // Auth routes (tenant-scoped)
-    Route::post('/login', [App\Http\Controllers\Api\AuthController::class, 'login']);
+    Route::post('/login', [App\Http\Controllers\Api\AuthController::class, 'login'])->name('login');
     Route::post('/register', [App\Http\Controllers\Api\AuthController::class, 'register']);
     Route::post('/logout', [App\Http\Controllers\Api\AuthController::class, 'logout'])->middleware('auth:sanctum');
     Route::get('/user', [App\Http\Controllers\Api\AuthController::class, 'user'])->middleware('auth:sanctum');
