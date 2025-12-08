@@ -133,7 +133,7 @@ const AppContent: React.FC = () => {
 
   // COPILOT GLOBAL RULES: Detect SuperAdmin host
     const host = window.location.hostname;
-    const adminHosts = ['management.localhost', 'management.vendaslive.com', 'upg2ai.vendaslive.com'];
+    const adminHosts = ['management.localhost', 'management.vendaslive.com'];
     const isSuperAdminHost = adminHosts.includes(host);  // If SuperAdmin host, render SuperAdmin app ONLY
   if (isSuperAdminHost) {
     if (!user) {

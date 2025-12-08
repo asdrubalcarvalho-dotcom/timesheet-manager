@@ -5,7 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades.DB;
+use Illuminate\Support\Facades\DB;
 use App\Models\Tenant;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -20,47 +20,37 @@ class SetSanctumTenantConnection
     public function handle(Request $request, Closure $next): Response
     {
         try {
-            // 1) Skip central/public endpoints and management/superadmin stuff (NO tenancy)
-            if (
-                $request->is('api/tenants/request-signup') ||
-                $request->is('api/tenants/verify-signup') ||
-                $request->is('api/tenants/check-slug') ||
-                $request->is('api/login') ||
-                $request->is('api/public/*') ||
-                $request->is('api/contact') ||
-                $request->is('api/landing/*') ||
-                $request->is('api/admin/telemetry/*') ||
-                $request->is('api/superadmin/telemetry/*')
-            ) {
-                \Log::debug('[SetSanctumTenantConnection] Skipped for central/public/superadmin endpoint: ' . $request->path());
+            // Skip for SuperAdmin telemetry routes (use central DB for management tenant)
+            if ($request->is('api/superadmin/telemetry/*')) {
+                \Log::debug('[SetSanctumTenantConnection] Skipping for SuperAdmin route');
                 return $next($request);
             }
-
-            // 2) If no X-Tenant header, stay on central DB
+            
             $tenantSlug = $request->header('X-Tenant');
+            
             if (!$tenantSlug) {
-                \Log::debug('[SetSanctumTenantConnection] No X-Tenant header found → central mode');
+                \Log::warning('[SetSanctumTenantConnection] No X-Tenant header found');
                 return $next($request);
             }
 
-            // 3) Find tenant in central DB
+            // Find tenant in central DB (force central connection first)
             DB::setDefaultConnection('mysql');
             $tenant = Tenant::where('slug', $tenantSlug)->first();
-
+            
             if (!$tenant) {
                 \Log::warning("[SetSanctumTenantConnection] Tenant not found: {$tenantSlug}");
                 return $next($request);
             }
 
-            // 4) Get tenant database name
+            // Get tenant database name
             $databaseName = $tenant->getInternal('db_name');
-
+            
             if (!$databaseName) {
                 \Log::error("[SetSanctumTenantConnection] No database configured for tenant: {$tenantSlug}");
                 return $next($request);
             }
 
-            // 5) Configure tenant connection
+            // Configure tenant connection
             Config::set('database.connections.tenant', [
                 'driver' => 'mysql',
                 'host' => config('database.connections.mysql.host'),
@@ -75,20 +65,19 @@ class SetSanctumTenantConnection
                 'engine' => null,
             ]);
 
-            // 6) Purge + reconnect
+            // Purge and reconnect to ensure clean state
             DB::purge('tenant');
             DB::reconnect('tenant');
-
-            // 7) Set tenant as default BEFORE Sanctum runs
+            
+            // CRITICAL: Set default connection BEFORE Sanctum Guard runs
             DB::setDefaultConnection('tenant');
             Config::set('database.default', 'tenant');
             Config::set('sanctum.connection', 'tenant');
-
+            
             \Log::info("[SetSanctumTenantConnection] Tenant connection set as default: {$databaseName}");
-        } catch (\Throwable $e) {
-            \Log::error('[SetSanctumTenantConnection] Failed to setup tenant connection: ' . $e->getMessage(), [
-                'exception' => get_class($e),
-            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('[SetSanctumTenantConnection] Failed to setup tenant connection: ' . $e->getMessage());
         }
 
         return $next($request);
