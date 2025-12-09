@@ -15,6 +15,18 @@
 2. Relevant spec in `docs/` for the feature (e.g., `EXPENSE_WORKFLOW_SPEC.md`)
 3. `docs/PERMISSION_MATRIX.md` - Authorization rules (if touching auth/policies)
 
+## 📍 Current Development Context
+
+**Active Branch**: `feature/planning-gantt` (Planning module with Gantt chart integration)  
+**Active Modules**: Planning (FullCalendar.js), Timesheets, Expenses, Billing  
+**Latest Version**: v1.2.0 (Multi-tenancy + granular rate limiting)
+
+**Check before starting work:**
+- Branch name for feature context
+- `CHANGELOG.md` for recent changes and breaking updates
+- Current module's feature flag requirements (`TenantFeatures::active()`)
+- Related docs in `docs/` matching your feature area
+
 ## 🏗️ Multi-Tenancy Architecture (Critical)
 
 ### Database Isolation Strategy
@@ -29,12 +41,38 @@
 // 3. Query parameter (fallback): ?tenant=test-company
 ```
 
+### Environment Configuration (Critical)
+```bash
+# .env configuration for multi-tenancy
+CENTRAL_DOMAINS=api.localhost,app.localhost,localhost,127.0.0.1
+TENANCY_BASE_DOMAIN=timeperk.localhost  # Subdomain base for production
+TENANCY_HEADER=X-Tenant                  # Dev/API header
+TENANCY_QUERY_PARAMETER=tenant           # Fallback query param
+TENANCY_CENTRAL_CONNECTION=mysql         # Central DB connection
+TENANCY_TENANT_CONNECTION=tenant         # Dynamic tenant connection
+TENANCY_DATABASE_PREFIX=timesheet_       # Tenant DB naming pattern
+TENANCY_ALLOW_CENTRAL_FALLBACK=true      # Allow localhost without tenant
+```
+
+**Docker Network Architecture**:
+- `nginx_api` (port 80): Serves Laravel API at `http://api.localhost`
+- `nginx_app` (port 8082): Serves React frontend at `http://localhost:8082`
+- `timesheet_mysql` (port 3307): MySQL 8.0 with central + tenant databases
+- `timesheet_redis` (port 6379): Redis for cache and sessions
+
 ### Key Tenancy Files
 - `config/tenancy.php`: Central configuration with DatabaseTenancyBootstrapper **DISABLED** (manual connection pattern)
 - `app/Tenancy/Bootstrappers/SanctumTenancyBootstrapper.php`: Custom Sanctum integration
 - `routes/api.php`: Central routes (registration, health checks)
 - `routes/tenant.php`: Tenant-scoped business routes
 - `app/Http/Middleware/InitializeTenancyBy*.php`: Custom tenant resolution middleware
+
+**Critical Middleware Stack** (applied in this order):
+1. `InitializeTenancyByRequestData`: Resolves tenant from header/subdomain/query
+2. `EnsureTenantContext`: Validates tenant context exists
+3. `SetSanctumTenantConnection`: Configures Sanctum for tenant DB
+4. `auth:sanctum`: Laravel Sanctum authentication
+5. `EnsureModuleEnabled`: Feature flag validation for conditional modules
 
 **Modern Tenancy Pattern** (2025):
 - Controllers NO LONGER need manual `->on($connection)` calls
