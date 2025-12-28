@@ -155,12 +155,12 @@ Project → hasMany(ProjectMember) // with project_role, expense_role, finance_r
 - `PriceCalculator`, `PlanManager`: Billing services (see billing docs)
 
 ### Modular Architecture
-**Modules/** directory contains self-contained feature modules with independent routes, controllers, and migrations:
+**Note**: `Modules/` directory is currently empty but prepared for future self-contained feature modules with independent routes, controllers, and migrations. Future modules planned:
 - `Timesheets/`, `Expenses/`: Core modules (always enabled)
 - `Travels/`, `Planning/`, `AI/`: Conditional modules (plan-based or addon)
 - `Billing/`: Subscription and payment management
 
-**Key Rules**: 
+**Key Rules for Future Modules**: 
 - NO direct cross-module dependencies (communication via billing services or feature flags only)
 - Each module has own `Routes/`, `Controllers/`, `Models/`, `Services/`, `Policies/`, `Database/migrations/`
 - Conditional modules use `EnsureModuleEnabled` middleware
@@ -232,6 +232,19 @@ const { permissions } = timesheet; // Returned from API
   <Button onClick={handleApprove}>Approve</Button>
 )}
 ```
+
+### Helper Functions (api.ts)
+The `src/services/api.ts` file exports key helpers for tenant management:
+- `setTenantSlug(slug: string)`: Store tenant slug after login
+- `clearTenantSlug()`: Remove tenant slug on logout
+- `getAuthHeaders()`: Get headers with auth + tenant for native fetch()
+- `fetchWithAuth(input, init)`: Alternative to axios with same auth pattern
+
+**Critical Pattern**: Always use `api` instance from `api.ts` for HTTP calls - it automatically handles:
+- Base URL configuration (Docker vs local)
+- Authorization header injection from localStorage
+- Tenant header (`X-Tenant`) auto-detection from subdomain or localStorage
+- JSON content type headers
 
 ## 🚀 Development Workflows
 
@@ -374,10 +387,11 @@ When working on features, respect the current development phase:
 ## 📚 Key Documentation Files
 
 ### Architecture & Specs
-- `docs/MULTITENANCY_IMPLEMENTATION_SUMMARY.md`: Complete tenancy guide
 - `docs/PERMISSION_MATRIX.md`: Authorization rules and role matrix
 - `docs/DEVELOPMENT_GUIDELINES.md`: Common errors and patterns
 - `docs/TENANT_DEPLOYMENT.md`: Deployment and troubleshooting
+- `docs/SANCTUM_MULTI_TENANT_AUTH.md`: Authentication in multi-tenant context
+- `docs/local_tenancy.md`: Local tenant development setup
 
 ### Feature Implementation Guides
 - `docs/ADMIN_PANEL_IMPLEMENTATION.md`: Admin panel structure
@@ -386,6 +400,14 @@ When working on features, respect the current development phase:
 - `docs/PLANNING_MODULE_IMPLEMENTATION.md`: Gantt chart planning
 - `docs/PENNANT_INTEGRATION_IMPLEMENTATION.md`: Feature flag system
 - `docs/OWNER_PROTECTION_SYSTEM.md`: Owner role security patterns
+- `docs/FINANCE_ROLE_IMPLEMENTATION.md`: Finance role and approval workflow
+
+### Billing & Stripe Integration
+- `docs/PHASE_10_STRIPE_WEBHOOKS_IMPLEMENTATION.md`: Webhook handling
+- `docs/PHASE_4_CUSTOMER_PORTAL_IMPLEMENTATION.md`: Self-service portal
+- `docs/BILLING_STRIPE_PRODUCTION_AUDIT.md`: Production checklist
+- `docs/STRIPE_PAYMENT_SETUP.md`: Payment method configuration
+- `docs/BILLING_CALCULATION_TEST_GUIDE.md`: Testing billing logic
 
 ### Testing & QA
 - `docs/FRONTEND_TENANT_TESTING_GUIDE.md`: Manual testing procedures

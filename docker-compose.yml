@@ -80,6 +80,9 @@ services:
       MYSQL_USER: timesheet
     volumes:
       - mysql_data:/var/lib/mysql
+      # Ensure multi-tenancy DB permissions are applied automatically whenever
+      # the MySQL data volume is created (e.g. after `docker-compose down -v`).
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-multi-tenancy-grants.sql:ro
     networks:
       - timesheet-network
 

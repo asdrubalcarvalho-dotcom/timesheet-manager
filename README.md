@@ -44,6 +44,33 @@ Password: admin123
 
 ---
 
+## 🧩 MySQL Grants (Multi-Tenancy) – Quick Fix
+
+If tenant creation fails with:
+`Access denied for user 'timesheet'@'%' to database 'timesheet_<...>'` during `CREATE DATABASE`.
+
+### Reset everything (dev only)
+```bash
+docker-compose down -v && docker-compose up -d --build
+```
+
+### Verify grants
+```bash
+docker-compose exec -T database mysql -u root -proot -e "SHOW GRANTS FOR 'timesheet'@'%';"
+```
+
+Expected to include:
+- `GRANT CREATE ON *.* TO 'timesheet'@'%'`
+- `GRANT ALL PRIVILEGES ON \`timesheet_%\`.* TO 'timesheet'@'%'`
+
+Notes:
+- Grants are applied automatically on fresh DB init via `docker/mysql/init.sql` (mounted into `/docker-entrypoint-initdb.d`).
+- `docker-compose down -v` deletes the MySQL volume (data + grants). The next `up` re-applies them.
+
+More details: [docs/DATABASE_PERMISSIONS.md](docs/DATABASE_PERMISSIONS.md)
+
+---
+
 ## 🔐 Professional Authorization System
 
 **TimePerk Cortex** implements enterprise-grade security and authorization:
@@ -149,6 +176,15 @@ curl -H "X-Tenant: test-company" http://localhost:8080/api/projects
 # Production (subdomain mode)
 curl http://test-company.timeperk.app/api/projects
 ```
+
+### Tenant Migration Baseline (existing tenant DB)
+- Use when a tenant database already has tables but the migrations table is missing history.
+- Run inside the app container:
+```bash
+docker-compose exec app php artisan tenant:baseline-migrations demo --batch=1
+docker-compose exec app php artisan tenants:migrate demo
+```
+- Safe to rerun; it only inserts missing migration rows. Replace `demo` with the target tenant slug.
 
 ### Intelligent Rate Limiting (Optimized 2025-11-12)
 **Granular throttle limits designed for intensive navigation**:
