@@ -31,6 +31,7 @@ interface TravelFormProps {
   onClose: () => void;
   onSave: () => void;
   editingTravel: TravelSegment | null;
+  selectedTechnicianId?: number | '';
 }
 
 interface Project {
@@ -47,20 +48,30 @@ interface Technician {
 interface Location {
   id: number;
   name: string;
-  country: string;
+  // Legacy/display-only on backend; MUST NOT be used to infer dropdown countries.
+  country?: string;
+  // Canonical FK (nullable)
+  country_id?: number | null;
   city?: string | null;
   address?: string | null;
   is_active: boolean;
 }
 
-const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingTravel }) => {
-  const { showSuccess, showError, showInfo } = useNotification();
+interface Country {
+  id: number;
+  name: string;
+  iso2: string;
+}
+
+const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingTravel, selectedTechnicianId }) => {
+  const { showSuccess, showError, showInfo, showWarning } = useNotification();
   const { hasAI } = useFeatures();
   const [loading, setLoading] = useState(false);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   const [workerContractCountry, setWorkerContractCountry] = useState<string>('');
   const [destinationLocations, setDestinationLocations] = useState<Location[]>([]);
   
@@ -88,9 +99,16 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
 
   useEffect(() => {
     if (open) {
-      fetchProjects();
+      const initialTechnician = editingTravel?.technician_id?.toString()
+        || (selectedTechnicianId ? selectedTechnicianId.toString() : '');
+      if (initialTechnician) {
+        setFormData((prev) => ({ ...prev, technician_id: initialTechnician }));
+      }
+
+      fetchProjects(initialTechnician);
       fetchTechnicians();
       fetchLocations();
+      fetchCountries();
       
       if (editingTravel) {
         setFormData({
@@ -105,7 +123,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
           status: editingTravel.status,
         });
       } else {
-        resetForm();
+        resetForm(initialTechnician);
       }
     }
   }, [open, editingTravel]);
@@ -121,6 +139,13 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
       setWorkerContractCountry('');
     }
   }, [formData.technician_id, technicians]);
+
+  // Refetch projects when technician changes
+  useEffect(() => {
+    if (open) {
+      fetchProjects(formData.technician_id || (selectedTechnicianId ? selectedTechnicianId.toString() : undefined));
+    }
+  }, [formData.technician_id, selectedTechnicianId, open]);
 
   // Filter destination locations based on origin country and worker contract country
   useEffect(() => {
@@ -156,11 +181,16 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
     return `${hours}h ${String(remainingMinutes).padStart(2, '0')}m`;
   }, [formData.start_at, formData.end_at]);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (technicianId?: string | number) => {
     try {
+      const technicianFilter = technicianId
+        ? parseInt(technicianId as string, 10)
+        : (selectedTechnicianId && typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined);
       // Get projects where user is manager OR member (same as Timesheet)
       // Uses /user/projects endpoint (TimesheetController::getUserProjects)
-      const projects = await projectsApi.getForCurrentUser();
+      const projects = await projectsApi.getForCurrentUser(
+        technicianFilter ? { technician_id: technicianFilter } : undefined
+      );
       setProjects(Array.isArray(projects) ? projects : []);
     } catch (error) {
       console.error('Failed to load projects:', error);
@@ -196,9 +226,21 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
     }
   };
 
-  const resetForm = () => {
+  const fetchCountries = async () => {
+    try {
+      const res = await api.get('/api/countries');
+      const list = res.data || [];
+      setCountries(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error('Failed to load countries:', error);
+      // Graceful empty dropdown (no fallback inference)
+      setCountries([]);
+    }
+  };
+
+  const resetForm = (technicianId?: string) => {
     setFormData({
-      technician_id: '',
+      technician_id: technicianId || '',
       project_id: '',
       start_at: null,
       end_at: null,
@@ -209,7 +251,28 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
       status: 'planned',
     });
     setLocations([]);
+    setCountries([]);
   };
+
+  const countryIdByIso2 = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of countries) {
+      if (c?.iso2) {
+        map[String(c.iso2).toUpperCase()] = c.id;
+      }
+    }
+    return map;
+  }, [countries]);
+
+  const originCountryId = useMemo(() => {
+    if (!formData.origin_country) return null;
+    return countryIdByIso2[String(formData.origin_country).toUpperCase()] ?? null;
+  }, [countryIdByIso2, formData.origin_country]);
+
+  const destinationCountryId = useMemo(() => {
+    if (!formData.destination_country) return null;
+    return countryIdByIso2[String(formData.destination_country).toUpperCase()] ?? null;
+  }, [countryIdByIso2, formData.destination_country]);
 
   const handleSuggest = async () => {
     // Feature gate: AI must be enabled
@@ -251,6 +314,8 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
       e.preventDefault();
     }
 
+    const requestedTechnicianId = formData.technician_id ? parseInt(formData.technician_id, 10) : null;
+
     try {
       setLoading(true);
       const payload: Partial<TravelSegment> = {
@@ -265,18 +330,73 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
         status: formData.status as 'planned' | 'completed' | 'cancelled',
       };
 
+      const extractSavedTravel = (result: any): any => {
+        if (!result) return null;
+        if (result.data) return result.data;
+        if (result.travel) return result.travel;
+        if (result.segment) return result.segment;
+        return result;
+      };
+
+      const extractWarningMessage = (result: any): string | null => {
+        if (!result) return null;
+        const w = (result as any).warning;
+        if (!w) return null;
+        if (typeof w === 'string') return w;
+        if (typeof w?.message === 'string' && w.message.trim()) return w.message;
+        if (typeof w?.detail === 'string' && w.detail.trim()) return w.detail;
+        return null;
+      };
+
+      const showOverrideWarningIfNeeded = (savedTravel: any, warningMessage: string | null) => {
+        const savedTechnicianIdRaw = savedTravel?.technician_id ?? savedTravel?.technician?.id;
+        const savedTechnicianId = Number(savedTechnicianIdRaw);
+
+        const hasOverride =
+          Number.isFinite(savedTechnicianId) &&
+          requestedTechnicianId !== null &&
+          Number.isFinite(requestedTechnicianId) &&
+          savedTechnicianId !== requestedTechnicianId;
+
+        if (warningMessage) {
+          showWarning(warningMessage);
+        }
+
+        if (hasOverride) {
+          // Sync UI to what was actually saved (no silent fallback).
+          setFormData((prev) => ({
+            ...prev,
+            technician_id: String(savedTechnicianId),
+          }));
+
+          if (!warningMessage) {
+            showWarning('Selected technician was not allowed; travel was saved for a different technician.');
+          }
+        }
+      };
+
       if (editingTravel) {
-        await travelsApi.update(editingTravel.id, payload);
+        const result = await travelsApi.update(editingTravel.id, payload);
+        const saved = extractSavedTravel(result);
+        showOverrideWarningIfNeeded(saved, extractWarningMessage(result));
         showSuccess('Travel segment updated successfully');
       } else {
-        await travelsApi.create(payload);
+        const result = await travelsApi.create(payload);
+        const saved = extractSavedTravel(result);
+        showOverrideWarningIfNeeded(saved, extractWarningMessage(result));
         showSuccess('Travel segment created successfully');
       }
 
       onSave();
       onClose();
     } catch (error: any) {
-      showError(error?.response?.data?.message || 'Failed to save travel segment');
+      const responseData = error?.response?.data;
+      const message =
+        responseData?.message ||
+        responseData?.error ||
+        (typeof responseData === 'string' ? responseData : null) ||
+        'Failed to save travel segment';
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -416,13 +536,13 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
 
             <Grid item xs={12} sm={6}>
               <Autocomplete
-                options={Array.from(new Set(locations.map(l => l.country)))}
-                getOptionLabel={(option) => option}
-                value={formData.origin_country || null}
+                options={countries}
+                getOptionLabel={(option) => option.name}
+                value={countries.find(c => c.iso2 === formData.origin_country) || null}
                 onChange={(_, newValue) => {
                   setFormData({ 
                     ...formData, 
-                    origin_country: newValue || '',
+                    origin_country: newValue ? newValue.iso2 : '',
                     origin_location_id: '' // Reset location when country changes
                   });
                 }}
@@ -444,7 +564,11 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
 
             <Grid item xs={12} sm={6}>
               <Autocomplete
-                options={locations.filter(l => l.country === formData.origin_country)}
+                options={
+                  originCountryId === null
+                    ? []
+                    : locations.filter(l => l.country_id === originCountryId)
+                }
                 getOptionLabel={(option) => `${option.name} (${option.city || option.country})`}
                 value={locations.find(l => l.id.toString() === formData.origin_location_id) || null}
                 onChange={(_, newValue) => setFormData({ ...formData, origin_location_id: newValue?.id.toString() || '' })}
@@ -466,13 +590,13 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
 
             <Grid item xs={12} sm={6}>
               <Autocomplete
-                options={Array.from(new Set(destinationLocations.map(l => l.country)))}
-                getOptionLabel={(option) => option}
-                value={formData.destination_country || null}
+                options={countries}
+                getOptionLabel={(option) => option.name}
+                value={countries.find(c => c.iso2 === formData.destination_country) || null}
                 onChange={(_, newValue) => {
                   setFormData({ 
                     ...formData, 
-                    destination_country: newValue || '',
+                    destination_country: newValue ? newValue.iso2 : '',
                     destination_location_id: '' // Reset location when country changes
                   });
                 }}
@@ -496,7 +620,11 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
 
             <Grid item xs={12} sm={6}>
               <Autocomplete
-                options={destinationLocations.filter(l => l.country === formData.destination_country)}
+                options={
+                  destinationCountryId === null
+                    ? []
+                    : destinationLocations.filter(l => l.country_id === destinationCountryId)
+                }
                 getOptionLabel={(option) => `${option.name} (${option.city || option.country})`}
                 value={destinationLocations.find(l => l.id.toString() === formData.destination_location_id) || null}
                 onChange={(_, newValue) => setFormData({ ...formData, destination_location_id: newValue?.id.toString() || '' })}

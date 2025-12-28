@@ -38,7 +38,13 @@ class TenantFeatures
     public static function active(Tenant $tenant, string $feature): bool
     {
         self::validateFeature($feature);
-        return Feature::for($tenant)->active($feature);
+        $isEntitled = Feature::for($tenant)->active($feature);
+
+        if ($feature === self::AI) {
+            return $isEntitled && (bool) $tenant->ai_enabled;
+        }
+
+        return $isEntitled;
     }
 
     /**

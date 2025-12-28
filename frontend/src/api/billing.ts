@@ -1,5 +1,14 @@
 import api from '../services/api';
 
+export type FeatureFlagValue = boolean | {
+  enabled: boolean;
+  entitled?: boolean;
+  toggle?: boolean;
+};
+
+export type FeatureEntitlements = Record<string, boolean | undefined>;
+export type FeatureToggles = Record<string, boolean | undefined>;
+
 /**
  * Billing Summary Response from Backend
  * Source: GET /api/billing/summary (PlanManager::getSubscriptionSummary)
@@ -30,8 +39,12 @@ export interface BillingSummary {
     expenses: boolean;
     travels: boolean;
     planning: boolean;
-    ai: boolean;
+    ai: FeatureFlagValue;
   };
+
+  // Feature entitlements & toggles (optional metadata returned by backend)
+  entitlements?: FeatureEntitlements;
+  toggles?: FeatureToggles;
 
   // Trial metadata (only present if is_trial=true)
   trial?: {

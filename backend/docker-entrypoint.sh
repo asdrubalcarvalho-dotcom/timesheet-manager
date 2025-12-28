@@ -19,8 +19,14 @@ if [ "${AUTO_MIGRATE}" = "true" ]; then
     echo "🔧 AUTO_MIGRATE=true - running automatic setup..."
     
     # Setup database permissions for multi-tenancy
-    echo "🔐 Setting up database permissions..."
-    php artisan db:setup-permissions || echo "⚠️  Permission setup skipped (may already exist)"
+    # In production, DB grants should be handled by infrastructure (DBA / init scripts).
+    # We only auto-attempt permission setup in local/testing to avoid noisy logs.
+    if [ "${APP_ENV}" = "local" ] || [ "${APP_ENV}" = "testing" ]; then
+        echo "🔐 Setting up database permissions (local/testing)..."
+        php artisan db:setup-permissions || echo "⚠️  Permission setup skipped (may already exist)"
+    else
+        echo "🔐 Skipping automatic permission setup (APP_ENV=${APP_ENV})"
+    fi
     
     # Run central database migrations
     echo "📦 Running central database migrations..."

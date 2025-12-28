@@ -8,7 +8,15 @@ import {
   DialogActions,
   TextField,
   IconButton,
-  Fab
+  Fab,
+  Tabs,
+  Tab,
+  Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -38,6 +46,23 @@ interface Project {
   manager_id?: number;
 }
 
+interface ProjectTask {
+  id: number;
+  name: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  estimated_hours?: number | null;
+  progress?: number | null;
+  project_id: number;
+}
+
+const isSameOrAfterDay = (end: string, start: string): boolean => {
+  const endDate = dayjs(end);
+  const startDate = dayjs(start);
+  if (!endDate.isValid() || !startDate.isValid()) return true;
+  return endDate.isSame(startDate, 'day') || endDate.isAfter(startDate, 'day');
+};
+
 const formatDateForInput = (value?: string | null) => {
   if (!value) return '';
   const [dateAndTime] = value.split('T');
@@ -51,6 +76,22 @@ const ProjectsManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editTab, setEditTab] = useState<'details' | 'tasks'>('details');
+
+  const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
+  const [loadingProjectTasks, setLoadingProjectTasks] = useState(false);
+  const [tasksLoadedForProjectId, setTasksLoadedForProjectId] = useState<number | null>(null);
+
+  const [openTaskDialog, setOpenTaskDialog] = useState(false);
+  const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
+  const [taskForm, setTaskForm] = useState({
+    name: '',
+    start_date: '',
+    end_date: '',
+    estimated_hours: '',
+    progress: '0',
+  });
+  const [taskFormError, setTaskFormError] = useState<string | null>(null);
   const [memberDialogProject, setMemberDialogProject] = useState<Project | null>(null);
   const [confirmDialog, setConfirmDialog] = useState({ 
     open: false, 
@@ -94,6 +135,9 @@ const ProjectsManager: React.FC = () => {
   const handleOpenDialog = (project?: Project) => {
     if (project) {
       setEditingProject(project);
+      setEditTab('details');
+      setTasksLoadedForProjectId(null);
+      setProjectTasks([]);
       setFormData({
         name: project.name,
         description: project.description || '',
@@ -103,6 +147,9 @@ const ProjectsManager: React.FC = () => {
       });
     } else {
       setEditingProject(null);
+      setEditTab('details');
+      setTasksLoadedForProjectId(null);
+      setProjectTasks([]);
       setFormData({
         name: '',
         description: '',
@@ -117,6 +164,147 @@ const ProjectsManager: React.FC = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingProject(null);
+    setEditTab('details');
+  };
+
+  const fetchProjectTasks = async (projectId: number) => {
+    try {
+      setLoadingProjectTasks(true);
+      const response = await api.get(`/api/projects/${projectId}/tasks`);
+      const list: ProjectTask[] = Array.isArray(response.data) ? response.data : response.data?.data || [];
+      setProjectTasks(list);
+      setTasksLoadedForProjectId(projectId);
+    } catch (error: any) {
+      console.error('[ProjectsManager] Error fetching project tasks:', error);
+      showError(error.response?.data?.message || 'Failed to load project tasks');
+      setProjectTasks([]);
+      setTasksLoadedForProjectId(projectId);
+    } finally {
+      setLoadingProjectTasks(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!openDialog) return;
+    if (editTab !== 'tasks') return;
+    if (!editingProject?.id) return;
+
+    if (tasksLoadedForProjectId === editingProject.id) return;
+    fetchProjectTasks(editingProject.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openDialog, editTab, editingProject?.id]);
+
+  const openCreateTask = () => {
+    if (!editingProject) return;
+    setEditingTask(null);
+    setTaskFormError(null);
+    setTaskForm({
+      name: '',
+      start_date: '',
+      end_date: '',
+      estimated_hours: '',
+      progress: '0',
+    });
+    setOpenTaskDialog(true);
+  };
+
+  const openEditTask = (task: ProjectTask) => {
+    setEditingTask(task);
+    setTaskFormError(null);
+    setTaskForm({
+      name: task.name ?? '',
+      start_date: formatDateForInput(task.start_date ?? undefined),
+      end_date: formatDateForInput(task.end_date ?? undefined),
+      estimated_hours: task.estimated_hours != null ? String(task.estimated_hours) : '',
+      progress: task.progress != null ? String(task.progress) : '0',
+    });
+    setOpenTaskDialog(true);
+  };
+
+  const closeTaskDialog = () => {
+    setOpenTaskDialog(false);
+    setEditingTask(null);
+    setTaskFormError(null);
+  };
+
+  const saveTask = async () => {
+    if (!editingProject) return;
+
+    const name = taskForm.name.trim();
+    const startDate = taskForm.start_date;
+    const endDate = taskForm.end_date;
+
+    const progressNum = Number(taskForm.progress);
+    const estimatedHoursNum = taskForm.estimated_hours === '' ? null : Number(taskForm.estimated_hours);
+
+    if (!name) {
+      setTaskFormError('Task name is required');
+      return;
+    }
+    if (!startDate) {
+      setTaskFormError('Start date is required');
+      return;
+    }
+    if (endDate && !isSameOrAfterDay(endDate, startDate)) {
+      setTaskFormError('End date must be the same or after start date');
+      return;
+    }
+    if (!Number.isFinite(progressNum) || progressNum < 0 || progressNum > 100) {
+      setTaskFormError('Progress must be between 0 and 100');
+      return;
+    }
+    if (estimatedHoursNum != null && (!Number.isFinite(estimatedHoursNum) || estimatedHoursNum < 0)) {
+      setTaskFormError('Estimated hours must be a positive number');
+      return;
+    }
+
+    const payload = {
+      name,
+      project_id: editingProject.id,
+      start_date: startDate,
+      end_date: endDate || null,
+      estimated_hours: estimatedHoursNum,
+      progress: Math.round(progressNum),
+    };
+
+    try {
+      if (editingTask) {
+        await api.put(`/api/tasks/${editingTask.id}`, payload);
+        showSuccess('Task updated successfully');
+      } else {
+        await api.post('/api/tasks', payload);
+        showSuccess('Task created successfully');
+      }
+      closeTaskDialog();
+      await fetchProjectTasks(editingProject.id);
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to save task');
+    }
+  };
+
+  const confirmDeleteTask = (task: ProjectTask) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Task',
+      message: 'Are you sure you want to delete this task? This action cannot be undone.',
+      recordDetails: {
+        name: task.name,
+        start_date: task.start_date,
+        end_date: task.end_date,
+      },
+      action: async () => {
+        try {
+          await api.delete(`/api/tasks/${task.id}`);
+          showSuccess('Task deleted successfully');
+          if (editingProject) {
+            await fetchProjectTasks(editingProject.id);
+          }
+        } catch (error: any) {
+          showError(error.response?.data?.message || 'Failed to delete task');
+        }
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+      }
+    });
   };
 
   const handleSave = async (e?: React.FormEvent) => {
@@ -163,8 +351,8 @@ const ProjectsManager: React.FC = () => {
           await api.delete(`/api/projects/${id}`);
           showSuccess('Project deleted successfully');
           fetchProjects();
-        } catch {
-          showError('Failed to delete project');
+        } catch (error: any) {
+          showError(error?.response?.data?.message || 'Failed to delete project');
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }
@@ -329,6 +517,21 @@ const ProjectsManager: React.FC = () => {
           {editingProject ? 'Edit Project' : 'New Project'}
         </DialogTitle>
         <DialogContent>
+          {editingProject && (
+            <>
+              <Tabs
+                value={editTab}
+                onChange={(_e, value) => setEditTab(value)}
+                sx={{ mb: 2 }}
+              >
+                <Tab value="details" label="Details" />
+                <Tab value="tasks" label="Tasks" />
+              </Tabs>
+              <Divider sx={{ mb: 2 }} />
+            </>
+          )}
+
+          {(!editingProject || editTab === 'details') && (
           <Box 
             component="form" 
             onSubmit={handleSave}
@@ -386,6 +589,65 @@ const ProjectsManager: React.FC = () => {
               <option value="on_hold">On Hold</option>
             </TextField>
           </Box>
+          )}
+
+          {editingProject && editTab === 'tasks' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Box sx={{ fontWeight: 600 }}>{editingProject.name}</Box>
+                  <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>Manage tasks for this project</Box>
+                </Box>
+                <Button variant="contained" onClick={openCreateTask}>Add Task</Button>
+              </Box>
+
+              <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Start</TableCell>
+                      <TableCell>End</TableCell>
+                      <TableCell align="right">Progress</TableCell>
+                      <TableCell align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {loadingProjectTasks ? (
+                      <TableRow>
+                        <TableCell colSpan={5}>
+                          Loading...
+                        </TableCell>
+                      </TableRow>
+                    ) : projectTasks.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5}>
+                          No tasks for this project.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      projectTasks.map((t) => (
+                        <TableRow key={t.id} hover>
+                          <TableCell>{t.name}</TableCell>
+                          <TableCell>{t.start_date ? dayjs(t.start_date).format('DD/MM/YYYY') : '-'}</TableCell>
+                          <TableCell>{t.end_date ? dayjs(t.end_date).format('DD/MM/YYYY') : '-'}</TableCell>
+                          <TableCell align="right">{t.progress != null ? `${t.progress}%` : '0%'}</TableCell>
+                          <TableCell align="right">
+                            <IconButton size="small" onClick={() => openEditTask(t)} sx={{ color: '#667eea' }}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" onClick={() => confirmDeleteTask(t)} sx={{ color: '#f44336' }}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
@@ -394,9 +656,69 @@ const ProjectsManager: React.FC = () => {
             form="project-form"
             variant="contained"
             color="primary"
+            disabled={Boolean(editingProject && editTab === 'tasks')}
           >
             {editingProject ? 'Update' : 'Create'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={openTaskDialog} onClose={closeTaskDialog} maxWidth="sm" fullWidth disableRestoreFocus>
+        <DialogTitle>
+          {editingTask ? 'Edit Task' : 'Add Task'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            {taskFormError && (
+              <Box sx={{ color: 'error.main', fontSize: '0.875rem' }}>{taskFormError}</Box>
+            )}
+            <TextField
+              label="Name"
+              fullWidth
+              required
+              value={taskForm.name}
+              onChange={(e) => setTaskForm((p) => ({ ...p, name: e.target.value }))}
+            />
+            <DatePicker
+              label="Start Date"
+              value={taskForm.start_date ? dayjs(taskForm.start_date) : null}
+              onChange={(newValue) => setTaskForm((p) => ({ ...p, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' }))}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  required: true,
+                },
+              }}
+            />
+            <DatePicker
+              label="End Date"
+              value={taskForm.end_date ? dayjs(taskForm.end_date) : null}
+              onChange={(newValue) => setTaskForm((p) => ({ ...p, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' }))}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                },
+              }}
+            />
+            <TextField
+              label="Estimated Hours"
+              fullWidth
+              value={taskForm.estimated_hours}
+              onChange={(e) => setTaskForm((p) => ({ ...p, estimated_hours: e.target.value }))}
+              inputProps={{ inputMode: 'decimal' }}
+            />
+            <TextField
+              label="Progress (0..100)"
+              fullWidth
+              value={taskForm.progress}
+              onChange={(e) => setTaskForm((p) => ({ ...p, progress: e.target.value }))}
+              inputProps={{ inputMode: 'numeric' }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeTaskDialog}>Cancel</Button>
+          <Button variant="contained" onClick={saveTask}>Save</Button>
         </DialogActions>
       </Dialog>
 

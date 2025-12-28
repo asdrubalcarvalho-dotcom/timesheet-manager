@@ -301,8 +301,8 @@ const TasksManager: React.FC = () => {
           await api.delete(`/api/tasks/${id}`);
           showSuccess('Task deleted successfully');
           fetchTasks();
-        } catch (error) {
-          showError('Failed to delete task');
+        } catch (error: any) {
+          showError(error?.response?.data?.message || 'Failed to delete task');
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }

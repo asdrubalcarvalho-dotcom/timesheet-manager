@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Switch,
 } from '@mui/material';
 import {
   AdminPanelSettings as BillingIcon,
@@ -30,12 +31,14 @@ import { useBilling } from '../../contexts/BillingContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import type { BillingSummary } from '../../types/billing';
 import { getCustomerPortalUrl } from '../../api/billing';
+import type { FeatureFlagValue } from '../../api/billing';
 import PlanCard from './PlanCard';
 import AddonToggle from './AddonToggle';
 import PricingSummary from './PricingSummary';
 import CheckoutModal from './CheckoutModal';
 import { ConfirmDowngradeDialog } from './ConfirmDowngradeDialog';
 import { ConfirmTrialExitDialog } from './ConfirmTrialExitDialog';
+import api from '../../services/api';
 
 /**
  * Calculate remaining trial days
@@ -53,6 +56,53 @@ function getTrialDaysLeft(summary?: BillingSummary | null): number | null {
   return diffDays;
 }
 
+const resolveFeatureEnabled = (value: FeatureFlagValue | boolean | undefined): boolean => {
+  if (value && typeof value === 'object') {
+    return Boolean(value.enabled);
+  }
+  return Boolean(value);
+};
+// BILLING RULE: License caps are enforced in UI to prevent invalid checkout requests.
+// NOTE: Behavior is intentional — do not change without reviewing billing logic
+const getMaxLicenseLimitForPlan = (plan: string): number => {
+  switch (plan) {
+    case 'trial_enterprise':
+      return 10;
+    case 'starter':
+      return 2;
+    case 'team':
+    case 'enterprise':
+      return 100;
+    default:
+      return 0;
+  }
+};
+
+/**
+ * Get the effective license limit to display and use in calculations.
+ * - Starter: always 2 (fixed)
+ * - Other plans: use user_limit if available, fall back to user_count, never show 0
+ */
+// BILLING SEMANTICS:
+// - user_limit = BILLABLE / purchased seats (used for pricing/checkout)
+// - user_count = DISPLAY ONLY / active users (used for UI and downgrade safety checks)
+const getEffectiveLicenseLimit = (summary: BillingSummary): number => {
+  const plan = summary.plan;
+
+  // Starter is fixed at 2
+  if (plan === 'starter') return 2;
+
+  // If backend provides a positive user_limit, trust it
+  const limit = summary.user_limit;
+  if (typeof limit === 'number' && limit > 0) return limit;
+
+  // Otherwise fall back to user_count if available (>0)
+  const count = summary.user_count;
+  if (typeof count === 'number' && count > 0) return count;
+
+  // Final fallback: 1 (never show 0 for paid/trial plans)
+  return 1;
+};
 /**
  * Get plan description (English only)
  */
@@ -76,9 +126,10 @@ function getPlanDescription(plan: string): string {
  */
 function getFeatureSummary(
   currentPlan: string,
-  features: { timesheets: boolean; expenses: boolean; travels: boolean; planning: boolean; ai: boolean }
+  features: { timesheets: boolean; expenses: boolean; travels: boolean; planning: boolean; ai: FeatureFlagValue | boolean }
 ): { included: string; addons: string } {
-  const { timesheets, expenses, travels, planning, ai } = features;
+  const { timesheets, expenses, travels, planning } = features;
+  const ai = resolveFeatureEnabled(features.ai);
   
   // Starter plan: only enabled features
   if (currentPlan === 'starter') {
@@ -130,12 +181,15 @@ function getFeatureSummary(
 const BillingPage: React.FC = () => {
   const { 
     billingSummary, 
+    tenantAiEnabled,
     loading, 
+    initializing,
     error, 
     openCheckoutForPlan,
     openCheckoutForAddon,
     openCheckoutForLicenses,
     toggleAddon,
+    updateTenantAiToggle,
     requestDowngrade,
     cancelDowngrade,
     refreshSummary 
@@ -153,8 +207,9 @@ const BillingPage: React.FC = () => {
   // License increase dialog state
   const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
   const [licenseIncrement, setLicenseIncrement] = useState<number>(1);
+  const [updatingTenantAi, setUpdatingTenantAi] = useState(false);
 
-  console.log('[BillingPage] 🎨 RENDER - billingSummary:', billingSummary, 'loading:', loading);
+  console.log('[BillingPage] 🎨 RENDER - billingSummary:', billingSummary, 'loading:', loading, 'initializing:', initializing);
 
   // CRITICAL: Refresh billing summary on every page render
   // This ensures user_count is ALWAYS fresh (e.g., after deleting users)
@@ -164,18 +219,34 @@ const BillingPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps = run only on mount
 
-  // Determine effective user limit (trial has no limit, so use user_count)
-  const effectiveUserLimit =
-    billingSummary?.is_trial && (billingSummary?.user_limit === null || billingSummary?.user_limit === undefined)
-      ? billingSummary?.user_count
-      : billingSummary?.user_limit;
+  // ONE-WAY ENFORCEMENT: Billing OFF → Tenant AI OFF
+  // NOTE: AI enforcement applies ONLY to Team plan. Enterprise includes AI by default.
+  // When billing add-on is disabled, automatically force tenant AI toggle OFF
+  // IMPORTANT: This protects billing compliance — tenant AI toggle must never enable AI without billing entitlement.
+  // DO NOT REFACTOR: Billing add-on (entitlement) and tenant AI toggle (preference) are intentionally separate.
+  useEffect(() => {
+    if (!billingSummary) return;
 
-  const showUserLimit =
-    typeof effectiveUserLimit === 'number' && effectiveUserLimit > 0;
+    // Only Team uses paid add-on entitlement for AI.
+    if (billingSummary.plan !== 'team') return;
+    
+    const billingAiEnabled = Boolean(billingSummary.addons?.ai && billingSummary.addons.ai > 0);
+    
+    // If billing addon is OFF but tenant AI is ON, force tenant AI OFF silently
+    if (!billingAiEnabled && tenantAiEnabled) {
+      console.log('[BillingPage] 🔒 One-way enforcement: Billing AI OFF → forcing tenant AI OFF');
+      updateTenantAiToggle(false).catch(err => {
+        console.error('[BillingPage] Failed to enforce one-way sync:', err);
+      });
+    }
+  }, [billingSummary?.plan, billingSummary?.addons?.ai, tenantAiEnabled, updateTenantAiToggle]);
 
   // Handle addon toggle with plan-specific rules (PHASE 3 - Frontend validation)
   const handleToggleAddon = async (addon: 'planning' | 'ai') => {
     if (!billingSummary) return;
+
+    // BUSINESS RULE: Starter cannot buy/enable add-ons.
+    // DO NOT REFACTOR: UI must avoid calling the API for disallowed actions.
 
     // Starter: No add-ons allowed
     if (billingSummary.plan === 'starter') {
@@ -186,15 +257,18 @@ const BillingPage: React.FC = () => {
     }
 
     // Enterprise/Trial: All features included, no add-ons needed
+    // INTENTIONAL: trial_enterprise behaves like enterprise for feature availability (no separate add-on purchases).
     if (billingSummary.plan === 'enterprise' || billingSummary.plan === 'trial_enterprise') {
       showInfo("All features are already included in your current plan.");
       return; // IMPORTANT: do not call API
     }
 
-    // Team: Check if addon is currently enabled
+    // Team: Check if addon is currently enabled (based on BILLING ENTITLEMENT ONLY)
+    // BILLING RULE: For AI, billingSummary.addons.ai reflects paid entitlement; tenantAiEnabled is a separate tenant preference.
+    // DO NOT REFACTOR: These fields intentionally do not mirror each other.
     const isCurrentlyEnabled = addon === 'planning' 
-      ? billingSummary.features?.planning 
-      : billingSummary.features?.ai;
+      ? Boolean(billingSummary.features?.planning) 
+      : Boolean(billingSummary.addons?.ai && billingSummary.addons.ai > 0);
 
     if (isCurrentlyEnabled) {
       // DISABLING: No payment needed, just toggle off
@@ -214,11 +288,33 @@ const BillingPage: React.FC = () => {
     }
   };
 
+  const handleTenantAiToggle = async (nextValue: boolean) => {
+    if (!billingSummary) return;
+
+    // IMPORTANT: This toggle is TENANT-LEVEL preference.
+    // BILLING RULE: It can only be used if the tenant is entitled via billing (AI add-on or Enterprise/Trial).
+
+    if (!aiEntitled) {
+      showInfo('Requires AI add-on in billing plan.');
+      return;
+    }
+
+    setUpdatingTenantAi(true);
+    try {
+      await updateTenantAiToggle(nextValue);
+    } catch (error) {
+      console.error('[BillingPage] Failed to update tenant AI toggle', error);
+    } finally {
+      setUpdatingTenantAi(false);
+    }
+  };
+
   // Handle plan downgrade (show confirmation dialog first)
   const handleDowngrade = async (plan: 'starter' | 'team') => {
     if (!billingSummary) return;
 
     // SPECIAL CASE: Trial → Paid Plan (immediate conversion)
+    // BUSINESS RULE: Trial exits are handled differently from paid-plan downgrades (immediate vs scheduled).
     if (billingSummary.is_trial) {
       setTargetTrialExitPlan(plan);
       setTrialExitDialogOpen(true);
@@ -302,8 +398,8 @@ const BillingPage: React.FC = () => {
     }
   };
 
-  if (loading) {
-    console.log('[BillingPage] ⏳ Loading state - showing spinner');
+  if (initializing) {
+    console.log('[BillingPage] ⏳ Initializing billing state - showing spinner');
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
@@ -330,7 +426,26 @@ const BillingPage: React.FC = () => {
   const currentPlan = billingSummary.plan;
   const addons = billingSummary.addons || { planning: 0, ai: 0 }; // Fallback to zero pricing
   const requiresUpgrade = billingSummary.requires_upgrade;
-  const features = billingSummary.features || {};
+  const defaultFeatures: BillingSummary['features'] = {
+    timesheets: false,
+    expenses: false,
+    travels: false,
+    planning: false,
+    ai: { enabled: false },
+  };
+  const features: BillingSummary['features'] = billingSummary.features ?? defaultFeatures;
+  const planningFeatureEnabled = Boolean(features.planning);
+  // AI entitlement rule (DO NOT broaden beyond this):
+  // - Enterprise + Enterprise Trial: always entitled
+  // - Team: entitled only if AI add-on is purchased (addons.ai > 0)
+  // - Starter: never entitled
+  const aiEntitled =
+    currentPlan === 'enterprise' ||
+    currentPlan === 'trial_enterprise' ||
+    (currentPlan === 'team' && addons.ai > 0);
+
+  // BILLING SEMANTICS: aiEntitled is billing entitlement; tenantAiEnabled is tenant preference.
+  // INTENTIONAL: Final AI availability is entitlement AND tenant toggle (see one-way enforcement effect).
 
   console.log('[BillingPage] 📊 Current state - plan:', currentPlan, 'addons:', addons, 'requiresUpgrade:', requiresUpgrade);
 
@@ -544,31 +659,51 @@ const BillingPage: React.FC = () => {
               <Grid container spacing={2}>
                 {/* Users */}
                 <Grid item xs={12} sm={4}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <UsersIcon color="primary" />
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Users
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {showUserLimit
-                            ? `${billingSummary.user_count} / ${effectiveUserLimit}`
-                            : `${billingSummary.user_count} users`}
-                        </Typography>
+                  {(() => {
+                    // BILLING RULE: effectiveLimit is the license limit used for checkout (derived from user_limit).
+                    // DISPLAY ONLY: user_count is shown for visibility but must not be treated as billable seats.
+                    const effectiveLimit = getEffectiveLicenseLimit(billingSummary);
+                    const maxLimit = getMaxLicenseLimitForPlan(billingSummary.plan);
+                    const canIncrease = billingSummary.plan !== 'starter' && effectiveLimit < maxLimit;
+
+                    return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <UsersIcon color="primary" />
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Licenses
+                            </Typography>
+
+                            <Typography variant="h6" sx={{ fontWeight: 400 }}>
+                              {effectiveLimit} {effectiveLimit === 1 ? 'license' : 'licenses'}
+                            </Typography>
+
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', mt: 0.5 }}
+                            >
+                              {/* DISPLAY ONLY: Active users can differ from billable licenses (user_limit). */}
+                              {billingSummary.user_count} {billingSummary.user_count === 1 ? 'active user' : 'active users'}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        {billingSummary.plan !== 'starter' && (
+                          <Button
+                            size="small"
+                            variant="text"
+                            disabled={!canIncrease}
+                            onClick={() => setLicenseDialogOpen(true)}
+                            sx={{ textTransform: 'none', alignSelf: 'flex-start' }}
+                          >
+                            + Increase Licenses
+                          </Button>
+                        )}
                       </Box>
-                    </Box>
-                    {(billingSummary.plan === 'team' || billingSummary.plan === 'enterprise') && (
-                      <Button
-                        size="small"
-                        variant="text"
-                        onClick={() => setLicenseDialogOpen(true)}
-                        sx={{ textTransform: 'none', alignSelf: 'flex-start' }}
-                      >
-                        + Increase Licenses
-                      </Button>
-                    )}
-                  </Box>
+                    );
+                  })()}
                 </Grid>
 
                 {/* Price */}
@@ -651,6 +786,7 @@ const BillingPage: React.FC = () => {
                   
                   // Determine if this is a downgrade (current plan is higher tier)
                   // For Trial, treat Team/Enterprise as UPGRADE (higher tier than trial in terms of features, even though both are level 3)
+                  // DO NOT REFACTOR: trial_enterprise is a virtual plan; hierarchy keeps UI decisions consistent with backend trial behavior.
                   const planHierarchy = { starter: 1, team: 2, enterprise: 3, trial_enterprise: 3 };
                   const currentLevel = planHierarchy[currentPlan as keyof typeof planHierarchy];
                   const targetLevel = planHierarchy[planName];
@@ -658,6 +794,7 @@ const BillingPage: React.FC = () => {
                   
                   // SPECIAL CASE: Trial → Team is actually a downgrade in tier (3→2) BUT it's an UPGRADE in terms of payment
                   // So we need to handle it via the downgrade dialog, which will then call the correct handler
+                  // INTENTIONAL: Trial-to-lower-tier actions require confirmation and may trigger either free exit or paid checkout.
                   const isTrialToLowerTier = billingSummary?.is_trial && (planName === 'starter' || planName === 'team');
                   
                   // Check if there's a pending downgrade to this plan
@@ -690,6 +827,7 @@ const BillingPage: React.FC = () => {
               </Typography>
               
               {/* Enterprise/Trial: Show info message */}
+              {/* BILLING RULE: Enterprise and trial_enterprise include add-ons; toggles are informational only. */}
               {(currentPlan === 'enterprise' || currentPlan === 'trial_enterprise') ? (
                 <Card>
                   <CardContent>
@@ -704,7 +842,7 @@ const BillingPage: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <AddonToggle
                       addon="planning"
-                      enabled={features.planning || false}
+                      enabled={planningFeatureEnabled}
                       onToggle={() => handleToggleAddon('planning')}
                       disabled={currentPlan === 'starter'}
                     />
@@ -712,7 +850,8 @@ const BillingPage: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <AddonToggle
                       addon="ai"
-                      enabled={features.ai || false}
+                      // BILLING RULE: This reflects paid entitlement state (billingSummary.addons.ai), not tenant preference.
+                      enabled={billingSummary.addons.ai > 0}
                       onToggle={() => handleToggleAddon('ai')}
                       disabled={currentPlan === 'starter'}
                     />
@@ -721,12 +860,71 @@ const BillingPage: React.FC = () => {
               )}
             </Grid>
 
+            {/* Tenant Settings */}
+            <Grid item xs={12}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Tenant Settings
+              </Typography>
+              <Card>
+                <CardContent>
+                  {/* IMPORTANT: Tenant AI toggle is separate from billing add-on purchase (entitlement vs preference). */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      justifyContent: 'space-between',
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      gap: 2,
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        AI Suggestions
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Enable or disable AI-powered planning suggestions for this tenant.
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color={aiEntitled ? 'text.secondary' : 'warning.main'}
+                        sx={{ mt: 1, display: 'block', fontWeight: 500 }}
+                      >
+                        Requires AI add-on in billing plan
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {tenantAiEnabled && (
+                        <Chip label="Active" size="small" color="secondary" sx={{ fontWeight: 600 }} />
+                      )}
+                      {aiEntitled ? (
+                        <Switch
+                          checked={tenantAiEnabled}
+                          onChange={(event) => handleTenantAiToggle(event.target.checked)}
+                          disabled={updatingTenantAi}
+                          color="secondary"
+                        />
+                      ) : (
+                        <Tooltip title="Purchase the AI add-on in Billing to unlock this toggle." arrow>
+                          <Box>
+                            <Switch checked={false} disabled color="secondary" />
+                          </Box>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
             {/* Pricing Summary */}
             <Grid item xs={12}>
               <PricingSummary
+                // BILLING SEMANTICS: baseSubtotal/total are computed server-side; frontend must not recalculate pricing.
+                // DISPLAY ONLY: userCount may differ from userLimit (billable licenses).
                 baseSubtotal={billingSummary.base_subtotal}
                 total={billingSummary.total}
                 userLimit={billingSummary.user_limit}
+                userCount={billingSummary.user_count}
                 pricePerUser={billingSummary.total > 0 ? billingSummary.base_subtotal / (billingSummary.user_limit || 1) : 0}
                 addons={billingSummary.addons}
                 nextRenewalAt={billingSummary.subscription?.next_renewal_at}
@@ -762,14 +960,15 @@ const BillingPage: React.FC = () => {
 
       {/* License Increase Dialog */}
       <Dialog open={licenseDialogOpen} onClose={() => setLicenseDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Increase User Licenses</DialogTitle>
+        <DialogTitle>Increase Licenses</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Add more user licenses to your {billingSummary?.plan} plan.
+            Add more licenses to your {billingSummary?.plan} plan.
           </Typography>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Current limit: <strong>{billingSummary?.user_limit} users</strong>
+            Current limit: <strong>{billingSummary ? getEffectiveLicenseLimit(billingSummary) : 0} users</strong>
           </Typography>
+          {/* BILLING RULE: Input clamps to plan max to keep checkout requests valid (no server-side assumptions here). */}
           <TextField
             autoFocus
             margin="dense"
@@ -778,23 +977,61 @@ const BillingPage: React.FC = () => {
             fullWidth
             variant="outlined"
             value={licenseIncrement}
-            onChange={(e) => setLicenseIncrement(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
-            inputProps={{ min: 1, max: 100 }}
-            helperText={`New limit will be: ${(billingSummary?.user_limit || 0) + licenseIncrement} users`}
+            onChange={(e) => {
+              if (!billingSummary) return;
+              const effectiveLimit = getEffectiveLicenseLimit(billingSummary);
+              const maxLimit = getMaxLicenseLimitForPlan(billingSummary.plan);
+              const maxIncrement = Math.max(1, maxLimit - effectiveLimit);
+              setLicenseIncrement(
+                Math.max(1, Math.min(maxIncrement, parseInt(e.target.value) || 1))
+              );
+            }}
+            inputProps={{
+              min: 1,
+              max: billingSummary ? (() => {
+                const effectiveLimit = getEffectiveLicenseLimit(billingSummary);
+                const maxLimit = getMaxLicenseLimitForPlan(billingSummary.plan);
+                return Math.max(1, maxLimit - effectiveLimit);
+              })() : 1,
+            }}
+            helperText={billingSummary ? (() => {
+              const effectiveLimit = getEffectiveLicenseLimit(billingSummary);
+              const maxLimit = getMaxLicenseLimitForPlan(billingSummary.plan);
+              return `New limit will be: ${effectiveLimit + licenseIncrement} licenses (max ${maxLimit})`;
+            })() : ''}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLicenseDialogOpen(false)}>Cancel</Button>
           <Button
-            onClick={() => {
-              // Calculate new user_limit
-              const newUserLimit = (billingSummary?.user_limit || 0) + licenseIncrement;
+            onClick={async () => {
+              if (!billingSummary) return;
+              const effectiveLimit = getEffectiveLicenseLimit(billingSummary);
+              const maxLimit = getMaxLicenseLimitForPlan(billingSummary.plan);
+              const newUserLimit = Math.min(maxLimit, effectiveLimit + licenseIncrement);
+
+              // Enterprise Trial: license increments are free and must never trigger checkout.
+              // Checkout is ONLY for paid plans.
+              if (billingSummary.plan === 'trial_enterprise' || (billingSummary.plan === 'enterprise' && billingSummary.is_trial)) {
+                try {
+                  await api.post('/api/billing/licenses/increase', {
+                    increment: licenseIncrement,
+                  });
+
+                  setLicenseDialogOpen(false);
+                  setLicenseIncrement(1);
+                  await refreshSummary();
+                  return;
+                } catch (err: any) {
+                  const message = err?.response?.data?.message || 'Failed to increase licenses.';
+                  showError(message);
+                  return;
+                }
+              }
               
-              // Close license dialog
+              // IMPORTANT: Licenses checkout uses NEW TOTAL user_limit (billable seats), not an increment amount.
               setLicenseDialogOpen(false);
               setLicenseIncrement(1);
-              
-              // Open checkout modal for licenses mode (NOT plan mode)
               openCheckoutForLicenses(newUserLimit);
             }}
             variant="contained"

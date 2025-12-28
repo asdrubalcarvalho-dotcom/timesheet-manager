@@ -12,6 +12,11 @@ class Company extends Model
 {
     use HasFactory;
 
+    /**
+     * Companies are stored in the central database (see create_companies_table migration).
+     */
+    protected $connection = 'mysql';
+
     protected $fillable = [
         'tenant_id',
         'name',

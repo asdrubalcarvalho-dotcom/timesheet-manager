@@ -33,7 +33,9 @@ export interface CheckoutState {
 export interface BillingContextValue {
   // State
   billingSummary: BillingSummary | null;
+  tenantAiEnabled: boolean;
   loading: boolean;
+  initializing: boolean;
   error: string | null;
   checkoutState: CheckoutState;
 
@@ -43,6 +45,7 @@ export interface BillingContextValue {
   requestDowngrade: (plan: 'starter' | 'team' | 'enterprise', userLimit?: number) => Promise<void>;
   cancelDowngrade: () => Promise<void>;
   toggleAddon: (addon: 'planning' | 'ai') => Promise<void>;
+  updateTenantAiToggle: (enabled: boolean) => Promise<void>;
   startCheckout: () => Promise<CheckoutSession>;
   confirmCheckout: (
     cardNumber: string, 

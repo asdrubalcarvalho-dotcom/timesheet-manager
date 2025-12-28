@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\Admin\AiMetricsController;
 use App\Http\Controllers\Api\TechnicianController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TimesheetController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TravelSegmentController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\PublicContactController;
+use App\Http\Controllers\CountryController;
 
 Route::post('/public/contact', [PublicContactController::class, 'submit']);
 /*
@@ -71,6 +73,13 @@ Route::middleware('throttle:login')->group(function () {
 Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::get('tenants', [TenantController::class, 'index']);
     Route::get('tenants/{slug}', [TenantController::class, 'show']);
+
+    Route::prefix('admin')->group(function () {
+        Route::get('ai/metrics', [AiMetricsController::class, 'index'])->middleware('throttle:read');
+        // Legacy system-admin endpoint kept for backwards compatibility (tenant flows use /api/billing/ai-toggle)
+        Route::put('tenants/{tenant:slug}/ai', [TenantController::class, 'updateAiToggle'])
+            ->middleware('throttle:edit');
+    });
 });
 
 // Public Billing Routes (No auth/tenant required - used by frontend before login)
@@ -104,8 +113,8 @@ Route::middleware(['tenant.initialize'])->group(function () {
             Route::post('schedule-downgrade', [\App\Modules\Billing\Controllers\BillingController::class, 'scheduleDowngrade']);
             Route::post('cancel-scheduled-downgrade', [\App\Modules\Billing\Controllers\BillingController::class, 'cancelScheduledDowngrade']);
             Route::post('toggle-addon', [\App\Modules\Billing\Controllers\BillingController::class, 'toggleAddon']);
-            // DEPRECATED: Direct license increase without payment - now uses checkout flow
-            // Route::post('licenses/increase', [\App\Modules\Billing\Controllers\BillingController::class, 'increaseLicenses'])->middleware('throttle:edit');
+            Route::put('ai-toggle', [TenantController::class, 'updateAiToggle'])->middleware('throttle:edit');
+            Route::post('licenses/increase', [\App\Modules\Billing\Controllers\BillingController::class, 'increaseLicenses'])->middleware('throttle:edit');
             Route::post('checkout/start', [\App\Modules\Billing\Controllers\BillingController::class, 'checkoutStart']);
             Route::post('checkout/confirm', [\App\Modules\Billing\Controllers\BillingController::class, 'checkoutConfirm']);
             
@@ -211,6 +220,9 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::delete('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'destroy'])->middleware('throttle:delete');
     });
 
+    Route::apiResource('countries', CountryController::class)
+        ->only(['index', 'show', 'store', 'update', 'destroy']);
+
     // Locations - View for all, manage for admins
     Route::get('locations/active', [\App\Http\Controllers\LocationController::class, 'active'])->middleware('throttle:read');
     Route::get('locations', [\App\Http\Controllers\LocationController::class, 'index'])->middleware('throttle:read');
@@ -257,8 +269,12 @@ Route::middleware(['tenant.initialize'])->group(function () {
     Route::get('dashboard/statistics', [DashboardController::class, 'getStatistics'])->middleware('throttle:read');
     Route::get('dashboard/top-projects', [DashboardController::class, 'getTopProjects'])->middleware('throttle:read');
 
-    // Events - CRUD for planning events
-    Route::apiResource('events', EventController::class);
+    // Events - CRUD for planning events (permission model mirrors Timesheets)
+    Route::get('events', [EventController::class, 'index'])->middleware(['permission:view-planning', 'throttle:read']);
+    Route::post('events', [EventController::class, 'store'])->middleware(['permission:create-planning', 'throttle:create']);
+    Route::get('events/{event}', [EventController::class, 'show'])->middleware(['permission:view-planning', 'throttle:read']);
+    Route::put('events/{event}', [EventController::class, 'update'])->middleware(['can_edit_planning', 'throttle:edit']);
+    Route::delete('events/{event}', [EventController::class, 'destroy'])->middleware(['can_edit_planning', 'throttle:delete']);
 
     // Travel Segments - Requires Team/Enterprise plan or Starter with >2 users
     Route::prefix('travels')->middleware('module:travels')->group(function () {
@@ -273,36 +289,36 @@ Route::middleware(['tenant.initialize'])->group(function () {
 
     // Planning Module - Requires Team/Enterprise plan + Planning addon
     Route::prefix('planning')->middleware('module:planning')->group(function () {
-        Route::get('projects', [\App\Http\Controllers\PlanningController::class, 'indexProjects'])->middleware('throttle:read');
-        Route::get('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'showProject']);
-        Route::post('projects', [\App\Http\Controllers\PlanningController::class, 'storeProject']);
-        Route::put('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'updateProject']);
-        Route::delete('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'destroyProject']);
+        Route::get('projects', [\App\Http\Controllers\PlanningController::class, 'indexProjects'])->middleware(['permission:view-planning', 'throttle:read']);
+        Route::get('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'showProject'])->middleware('permission:view-planning');
+        Route::post('projects', [\App\Http\Controllers\PlanningController::class, 'storeProject'])->middleware('permission:create-planning');
+        Route::put('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'updateProject'])->middleware('can_edit_planning');
+        Route::delete('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'destroyProject'])->middleware('can_edit_planning');
 
-        Route::get('tasks', [\App\Http\Controllers\PlanningController::class, 'indexTasks']);
-        Route::get('tasks/{task}', [\App\Http\Controllers\PlanningController::class, 'showTask']);
-        Route::post('tasks', [\App\Http\Controllers\PlanningController::class, 'storeTask']);
-        Route::put('tasks/{task}', [\App\Http\Controllers\PlanningController::class, 'updateTask']);
-        Route::delete('tasks/{task}', [\App\Http\Controllers\PlanningController::class, 'destroyTask']);
+        Route::get('tasks', [\App\Http\Controllers\PlanningController::class, 'indexTasks'])->middleware('permission:view-planning');
+        Route::get('tasks/{task}', [\App\Http\Controllers\PlanningController::class, 'showTask'])->middleware('permission:view-planning');
+        Route::post('tasks', [\App\Http\Controllers\PlanningController::class, 'storeTask'])->middleware('permission:create-planning');
+        Route::put('tasks/{task}', [\App\Http\Controllers\PlanningController::class, 'updateTask'])->middleware('can_edit_planning');
+        Route::delete('tasks/{task}', [\App\Http\Controllers\PlanningController::class, 'destroyTask'])->middleware('can_edit_planning');
 
-        Route::get('resources', [\App\Http\Controllers\PlanningController::class, 'indexResources']);
-        Route::get('resources/{resource}', [\App\Http\Controllers\PlanningController::class, 'showResource']);
-        Route::post('resources', [\App\Http\Controllers\PlanningController::class, 'storeResource']);
-        Route::put('resources/{resource}', [\App\Http\Controllers\PlanningController::class, 'updateResource']);
-        Route::delete('resources/{resource}', [\App\Http\Controllers\PlanningController::class, 'destroyResource']);
+        Route::get('resources', [\App\Http\Controllers\PlanningController::class, 'indexResources'])->middleware('permission:view-planning');
+        Route::get('resources/{resource}', [\App\Http\Controllers\PlanningController::class, 'showResource'])->middleware('permission:view-planning');
+        Route::post('resources', [\App\Http\Controllers\PlanningController::class, 'storeResource'])->middleware('permission:create-planning');
+        Route::put('resources/{resource}', [\App\Http\Controllers\PlanningController::class, 'updateResource'])->middleware('can_edit_planning');
+        Route::delete('resources/{resource}', [\App\Http\Controllers\PlanningController::class, 'destroyResource'])->middleware('can_edit_planning');
 
-        Route::get('locations', [\App\Http\Controllers\PlanningController::class, 'indexLocations']);
-        Route::get('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'showLocation']);
-        Route::post('locations', [\App\Http\Controllers\PlanningController::class, 'storeLocation']);
-        Route::put('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'updateLocation']);
-        Route::delete('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'destroyLocation']);
+        Route::get('locations', [\App\Http\Controllers\PlanningController::class, 'indexLocations'])->middleware('permission:view-planning');
+        Route::get('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'showLocation'])->middleware('permission:view-planning');
+        Route::post('locations', [\App\Http\Controllers\PlanningController::class, 'storeLocation'])->middleware('permission:create-planning');
+        Route::put('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'updateLocation'])->middleware('can_edit_planning');
+        Route::delete('locations/{location}', [\App\Http\Controllers\PlanningController::class, 'destroyLocation'])->middleware('can_edit_planning');
     });
 
     // Task-Location Management (outside planning middleware - available for all)
     Route::prefix('tasks/{task}/locations')->group(function () {
-        Route::get('/', [\App\Http\Controllers\PlanningController::class, 'getTaskLocations'])->middleware('throttle:read');
-        Route::post('/', [\App\Http\Controllers\PlanningController::class, 'attachLocations'])->middleware('throttle:edit');
-        Route::delete('/{location}', [\App\Http\Controllers\PlanningController::class, 'detachLocation'])->middleware('throttle:delete');
+        Route::get('/', [\App\Http\Controllers\PlanningController::class, 'getTaskLocations'])->middleware(['permission:view-planning', 'throttle:read']);
+        Route::post('/', [\App\Http\Controllers\PlanningController::class, 'attachLocations'])->middleware(['can_edit_planning', 'throttle:edit']);
+        Route::delete('/{location}', [\App\Http\Controllers\PlanningController::class, 'detachLocation'])->middleware(['can_edit_planning', 'throttle:delete']);
     });
 
     // Admin-only: Reset tenant data (preserves Owner user)

@@ -1,4 +1,126 @@
 <?php
+ /* =====================================================================
+ * IMPORTANT — BILLING CONTROLLER INTENT & SAFETY NOTES (COMMENTS ONLY)
+ * =====================================================================
+ *
+ * ⚠️ DO NOT REFACTOR OR SIMPLIFY THIS FILE WITHOUT FULL BILLING CONTEXT.
+ *
+ * This controller intentionally contains:
+ * - Multiple checkout modes (plan / licenses / addon)
+ * - Snapshot-based billing (Billing Model A)
+ * - Trial-specific behavior (Enterprise trial → paid transitions)
+ * - Strict separation between:
+ *      • user_limit  = BILLABLE / PURCHASED LICENSES
+ *      • user_count  = DISPLAY-ONLY ACTIVE USERS
+ *
+ * ---------------------------------------------------------------------
+ * CORE CONCEPTS (READ BEFORE CHANGES)
+ * ---------------------------------------------------------------------
+ *
+ * 1) user_limit vs user_count
+ * ---------------------------------------------------------------------
+ * - user_limit:
+ *     • Stored on Subscription
+ *     • Represents PURCHASED licenses
+ *     • Used for billing, enforcement, pricing
+ *     • NULL during trial = unlimited users
+ *     • Starter plan ALWAYS forced to 2
+ *
+ * - user_count:
+ *     • Computed at runtime (active technicians)
+ *     • DISPLAY ONLY
+ *     • NEVER used for billing calculations
+ *
+ * Mixing these concepts WILL break billing correctness.
+ *
+ * ---------------------------------------------------------------------
+ * 2) Trial Enterprise is a VIRTUAL PLAN
+ * ---------------------------------------------------------------------
+ * - Database:
+ *     plan = 'enterprise'
+ *     is_trial = true
+ *
+ * - API / Frontend:
+ *     plan = 'trial_enterprise'
+ *
+ * This transformation is intentional and REQUIRED.
+ * Do NOT attempt to "clean this up" or normalize it.
+ *
+ * ---------------------------------------------------------------------
+ * 3) Checkout MODES are intentionally implicit
+ * ---------------------------------------------------------------------
+ * checkoutStart() supports multiple behaviors via `mode`:
+ *
+ * - mode = plan
+ *     • Plan upgrade / downgrade pricing
+ *     • License count is PRESERVED (not changed here)
+ *
+ * - mode = licenses
+ *     • Explicit purchase of additional licenses
+ *     • user_limit MUST increase
+ *
+ * - mode = addon
+ *     • Activates billing add-ons (planning / ai)
+ *
+ * There is NO explicit operation_type field by design.
+ * Behavior is inferred intentionally.
+ *
+ * ---------------------------------------------------------------------
+ * 4) Snapshot-based billing (Billing Model A)
+ * ---------------------------------------------------------------------
+ * - Checkout NEVER updates subscription directly
+ * - A Payment SNAPSHOT is created first
+ * - Snapshot is applied ONLY after successful payment
+ *
+ * This guarantees:
+ *   • Auditability
+ *   • Correct proration
+ *   • Idempotency
+ *
+ * DO NOT bypass snapshots.
+ *
+ * ---------------------------------------------------------------------
+ * 5) License rules are duplicated ON PURPOSE
+ * ---------------------------------------------------------------------
+ * You will see license caps enforced in:
+ * - upgradePlan()
+ * - checkoutStart()
+ * - PlanManager
+ *
+ * This is DEFENSIVE and INTENTIONAL.
+ * Removing "redundant" checks is a common source of regressions.
+ *
+ * ---------------------------------------------------------------------
+ * 6) Downgrades are NEVER immediate
+ * ---------------------------------------------------------------------
+ * - scheduleDowngrade() stores intent only
+ * - Actual downgrade happens at next renewal
+ * - cancelScheduledDowngrade() has time-based guards
+ *
+ * This is a hard business rule.
+ *
+ * ---------------------------------------------------------------------
+ * 7) AI feature uses a 3-layer control model
+ * ---------------------------------------------------------------------
+ * - entitlements['ai'] : plan-level permission
+ * - tenant.ai_enabled  : tenant preference
+ * - features['ai']     : FINAL computed value
+ *
+ * Frontend MUST rely on features['ai'], not entitlements alone.
+ *
+ * ---------------------------------------------------------------------
+ * TL;DR
+ * ---------------------------------------------------------------------
+ * This file looks complex because billing IS complex.
+ * The complexity is INTENTIONAL.
+ *
+ * Any refactor must be preceded by:
+ * - Full billing flow review
+ * - Trial + downgrade + license increment testing
+ *
+ * If unsure: ADD COMMENTS, DO NOT CHANGE LOGIC.
+ * =====================================================================
+ */
 
 namespace App\Services\Billing;
 

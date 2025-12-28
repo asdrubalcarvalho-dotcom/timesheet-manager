@@ -1,5 +1,105 @@
 <?php
 /**
+ * ============================================================================
+ * ⚠️ CRITICAL BILLING CONTROLLER — READ BEFORE MODIFYING ⚠️
+ * ============================================================================
+ *
+ * This controller is the CORE of billing, checkout, trials, licenses and addons.
+ * The logic here is intentionally verbose and defensive.
+ *
+ * PLEASE READ BEFORE CHANGING ANYTHING:
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * 1) UPGRADE vs DOWNGRADE IS INTENTIONAL
+ * ────────────────────────────────────────────────────────────────────────────
+ * - Upgrades (plan, licenses, addons) are IMMEDIATE after successful checkout.
+ * - Downgrades are NEVER immediate:
+ *   → They are SCHEDULED and applied at the next renewal cycle.
+ *   → This avoids breaking already-paid billing periods.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * 2) LICENSES TERMINOLOGY (VERY IMPORTANT)
+ * ────────────────────────────────────────────────────────────────────────────
+ * - user_limit = PURCHASED licenses (billing source of truth)
+ * - user_count = ACTIVE users (technicians with is_active=1)
+ *
+ * user_count is DISPLAY-ONLY and MUST NEVER be used for billing calculations.
+ * user_limit is what the customer PAYS for.
+ *
+ * During trial:
+ * - user_limit may be NULL → meaning "unlimited users"
+ * After trial:
+ * - user_limit MUST be a concrete integer
+ *
+ * Starter plan:
+ * - ALWAYS forces user_limit = 2
+ * - Any higher value is ignored intentionally
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * 3) TRIAL ENTERPRISE IS A *VIRTUAL* PLAN
+ * ────────────────────────────────────────────────────────────────────────────
+ * - Database stores: plan = 'enterprise', is_trial = true
+ * - API returns: plan = 'trial_enterprise'
+ *
+ * This transformation is intentional and MUST NOT be simplified.
+ * Frontend relies on this distinction for UI and feature access.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * 4) CHECKOUT MODES (DO NOT MERGE OR SIMPLIFY)
+ * ────────────────────────────────────────────────────────────────────────────
+ * checkoutStart() supports multiple explicit modes:
+ *
+ * - mode = 'plan'      → Plan upgrade/downgrade pricing
+ * - mode = 'licenses'  → License increment ONLY (delta × price_per_user)
+ * - mode = 'addon'     → Addon activation (percentage of base price)
+ *
+ * Each mode has DIFFERENT pricing, validation and snapshot behavior.
+ * DO NOT attempt to unify these paths.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * 5) SNAPSHOT-BASED BILLING (MODEL A)
+ * ────────────────────────────────────────────────────────────────────────────
+ * - checkoutStart() creates a PAYMENT SNAPSHOT
+ * - checkoutConfirm() applies the snapshot to the subscription
+ *
+ * NEVER apply subscription changes directly during checkoutStart().
+ * All mutations MUST go through snapshot application.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * 6) ADDONS vs TENANT TOGGLES (AI CASE)
+ * ────────────────────────────────────────────────────────────────────────────
+ * AI has THREE layers:
+ *
+ * 1) Billing entitlement (plan/addon)
+ * 2) Tenant preference (tenant.ai_enabled)
+ * 3) Final computed feature flag
+ *
+ * Billing add-on OFF → tenant AI is forcibly turned OFF
+ * Billing add-on ON  → tenant may still choose OFF
+ *
+ * This is INTENTIONAL one-way enforcement.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * 7) COPILOT / REFACTOR WARNING
+ * ────────────────────────────────────────────────────────────────────────────
+ * This file has been repeatedly broken by "simplifying refactors".
+ *
+ * ❌ DO NOT:
+ * - Merge plan/license/addon checkout flows
+ * - Replace user_limit with user_count
+ * - Remove snapshot logic
+ * - Inline trial logic
+ *
+ * ✅ SAFE CHANGES:
+ * - Add logging
+ * - Add comments
+ * - Improve validation messages
+ *
+ * If unsure, STOP and review PlanManager + PriceCalculator first.
+ *
+ * ============================================================================
+ */
+/**
  * === COPILOT GUIDANCE — DOWNGRADE SCHEDULING IMPLEMENTATION ===
  *
  * Goal:
@@ -386,38 +486,40 @@ class BillingController extends Controller
                 ], 404);
             }
 
-            // Validate plan allows license increase (Team/Enterprise only)
-            if (!in_array($subscription->plan, ['team', 'enterprise'])) {
+            // BUSINESS RULE: This endpoint is ONLY allowed for Trial Enterprise license updates.
+            // Paid plans must use the checkout flow.
+            if (!($subscription->is_trial ?? false)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'License increase is only available for Team and Enterprise plans',
-                    'code' => 'plan_not_eligible'
-                ], 400);
+                    'message' => 'Direct license increase is only available for trial subscriptions',
+                    'code' => 'trial_only'
+                ], 403);
             }
 
             $validated = $request->validate([
                 'increment' => 'required|integer|min:1|max:100'
             ]);
 
-            // Get plan-specific limits
-            $planLimits = config("billing.user_limits.{$subscription->plan}");
-            if (!$planLimits) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid plan configuration'
-                ], 500);
-            }
+            // Trial cap: UI enforces 10; backend must enforce too.
+            $trialMax = 10;
 
-            $newLimit = $subscription->user_limit + $validated['increment'];
-            
-            // Validate against plan maximum
-            if ($newLimit > $planLimits['max']) {
+            // Baseline current limit. If user_limit is null (legacy trial semantics),
+            // never allow reducing below current active users.
+            $activeUserCount = $tenant->run(function () {
+                return \App\Models\Technician::where('is_active', 1)->count();
+            });
+            $currentLimit = $subscription->user_limit ?? $activeUserCount;
+            $currentLimit = max((int) $currentLimit, (int) $activeUserCount, 1);
+
+            $newLimit = $currentLimit + (int) $validated['increment'];
+
+            if ($newLimit > $trialMax) {
                 return response()->json([
                     'success' => false,
-                    'message' => "Cannot increase beyond {$planLimits['max']} users for {$subscription->plan} plan. Current limit: {$subscription->user_limit}. To add more users, please upgrade to a higher tier plan.",
+                    'message' => "Trial supports up to {$trialMax} licenses. Current limit: {$currentLimit}.",
                     'code' => 'max_limit_reached',
-                    'max_limit' => $planLimits['max'],
-                    'current_limit' => $subscription->user_limit
+                    'max_limit' => $trialMax,
+                    'current_limit' => $currentLimit,
                 ], 400);
             }
             
@@ -428,7 +530,7 @@ class BillingController extends Controller
             // Log the operation
             \Log::info('[License Increase] User limit increased', [
                 'tenant_id' => $tenant->id,
-                'old_limit' => $subscription->user_limit - $validated['increment'],
+                'old_limit' => $newLimit - (int) $validated['increment'],
                 'new_limit' => $newLimit,
                 'increment' => $validated['increment'],
                 'plan' => $subscription->plan,
@@ -698,13 +800,15 @@ class BillingController extends Controller
                     $plan = $targetPlan ?? $subscription->plan ?? 'starter';
                     $userLimit = $targetUserLimit ?? $subscription->user_limit ?? 1;
                     
-                    // Build addons array
-                    $addons = [];
-                    if ($subscription->planning_addon_enabled ?? false) {
-                        $addons[] = 'planning';
-                    }
-                    if ($subscription->ai_addon_enabled ?? false) {
-                        $addons[] = 'ai';
+                    // Build addons array from subscription JSON field
+                    $addons = $subscription->addons ?? [];
+
+                    // When activating a new addon via checkout, ensure snapshot captures it
+                    if (($validated['mode'] ?? null) === 'addon' && !empty($validated['addon'])) {
+                        $addonKey = $validated['addon'];
+                        if (!in_array($addonKey, $addons, true)) {
+                            $addons[] = $addonKey;
+                        }
                     }
                     
                     $cycleStart = now();
@@ -816,12 +920,21 @@ class BillingController extends Controller
 
             // Retrieve the pending payment (force central database connection)
             $payment = Payment::on('mysql')->findOrFail($validated['payment_id']);
-            
+
+            // Idempotency guard: if this PaymentIntent was already processed, return success and skip re-application
             if ($payment->status !== 'pending') {
+                \Log::info('[checkoutConfirm] Idempotent skip: payment already processed', [
+                    'payment_id' => $payment->id,
+                    'status' => $payment->status,
+                    'gateway_reference' => $payment->gateway_reference ?? $payment->metadata['stripe_payment_intent_id'] ?? null,
+                ]);
+
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Payment already processed'
-                ], 400);
+                    'success' => true,
+                    'payment_id' => $payment->id,
+                    'status' => $payment->status,
+                    'message' => 'Payment already processed',
+                ]);
             }
 
             // Use gateway to confirm payment

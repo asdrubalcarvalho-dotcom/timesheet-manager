@@ -13,6 +13,7 @@ import type {
   DashboardStatistics,
   TopProject
 } from '../types';
+import { notifyGlobal } from './globalNotifications';
 
 /**
  * API ROOT (sem /api no fim - será adicionado nas rotas)
@@ -40,9 +41,16 @@ const getTenantSlug = (): string | null => {
   // Try subdomain first (e.g., "acme" from "acme.app.timeperk.com")
   const host = window.location.hostname;
   const parts = host.split('.');
+  const reservedSubdomains = new Set(['app', 'www', 'api', 'management']);
   
   // If subdomain exists and it's not "app" or "www", use it as tenant
-  if (parts.length > 2 && parts[0] !== 'app' && parts[0] !== 'www') {
+  if (parts.length > 2 && !reservedSubdomains.has(parts[0])) {
+    return parts[0];
+  }
+
+  // Local dev convenience: treat "<tenant>.localhost" as a tenant slug.
+  // Example: http://upg.localhost:8082 should send X-Tenant: upg
+  if (parts.length === 2 && parts[1] === 'localhost' && !reservedSubdomains.has(parts[0])) {
     return parts[0];
   }
   
@@ -124,10 +132,29 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Global 403 handling (UX-only): show backend message, then re-throw.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    if (status === 403) {
+      const data = error?.response?.data;
+      const msg = data?.message ?? data?.error;
+
+      if (typeof msg === 'string' && msg.trim()) {
+        notifyGlobal(msg, 'warning');
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 export interface TimesheetMutationResponse {
   data: Timesheet;
   validation?: TimesheetValidationResult;
   message?: string;
+  warning?: any;
   permissions?: TimesheetPermissions;
 }
 
@@ -161,8 +188,11 @@ export const projectsApi = {
   getAll: (): Promise<Project[]> =>
     api.get('/api/projects').then(res => res.data),
   
-  getForCurrentUser: (): Promise<Project[]> =>
-    api.get('/api/user/projects').then(res => res.data),
+  getForCurrentUser: (params?: { technician_id?: number; user_id?: number }): Promise<Project[]> =>
+    api.get('/api/user/projects', { params }).then(res => res.data),
+  
+  getForCurrentUserExpenses: (params?: { technician_id?: number; user_id?: number }): Promise<Project[]> =>
+    api.get('/api/user/expense-projects', { params }).then(res => res.data),
   
   getById: (id: number): Promise<Project> =>
     api.get(`/api/projects/${id}`).then(res => res.data),
@@ -354,10 +384,43 @@ export interface TenantRegistrationResponse {
   };
 }
 
+export interface TaskLocationSuggestionWeights {
+  same_project: number;
+  cross_project: number;
+  assignment_fallback: number;
+}
+
+export interface TaskLocationSuggestionLocationMeta {
+  city?: string;
+  country?: string;
+  timezone?: string;
+  full_address?: string;
+  meta?: Record<string, unknown> | null;
+  is_active?: boolean;
+}
+
+export interface TaskLocationSuggestion {
+  location_id: number;
+  name: string;
+  confidence: number;
+  sources?: string[];
+  location?: TaskLocationSuggestionLocationMeta;
+}
+
+export interface TaskLocationSuggestionResponse {
+  success: boolean;
+  weights?: TaskLocationSuggestionWeights;
+  data: {
+    task_id: number;
+    project_id: number | null;
+    project_name?: string | null;
+    suggestions: TaskLocationSuggestion[];
+  };
+}
+
 export const tenantApi = {
   /**
    * Register a new tenant (company)
-   * This endpoint does NOT require X-Tenant header
    */
   register: (data: TenantRegistrationData): Promise<TenantRegistrationResponse> =>
     api.post('/api/tenants/request-signup', data).then(res => res.data),
@@ -373,6 +436,14 @@ export const tenantApi = {
    */
   get: (slug: string): Promise<any> =>
     api.get(`/api/tenants/${slug}`).then(res => res.data.tenant),
+
+  /**
+   * Update AI toggle for current tenant (tenant-scoped route)
+   */
+  updateAiToggle: (aiEnabled: boolean): Promise<any> =>
+    api.put('/api/billing/ai-toggle', {
+      ai_enabled: aiEnabled,
+    }).then(res => res.data),
 };
 
 // Task-Location Management API
@@ -394,6 +465,11 @@ export const taskLocationsApi = {
    */
   detach: (taskId: number, locationId: number) =>
     api.delete(`/api/tasks/${taskId}/locations/${locationId}`)
+};
+
+export const aiSuggestionsApi = {
+  suggestTaskLocations: (taskId: number, limit = 5): Promise<TaskLocationSuggestionResponse> =>
+    api.post('/api/ai/suggest-task-locations', { task_id: taskId, limit }).then(res => res.data),
 };
 
 export default api;

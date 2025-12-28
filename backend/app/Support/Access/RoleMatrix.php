@@ -15,6 +15,14 @@ class RoleMatrix
             'approve-timesheets',
             'delete-timesheets',
 
+            // Planning permissions (mirror Timesheets permission model)
+            'view-planning',
+            'create-planning',
+            'edit-own-planning',
+            'edit-all-planning',
+            'approve-planning',
+            'delete-planning',
+
             // Expense permissions
             'view-expenses',
             'create-expenses',
@@ -43,6 +51,9 @@ class RoleMatrix
                 'view-timesheets',
                 'create-timesheets',
                 'edit-own-timesheets',
+                'view-planning',
+                'create-planning',
+                'edit-own-planning',
                 'view-expenses',
                 'create-expenses',
                 'edit-own-expenses',
@@ -53,6 +64,11 @@ class RoleMatrix
                 'edit-own-timesheets',
                 'edit-all-timesheets',
                 'approve-timesheets',
+                'view-planning',
+                'create-planning',
+                'edit-own-planning',
+                'edit-all-planning',
+                'approve-planning',
                 'view-expenses',
                 'create-expenses',
                 'edit-own-expenses',

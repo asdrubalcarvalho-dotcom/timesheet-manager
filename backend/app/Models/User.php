@@ -10,6 +10,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class User extends Authenticatable
 {
@@ -50,6 +51,14 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Technician profile linked to this user (tenant-scoped).
+     */
+    public function technician(): HasOne
+    {
+        return $this->hasOne(Technician::class);
     }
 
     /**
@@ -106,58 +115,42 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user manages any project (either via manager_id or project_members).
+     * Check if user manages any project via project_members pivot.
      * This is the correct way to determine if a user is a "project manager",
      * NOT by checking Spatie role 'Manager'.
      */
     public function isProjectManager(): bool
     {
-        // Check if user is manager_id in any project
-        $hasManagerIdProjects = Project::where('manager_id', $this->id)->exists();
-        
-        if ($hasManagerIdProjects) {
-            return true;
-        }
-        
-        // Check if user has project_role='manager' in project_members
-        $hasMemberManagerRole = $this->memberRecords()
+        return $this->memberRecords()
             ->where('project_role', 'manager')
             ->exists();
-        
-        return $hasMemberManagerRole;
     }
 
     /**
-     * Get all project IDs where this user is a manager.
-     * Combines both manager_id FK and project_members with project_role='manager'.
+     * Get all project IDs where this user is a manager via project_members.
      */
     public function getManagedProjectIds(): array
     {
-        // Get projects via manager_id FK
-        $managerIdProjects = Project::where('manager_id', $this->id)->pluck('id')->toArray();
-        
         // Get projects via project_members
         $memberManagerProjects = $this->memberRecords()
             ->where('project_role', 'manager')
             ->pluck('project_id')
             ->toArray();
-        
-        return array_unique(array_merge($managerIdProjects, $memberManagerProjects));
+
+        return array_unique($memberManagerProjects);
     }
 
     /**
-     * Get project ids where the user manages expenses.
+     * Get project ids where the user manages expenses via project_members.
      */
     public function getExpenseManagedProjectIds(): array
     {
-        $managerIdProjects = Project::where('manager_id', $this->id)->pluck('id')->toArray();
-
         $expenseManagerProjects = $this->memberRecords()
             ->where('expense_role', 'manager')
             ->pluck('project_id')
             ->toArray();
 
-        return array_unique(array_merge($managerIdProjects, $expenseManagerProjects));
+        return array_unique($expenseManagerProjects);
     }
 
     /**

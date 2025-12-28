@@ -24,8 +24,9 @@ class UpdateExpenseRequest extends FormRequest
     {
         $rules = [
             'project_id' => ['sometimes', 'required', 'exists:projects,id'],
+            'technician_id' => ['sometimes', 'nullable', 'integer', 'exists:technicians,id'],
             'date' => ['sometimes', 'required', 'date'],
-            'category' => ['sometimes', 'required', 'string', 'max:100'],
+            'category' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'attachment' => ['nullable', 'file', 'mimes:jpeg,jpg,png,pdf,doc,docx', 'max:5120'],
             'expense_type' => ['sometimes', 'required', Rule::in(['reimbursement', 'mileage', 'company_card'])],

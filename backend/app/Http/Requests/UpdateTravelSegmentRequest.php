@@ -24,9 +24,9 @@ class UpdateTravelSegmentRequest extends FormRequest
             'project_id' => ['sometimes', 'integer', 'exists:projects,id'],
             'start_at' => ['sometimes', 'date'],
             'end_at' => ['nullable', 'date', 'after_or_equal:start_at'],
-            'origin_country' => ['sometimes', 'string', 'size:2'],
+            'origin_country' => ['sometimes', 'string', 'size:2', 'exists:countries,iso2'],
             'origin_location_id' => ['nullable', 'integer', 'exists:locations,id'],
-            'destination_country' => ['sometimes', 'string', 'size:2'],
+            'destination_country' => ['sometimes', 'string', 'size:2', 'exists:countries,iso2'],
             'destination_location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'status' => ['sometimes', 'in:planned,completed,cancelled'],
         ];

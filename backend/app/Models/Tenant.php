@@ -17,6 +17,12 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 {
     use HasFactory, HasDatabase, HasDataColumn;
 
+    /**
+     * Central model: always use the central connection.
+     * Prevents queries against the tenant database (which does not have a `tenants` table).
+     */
+    protected $connection = 'mysql';
+
     protected $fillable = [
         'id',
         'name',
@@ -25,6 +31,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'stripe_customer_id',
         'stripe_subscription_id',
         'active_addons',
+        'ai_enabled',
         'subscription_renews_at',
         'subscription_status',
         'subscription_last_event',
@@ -54,6 +61,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'subscription_last_status_change_at' => 'datetime',
         'deactivated_at' => 'datetime',
         'is_paused' => 'boolean',
+        'ai_enabled' => 'boolean',
         // Stripe Tax fields
         'billing_country' => 'string',
         'billing_address' => 'string',
@@ -138,6 +146,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'trial_ends_at',
             'deactivated_at',
             'settings',
+            'ai_enabled',
         ]);
     }
 
@@ -151,5 +160,18 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         }
 
         return $this->plan ?? 'starter';
+    }
+
+    /**
+     * Resolve internal tenant values. During tests we reuse the default database
+     * connection instead of provisioning per-tenant schemas.
+     */
+    public function getInternal(string $key)
+    {
+        if ($key === 'db_name' && app()->environment('testing')) {
+            return config('database.connections.mysql.database');
+        }
+
+        return parent::getInternal($key);
     }
 }

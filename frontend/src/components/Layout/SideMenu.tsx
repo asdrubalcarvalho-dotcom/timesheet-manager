@@ -55,13 +55,14 @@ const DRAWER_WIDTH_COLLAPSED = 72;
 export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange }) => {
   const { user, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
-  const { hasTravels, hasPlanning, hasAI } = useFeatures(); // Billing-controlled feature flags
+  const { hasTravels, hasAI } = useFeatures(); // Billing-controlled feature flags
   const { billingSummary } = useBilling(); // Get billing info to check trial status
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
+  const [planningOpen, setPlanningOpen] = useState(true); // Planning starts open
   const [administrationOpen, setAdministrationOpen] = useState(true); // Start open for admins
   const [resetDataDialogOpen, setResetDataDialogOpen] = useState(false);
 
@@ -135,20 +136,60 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       show: hasPermission('view-locations') || hasPermission('manage-locations') || isAdmin()
     },
     {
+      id: 'admin-countries',
+      label: 'Countries',
+      icon: <SettingsIcon />,
+      path: 'admin-countries',
+      show: hasPermission('view-locations') || hasPermission('manage-locations') || isAdmin()
+    },
+    {
       id: 'ai-insights',
       label: 'AI Insights',
       icon: <AIIcon />, 
       path: 'ai-insights',
       show: hasAI
-    },
-    {
-      id: 'planning',
-      label: 'Planning',
-      icon: <PlanningIcon />,
-      path: 'planning',
-      show: hasPlanning
     }
   ];
+
+  const visibleManagementItems = managementItems.filter((item) => item.show);
+
+  const hasAnyPermission = (perms: string[]): boolean => perms.some((perm) => hasPermission(perm));
+  const planningMenuPermissions = [
+    'view-planning',
+    'create-planning',
+    'edit-own-planning',
+    'edit-all-planning',
+    'approve-planning',
+    'delete-planning'
+  ];
+  const canSeeAnyPlanningSubmenu = hasAnyPermission(planningMenuPermissions);
+
+  const planningItems = [
+    {
+      id: 'planning-projects',
+      label: 'Projects',
+      icon: <ProjectsIcon />,
+      path: 'planning',
+      show: canSeeAnyPlanningSubmenu
+    },
+    {
+      id: 'planning-locations',
+      label: 'Locations',
+      icon: <SettingsIcon />,
+      path: 'planning-locations',
+      show: canSeeAnyPlanningSubmenu
+    },
+    {
+      id: 'planning-users',
+      label: 'Users',
+      icon: <TeamIcon />,
+      path: 'planning-users',
+      show: canSeeAnyPlanningSubmenu
+    }
+  ];
+
+  const visiblePlanningItems = planningItems.filter((item) => item.show);
+  const showPlanningSection = visiblePlanningItems.length > 0;
 
   const administrationItems = [
     {
@@ -181,6 +222,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       action: true // Special flag to trigger dialog instead of navigation
     }
   ];
+
+  const visibleAdministrationItems = administrationItems.filter((item) => item.show);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -373,90 +416,178 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
             </ListItem>
           ))}
 
-          {/* Management Section */}
-          <Divider sx={{ my: 2, borderColor: alpha(theme.palette.common.white, 0.1) }} />
-          
-          {!collapsed && (
-            <ListItem>
-              <ListItemButton
-                onClick={() => setManagementOpen(!managementOpen)}
-                sx={{ color: 'grey.400' }}
-              >
-                <ListItemIcon sx={{ color: 'inherit' }}>
-                  <SettingsIcon />
-                </ListItemIcon>
-                <ListItemText primary="Management" />
-                {managementOpen ? <ExpandLess /> : <ExpandMore />}
-              </ListItemButton>
-            </ListItem>
-          )}
-
-          {/* Show icons when collapsed, or full items when expanded */}
-          {collapsed ? (
-            // Show only icons when collapsed
-            managementItems.filter(item => item.show).map((item) => (
-              <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
-                <ListItemButton
-                  onClick={() => handleItemClick(item.path)}
-                  selected={currentPage === item.path}
-                  sx={{
-                    mx: 1,
-                    borderRadius: 2,
-                    color: 'grey.300',
-                    justifyContent: 'center',
-                    '&.Mui-selected': {
-                      bgcolor: alpha(theme.palette.secondary.main, 0.2),
-                      color: 'secondary.light',
-                      '& .MuiListItemIcon-root': { color: 'secondary.light' }
-                    },
-                    '&:hover': {
-                      bgcolor: alpha(theme.palette.common.white, 0.05)
-                    }
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                    {item.icon}
-                  </ListItemIcon>
-                </ListItemButton>
-              </ListItem>
-            ))
-          ) : (
-            // Show collapsible list when expanded
-            <Collapse in={managementOpen} timeout="auto" unmountOnExit>
-              {managementItems.filter(item => item.show).map((item) => (
-                <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+          {/* Planning Section (permission-driven; parent depends on children) */}
+          {showPlanningSection && (
+            <>
+              <Divider sx={{ my: 2, borderColor: alpha(theme.palette.common.white, 0.1) }} />
+              
+              {!collapsed && (
+                <ListItem>
                   <ListItemButton
-                    onClick={() => handleItemClick(item.path)}
-                    selected={currentPage === item.path}
-                    sx={{
-                      mx: 2,
-                      borderRadius: 2,
-                      color: 'grey.400',
-                      '&.Mui-selected': {
-                        bgcolor: alpha(theme.palette.secondary.main, 0.2),
-                        color: 'secondary.light',
-                        '& .MuiListItemIcon-root': { color: 'secondary.light' }
-                      },
-                      '&:hover': {
-                        bgcolor: alpha(theme.palette.common.white, 0.05)
-                      }
-                    }}
+                    onClick={() => setPlanningOpen(!planningOpen)}
+                    sx={{ color: 'grey.400' }}
                   >
-                    <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                      {item.icon}
+                    <ListItemIcon sx={{ color: 'inherit' }}>
+                      <PlanningIcon />
                     </ListItemIcon>
-                    <ListItemText 
-                      primary={item.label}
-                      primaryTypographyProps={{ fontSize: '0.875rem' }}
-                    />
+                    <ListItemText primary="Planning" />
+                    {planningOpen ? <ExpandLess /> : <ExpandMore />}
                   </ListItemButton>
                 </ListItem>
-              ))}
-            </Collapse>
+              )}
+
+              {/* Show icons when collapsed, or full items when expanded */}
+              {collapsed ? (
+                // Show only icons when collapsed
+                visiblePlanningItems.map((item) => (
+                  <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      onClick={() => handleItemClick(item.path)}
+                      selected={currentPage === item.path}
+                      sx={{
+                        mx: 1,
+                        borderRadius: 2,
+                        color: 'grey.300',
+                        justifyContent: 'center',
+                        '&.Mui-selected': {
+                          bgcolor: alpha(theme.palette.secondary.main, 0.2),
+                          color: 'secondary.light',
+                          '& .MuiListItemIcon-root': { color: 'secondary.light' }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.common.white, 0.05)
+                        }
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                        {item.icon}
+                      </ListItemIcon>
+                    </ListItemButton>
+                  </ListItem>
+                ))
+              ) : (
+                // Show collapsible list when expanded
+                <Collapse in={planningOpen} timeout="auto" unmountOnExit>
+                  {visiblePlanningItems.map((item) => (
+                    <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                      <ListItemButton
+                        onClick={() => handleItemClick(item.path)}
+                        selected={currentPage === item.path}
+                        sx={{
+                          mx: 2,
+                          borderRadius: 2,
+                          color: 'grey.400',
+                          '&.Mui-selected': {
+                            bgcolor: alpha(theme.palette.secondary.main, 0.2),
+                            color: 'secondary.light',
+                            '& .MuiListItemIcon-root': { color: 'secondary.light' }
+                          },
+                          '&:hover': {
+                            bgcolor: alpha(theme.palette.common.white, 0.05)
+                          }
+                        }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                          {item.icon}
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={item.label}
+                          primaryTypographyProps={{ fontSize: '0.875rem' }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </Collapse>
+              )}
+            </>
           )}
 
-          {/* Administration Section (Admin Only) */}
-          {isAdmin() && (
+          {/* Management Section (hidden if no visible children) */}
+          {visibleManagementItems.length > 0 && (
+            <>
+              <Divider sx={{ my: 2, borderColor: alpha(theme.palette.common.white, 0.1) }} />
+              
+              {!collapsed && (
+                <ListItem>
+                  <ListItemButton
+                    onClick={() => setManagementOpen(!managementOpen)}
+                    sx={{ color: 'grey.400' }}
+                  >
+                    <ListItemIcon sx={{ color: 'inherit' }}>
+                      <SettingsIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Management" />
+                    {managementOpen ? <ExpandLess /> : <ExpandMore />}
+                  </ListItemButton>
+                </ListItem>
+              )}
+
+              {/* Show icons when collapsed, or full items when expanded */}
+              {collapsed ? (
+                visibleManagementItems.map((item) => (
+                  <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      onClick={() => handleItemClick(item.path)}
+                      selected={currentPage === item.path}
+                      sx={{
+                        mx: 1,
+                        borderRadius: 2,
+                        color: 'grey.300',
+                        justifyContent: 'center',
+                        '&.Mui-selected': {
+                          bgcolor: alpha(theme.palette.secondary.main, 0.2),
+                          color: 'secondary.light',
+                          '& .MuiListItemIcon-root': { color: 'secondary.light' }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.common.white, 0.05)
+                        }
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                        {item.icon}
+                      </ListItemIcon>
+                    </ListItemButton>
+                  </ListItem>
+                ))
+              ) : (
+                <Collapse in={managementOpen} timeout="auto" unmountOnExit>
+                  {visibleManagementItems.map((item) => (
+                    <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                      <ListItemButton
+                        onClick={() => handleItemClick(item.path)}
+                        selected={currentPage === item.path}
+                        sx={{
+                          mx: 2,
+                          borderRadius: 2,
+                          color: 'grey.400',
+                          '&.Mui-selected': {
+                            bgcolor: alpha(theme.palette.secondary.main, 0.2),
+                            color: 'secondary.light',
+                            '& .MuiListItemIcon-root': { color: 'secondary.light' }
+                          },
+                          '&:hover': {
+                            bgcolor: alpha(theme.palette.common.white, 0.05)
+                          }
+                        }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                          {item.icon}
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={item.label}
+                          primaryTypographyProps={{ fontSize: '0.875rem' }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </Collapse>
+              )}
+            </>
+          )}
+
+          {/* Administration Section (Admin Only, hidden if no visible children) */}
+          {isAdmin() && visibleAdministrationItems.length > 0 && (
             <>
               <Divider sx={{ my: 2, borderColor: alpha(theme.palette.common.white, 0.1) }} />
               
@@ -477,8 +608,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
 
               {/* Show icons when collapsed, or full items when expanded */}
               {collapsed ? (
-                // Show only icons when collapsed
-                administrationItems.filter(item => item.show).map((item) => (
+                visibleAdministrationItems.map((item) => (
                   <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
                       onClick={() => handleItemClick(item.path, item.action)}
@@ -505,9 +635,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                   </ListItem>
                 ))
               ) : (
-                // Show collapsible list when expanded
                 <Collapse in={administrationOpen} timeout="auto" unmountOnExit>
-                  {administrationItems.filter(item => item.show).map((item) => (
+                  {visibleAdministrationItems.map((item) => (
                     <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
                       <ListItemButton
                         onClick={() => handleItemClick(item.path, item.action)}

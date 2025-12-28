@@ -11,8 +11,10 @@ export const travelsApi = {
     if (filters?.status) params.append('status', filters.status);
     if (filters?.start_date) params.append('start_date', filters.start_date);
     if (filters?.end_date) params.append('end_date', filters.end_date);
-    
-    return api.get(`/api/travels?${params.toString()}`).then(res => res.data);
+
+    const query = params.toString();
+    const url = query ? `/api/travels?${query}` : '/api/travels';
+    return api.get(url).then(res => res.data);
   },
 
   getById: (id: number) =>

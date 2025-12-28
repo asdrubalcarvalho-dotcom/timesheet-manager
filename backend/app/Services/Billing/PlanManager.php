@@ -265,6 +265,18 @@ class PlanManager
     }
     
     /**
+     * Public helper to resync feature flags after external subscription mutations.
+     */
+    public function resyncFeatures(Tenant $tenant, ?Subscription $subscription = null): void
+    {
+        $subscription ??= $tenant->subscription;
+        
+        if ($subscription) {
+            $this->syncPennantFeatures($tenant, $subscription);
+        }
+    }
+    
+    /**
      * Legacy wrapper for backwards compatibility.
      * @deprecated Use syncPennantFeatures() directly
      */
@@ -314,6 +326,13 @@ class PlanManager
         // Get pricing calculation from PriceCalculator (never duplicate logic)
         $calculator = app(PriceCalculator::class);
         $summary = $calculator->calculateForTenant($tenant);
+
+        $aiEntitled = (bool) data_get($summary, 'features.ai', false);
+        $aiToggle = (bool) $tenant->ai_enabled;
+
+        $summary['entitlements']['ai'] = $aiEntitled;
+        $summary['toggles']['ai_enabled'] = $aiToggle;
+        $summary['features']['ai'] = $aiEntitled && $aiToggle;
         
         // Add subscription metadata
         $subscription = $tenant->subscription;
@@ -498,6 +517,12 @@ class PlanManager
         // Update subscription
         $subscription->addons = $currentAddons;
         $subscription->save();
+
+        // Keep tenant-level AI toggle in sync with addon state
+        if ($addon === 'ai' && $action !== 'no_change') {
+            $tenant->ai_enabled = ($action === 'enabled');
+            $tenant->save();
+        }
         
         // Sync Pennant features after addon change
         $this->syncPennantFeatures($tenant, $subscription);

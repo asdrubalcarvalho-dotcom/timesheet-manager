@@ -1,20 +1,52 @@
 <?php
+/*
+IMPORTANT — READ FIRST
 
+Before modifying, creating, or refactoring ANY list endpoint
+(e.g. index(), search(), by-date, summary, picker, etc.):
+
+1. You MUST read and follow ACCESS_RULES.md.
+2. You MUST validate the endpoint against ALL list rules:
+   - Technician existence
+   - Project membership scoping
+   - Canonical project manager detection
+   - Manager segregation (managers must not see other managers)
+   - List query must be >= Policy::view rules
+   - System roles must NOT be used for data scoping
+
+3. If the current behavior violates ANY rule:
+   - Explicitly state: “BUG CONFIRMED”
+   - Explain which rule is violated and where (file + lines)
+   - DO NOT change code unless explicitly asked
+
+4. If behavior is compliant:
+   - Explicitly state: “ACCESS RULES COMPLIANT”
+
+5. Never invent alternative access models.
+6. When in doubt, return LESS data, not more.
+
+Failure to follow ACCESS_RULES.md is considered a regression.
+
+*/
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\HandlesConstraintExceptions;
 use App\Http\Requests\StoreExpenseRequest;
 use App\Http\Requests\UpdateExpenseRequest;
 use App\Models\Expense;
 use App\Models\Project;
 use App\Models\Technician;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Database\QueryException;
 
 class ExpenseController extends Controller
 {
+    use HandlesConstraintExceptions;
     public function __construct()
     {
         $this->authorizeResource(Expense::class, 'expense');
@@ -26,24 +58,63 @@ class ExpenseController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+        $isOwnerGlobalView = $user->hasRole('Owner');
+
+        // Optional subject context (used to scope projects when viewing another technician)
+        $subjectTechnician = $request->filled('technician_id')
+            ? Technician::find($request->technician_id)
+            : null;
+
+        if (!$subjectTechnician && $request->filled('user_id')) {
+            $subjectTechnician = Technician::where('user_id', $request->user_id)->first();
+        }
+
+        $subjectUser = $subjectTechnician?->user;
+        if (!$subjectUser && $request->filled('user_id')) {
+            $subjectUser = User::find($request->user_id);
+        }
+
+        $subjectManagedProjectIds = $subjectUser ? $subjectUser->getExpenseManagedProjectIds() : [];
+        $subjectVisibleProjectIds = $subjectUser
+            ? array_values(array_unique(array_merge(
+                $subjectUser->projects()->pluck('projects.id')->toArray(),
+                $subjectManagedProjectIds
+            )))
+            : null;
 
         $query = Expense::with(['technician', 'project']);
 
-        if (!$user->hasRole('Admin')) {
-            $query->where(function ($builder) use ($user) {
-                $builder->whereHas('technician', function ($technicianQuery) use ($user) {
-                    $technicianQuery->where('user_id', $user->id);
-                })->orWhere(function ($subQuery) use ($user) {
-                    $subQuery->whereHas('project.memberRecords', function ($memberQuery) use ($user) {
-                        $memberQuery->where('user_id', $user->id)
-                            ->where('expense_role', 'manager');
-                    })->whereHas('technician.user.memberRecords', function ($memberQuery) {
-                        $memberQuery->where('expense_role', 'member');
-                    });
-                });
-            });
+        if ($isOwnerGlobalView) {
+            if ($subjectVisibleProjectIds !== null) {
+                $query->whereIn('project_id', $subjectVisibleProjectIds);
+            }
+        } else {
+            $technician = $user->technician
+                ?? Technician::where('user_id', $user->id)->first()
+                ?? Technician::where('email', $user->email)->first();
+
+            // ACCESS_RULES.md — Technician requirement (no Technician => empty list)
+            if (!$technician) {
+                $query->whereRaw('1 = 0');
+            } else {
+                // ACCESS_RULES.md — Canonical project visibility (member OR canonical manager)
+                $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
+                $managedProjectIds = $user->getExpenseManagedProjectIds();
+                $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
+
+                if ($subjectVisibleProjectIds !== null) {
+                    $visibleProjectIds = array_values(array_intersect($visibleProjectIds, $subjectVisibleProjectIds));
+                }
+
+                if (empty($visibleProjectIds)) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->whereIn('project_id', $visibleProjectIds);
+                }
+            }
         }
 
+        // Filter by technician (narrowing only; base query remains ACCESS_RULES-scoped)
         if ($request->filled('technician_id')) {
             $query->where('technician_id', $request->technician_id);
         }
@@ -78,25 +149,38 @@ class ExpenseController extends Controller
      */
     public function store(StoreExpenseRequest $request): JsonResponse
     {
-        // Policy check
         $this->authorize('create', Expense::class);
 
         $validated = $request->validated();
-
-        $project = Project::with('memberRecords')->findOrFail($validated['project_id']);
         $user = $request->user();
-        $isAdmin = $user->hasRole('Admin');
-        $isExpenseManager = $project->isUserExpenseManager($user);
+        $project = Project::with('memberRecords')->findOrFail($validated['project_id']);
 
-        if (!$isAdmin && !$project->isUserMember($user)) {
-            return response()->json(['message' => 'You are not a member of this project.'], 403);
+        if (!$project->isUserMember($user)) {
+            return response()->json(['error' => 'You are not assigned to this project.'], 403);
         }
 
-        $technician = null;
+        $authTechnician = Technician::where('user_id', $user->id)->first()
+            ?? Technician::where('email', $user->email)->first();
 
-        if (($isAdmin || $isExpenseManager) && !empty($validated['technician_id'])) {
-            $technician = Technician::find($validated['technician_id']);
+        if (!$authTechnician) {
+            return response()->json(['error' => 'Technician profile not found'], 404);
+        }
 
+        $requestedTechnicianId = isset($validated['technician_id']) ? (int) $validated['technician_id'] : 0;
+        $isProjectManager = $project->isUserExpenseManager($user);
+
+        if ($requestedTechnicianId === 0) {
+            $requestedTechnicianId = $authTechnician->id;
+        }
+
+        if ($requestedTechnicianId !== (int) $authTechnician->id) {
+            if (!$isProjectManager) {
+                return response()->json([
+                    'error' => 'Only expense managers can create records for other technicians.'
+                ], 403);
+            }
+
+            $technician = Technician::find($requestedTechnicianId);
             if (!$technician) {
                 return response()->json(['error' => 'Worker not found'], 404);
             }
@@ -106,16 +190,8 @@ class ExpenseController extends Controller
             }
         }
 
-        if (!$technician) {
-            $technician = Technician::where('user_id', $user->id)->first()
-                ?? Technician::where('email', $user->email)->first();
+        $validated['technician_id'] = $requestedTechnicianId;
 
-            if (!$technician) {
-                return response()->json(['error' => 'Technician profile not found'], 404);
-            }
-        }
-
-        $validated['technician_id'] = $technician->id;
         $validated['status'] = $validated['status'] ?? 'draft';
 
         if ($request->hasFile('attachment')) {
@@ -156,6 +232,44 @@ class ExpenseController extends Controller
         }
 
         $validated = $request->validated();
+        $validated['technician_id'] = $validated['technician_id'] ?? $expense->technician_id;
+        $validated['project_id'] = $validated['project_id'] ?? $expense->project_id;
+
+        $user = $request->user();
+        $project = Project::with('memberRecords')->findOrFail($validated['project_id']);
+
+        if (!$project->isUserMember($user)) {
+            return response()->json(['error' => 'You are not assigned to this project.'], 403);
+        }
+
+        $authTechnician = Technician::where('user_id', $user->id)->first()
+            ?? Technician::where('email', $user->email)->first();
+
+        if (!$authTechnician) {
+            return response()->json(['error' => 'Technician profile not found'], 404);
+        }
+
+        $requestedTechnicianId = isset($validated['technician_id']) ? (int) $validated['technician_id'] : 0;
+        $isProjectManager = $project->isUserExpenseManager($user);
+
+        if ($requestedTechnicianId !== (int) $authTechnician->id && !$isProjectManager) {
+            return response()->json([
+                'error' => 'Only expense managers can create records for other technicians.'
+            ], 403);
+        }
+
+        if ($requestedTechnicianId !== (int) $authTechnician->id) {
+            $targetTechnician = Technician::find($requestedTechnicianId);
+            if (!$targetTechnician) {
+                return response()->json(['error' => 'Worker not found'], 404);
+            }
+
+            if ($targetTechnician->user && !$project->memberRecords()->where('user_id', $targetTechnician->user->id)->exists()) {
+                return response()->json(['error' => 'This worker is not a member of the selected project.'], 422);
+            }
+        }
+
+        $validated['technician_id'] = $requestedTechnicianId;
         
         // Remove _method from validated data if present
         unset($validated['_method']);
@@ -198,8 +312,18 @@ class ExpenseController extends Controller
             Storage::delete($expense->attachment_path);
         }
 
-        $expense->delete();
-        return response()->json(['message' => 'Expense deleted successfully']);
+        try {
+            $expense->delete();
+            return response()->json(['message' => 'Expense deleted successfully']);
+        } catch (QueryException $e) {
+            if ($this->isForeignKeyConstraint($e)) {
+                return $this->constraintConflictResponse(
+                    'This expense cannot be deleted because it is referenced by related records.'
+                );
+            }
+
+            throw $e;
+        }
     }
 
     /**
@@ -349,15 +473,79 @@ class ExpenseController extends Controller
     public function getUserProjects(Request $request): JsonResponse
     {
         $user = $request->user();
+        $isGlobalView = $user->hasRole(['Owner', 'Admin']);
 
-        $projects = $user->projects()->with(['memberRecords' => function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        }])->orderBy('name')->get();
+        // Optional subject context for dropdown scoping
+        $subjectTechnician = $request->filled('technician_id')
+            ? Technician::find($request->technician_id)
+            : null;
 
-        $projects->each(function ($project) use ($user) {
+        if (!$subjectTechnician && $request->filled('user_id')) {
+            $subjectTechnician = Technician::where('user_id', $request->user_id)->first();
+        }
+
+        $subjectUser = $subjectTechnician?->user;
+        if (!$subjectUser && $request->filled('user_id')) {
+            $subjectUser = User::find($request->user_id);
+        }
+
+        $subjectManagedProjectIds = $subjectUser ? $subjectUser->getExpenseManagedProjectIds() : [];
+        $subjectVisibleProjectIds = $subjectUser
+            ? array_values(array_unique(array_merge(
+                $subjectUser->projects()->pluck('projects.id')->toArray(),
+                $subjectManagedProjectIds
+            )))
+            : null;
+
+        $technician = $user->technician
+            ?? Technician::where('user_id', $user->id)->first()
+            ?? Technician::where('email', $user->email)->first();
+
+        // ACCESS_RULES.md — Technician requirement (no Technician => empty list)
+        if (!$technician && !$isGlobalView) {
+            return response()->json([]);
+        }
+
+        // ACCESS_RULES.md — Canonical project visibility (member OR canonical manager)
+        $memberProjectIds = $technician ? $user->projects()->pluck('projects.id')->toArray() : [];
+        $managedProjectIds = $technician ? $user->getExpenseManagedProjectIds() : [];
+        $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
+
+        if ($subjectVisibleProjectIds !== null) {
+            $visibleProjectIds = $isGlobalView
+                ? $subjectVisibleProjectIds
+                : array_values(array_intersect($visibleProjectIds, $subjectVisibleProjectIds));
+            $managedProjectIds = $isGlobalView
+                ? $subjectManagedProjectIds
+                : array_values(array_intersect($managedProjectIds, $subjectManagedProjectIds));
+        }
+
+        if (empty($visibleProjectIds)) {
+            return response()->json([]);
+        }
+
+        $roleUser = $subjectUser ?? $user;
+
+        $projects = Project::query()
+            ->whereIn('id', $visibleProjectIds)
+            ->with([
+                'memberRecords' => function ($query) use ($roleUser) {
+                    $query->where('user_id', $roleUser->id);
+                }
+            ])
+            ->orderBy('name')
+            ->get();
+
+        $projects->each(function ($project) use ($managedProjectIds) {
             $memberRecord = $project->memberRecords->first();
             $project->user_project_role = $memberRecord?->project_role;
             $project->user_expense_role = $memberRecord?->expense_role;
+
+            if (!$memberRecord && in_array($project->id, $managedProjectIds, true)) {
+                $project->user_expense_role = 'manager';
+                $project->user_project_role = $project->user_project_role ?? 'manager';
+            }
+
             unset($project->memberRecords);
         });
 

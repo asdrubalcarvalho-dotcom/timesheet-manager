@@ -41,8 +41,8 @@ return new class extends Migration
             $table->unsignedBigInteger('location_id')->nullable(false)->change();
             
             // Re-add foreign key constraints
-            $table->foreign('task_id')->references('id')->on('tasks')->onDelete('cascade');
-            $table->foreign('location_id')->references('id')->on('locations')->onDelete('cascade');
+            $table->foreign('task_id')->references('id')->on('tasks')->onDelete('restrict');
+            $table->foreign('location_id')->references('id')->on('locations')->onDelete('restrict');
         });
     }
 };

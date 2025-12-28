@@ -103,12 +103,16 @@ Route::middleware([
         Route::apiResource('tasks', App\Http\Controllers\TaskController::class);
         Route::apiResource('locations', App\Http\Controllers\LocationController::class);
 
-        // AI Suggestions (controller in root namespace)
+        // AI Suggestions
         Route::get('/suggestions/timesheet', [App\Http\Controllers\SuggestionController::class, 'suggestTimesheet']);
+        Route::post('/ai/suggest-task-locations', [App\Http\Controllers\Api\AiSuggestionController::class, 'suggestTaskLocations'])
+            ->middleware('throttle:ai-read');
 
-        // Planning (controller in root namespace)
-        Route::get('/planning/gantt', [App\Http\Controllers\PlanningController::class, 'gantt']);
-        Route::post('/planning/gantt/update', [App\Http\Controllers\PlanningController::class, 'updateGantt']);
+        // Planning (controller in root namespace) - permission model mirrors Timesheets
+        Route::get('/planning/gantt', [App\Http\Controllers\PlanningController::class, 'gantt'])
+            ->middleware('permission:view-planning');
+        Route::post('/planning/gantt/update', [App\Http\Controllers\PlanningController::class, 'updateGantt'])
+            ->middleware('can_edit_planning');
 
         // Events
         Route::apiResource('events', App\Http\Controllers\Api\EventController::class);

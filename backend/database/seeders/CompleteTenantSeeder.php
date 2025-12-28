@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Technician;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\Country;
 use App\Models\Location;
 use App\Models\Resource;
 use App\Models\Timesheet;
@@ -16,6 +17,7 @@ use App\Models\ProjectMember;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class CompleteTenantSeeder extends Seeder
@@ -33,6 +35,12 @@ class CompleteTenantSeeder extends Seeder
      */
     public function run(): void
     {
+        DB::purge('tenant');
+        DB::reconnect('tenant');
+        DB::setDefaultConnection('tenant');
+
+        $this->call(CountriesSeeder::class);
+
         // NOTE: Roles and Permissions are already created by RolesAndPermissionsSeeder
         // Skip step 1 when called after reset-data
         
@@ -349,10 +357,16 @@ class CompleteTenantSeeder extends Seeder
     {
         $locations = [];
 
+        $ptId = Country::where('iso2', 'PT')->value('id');
+        $esId = Country::where('iso2', 'ES')->value('id');
+        $frId = Country::where('iso2', 'FR')->value('id');
+        $deId = Country::where('iso2', 'DE')->value('id');
+
         // Portugal locations
-        $locations['lisbon_office'] = Location::firstOrCreate(
+        $locations['lisbon_office'] = Location::updateOrCreate(
             ['name' => 'Lisbon Office', 'country' => 'PT'],
             [
+                'country_id' => $ptId,
                 'city' => 'Lisboa',
                 'address' => 'Av. da Liberdade, 123',
                 'is_active' => true,
@@ -361,9 +375,10 @@ class CompleteTenantSeeder extends Seeder
             ]
         );
 
-        $locations['porto_office'] = Location::firstOrCreate(
+        $locations['porto_office'] = Location::updateOrCreate(
             ['name' => 'Porto Office', 'country' => 'PT'],
             [
+                'country_id' => $ptId,
                 'city' => 'Porto',
                 'address' => 'Rua de Santa Catarina, 456',
                 'is_active' => true,
@@ -373,9 +388,10 @@ class CompleteTenantSeeder extends Seeder
         );
 
         // Spain locations
-        $locations['madrid_office'] = Location::firstOrCreate(
+        $locations['madrid_office'] = Location::updateOrCreate(
             ['name' => 'Madrid Office', 'country' => 'ES'],
             [
+                'country_id' => $esId,
                 'city' => 'Madrid',
                 'address' => 'Gran Vía, 789',
                 'is_active' => true,
@@ -384,9 +400,10 @@ class CompleteTenantSeeder extends Seeder
             ]
         );
 
-        $locations['barcelona_datacenter'] = Location::firstOrCreate(
+        $locations['barcelona_datacenter'] = Location::updateOrCreate(
             ['name' => 'Barcelona Data Center', 'country' => 'ES'],
             [
+                'country_id' => $esId,
                 'city' => 'Barcelona',
                 'address' => 'Passeig de Gràcia, 321',
                 'is_active' => true,
@@ -396,9 +413,10 @@ class CompleteTenantSeeder extends Seeder
         );
 
         // France locations
-        $locations['paris_office'] = Location::firstOrCreate(
+        $locations['paris_office'] = Location::updateOrCreate(
             ['name' => 'Paris Office', 'country' => 'FR'],
             [
+                'country_id' => $frId,
                 'city' => 'Paris',
                 'address' => 'Champs-Élysées, 100',
                 'is_active' => true,
@@ -408,9 +426,10 @@ class CompleteTenantSeeder extends Seeder
         );
 
         // Germany locations
-        $locations['berlin_office'] = Location::firstOrCreate(
+        $locations['berlin_office'] = Location::updateOrCreate(
             ['name' => 'Berlin Office', 'country' => 'DE'],
             [
+                'country_id' => $deId,
                 'city' => 'Berlin',
                 'address' => 'Alexanderplatz, 50',
                 'is_active' => true,
@@ -886,8 +905,59 @@ class CompleteTenantSeeder extends Seeder
             }
         }
 
+        // Deterministic demo requirement:
+        // Ensure Pedro Costa (tech1@upg2ai.com) has at least 1 DRAFT timesheet on 2025-12-24.
+        // Use updateOrCreate to enforce draft status even on re-seed.
+        $pedroDemoDate = Carbon::create(2025, 12, 24)->format('Y-m-d');
+        Timesheet::updateOrCreate(
+            [
+                'technician_id' => $technicians['tech1']->id,
+                'project_id' => $projects['ecommerce']->id,
+                'task_id' => $tasks['ecom_backend']->id,
+                'date' => $pedroDemoDate,
+            ],
+            [
+                'location_id' => $taskLocations['ecom_backend'],
+                'start_time' => '09:00',
+                'end_time' => '18:00',
+                'hours_worked' => 8,
+                'description' => 'Demo: seeded draft timesheet for Pedro (deterministic date)',
+                'status' => 'draft',
+                'hour_type' => 'working',
+                'job_status' => 'ongoing',
+                'created_by' => $users['tech1']->id,
+                'updated_by' => $users['tech1']->id,
+            ]
+        );
+
         $this->command->info('✅ Timesheets created');
     }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Seeder Verification (tenant DB)
+     |--------------------------------------------------------------------------
+     | SQL (inside tenant DB):
+     | 1) Countries exist (incl. PT/ES/FR/DE/GB/US/BR)
+     |    SELECT iso2, name FROM countries ORDER BY iso2;
+     |
+     | 2) Pedro has a draft timesheet on 2025-12-24
+     |    SELECT t.id, u.email, t.date, t.status, t.project_id, t.task_id
+     |    FROM timesheets t
+     |    JOIN technicians tech ON tech.id = t.technician_id
+     |    JOIN users u ON u.id = tech.user_id
+     |    WHERE u.email = 'tech1@upg2ai.com' AND t.date = '2025-12-24' AND t.status = 'draft';
+     |
+     | 3) Travel segments use ISO2 that exists in countries
+     |    SELECT ts.id, ts.origin_country, ts.destination_country
+     |    FROM travel_segments ts
+     |    LEFT JOIN countries c1 ON c1.iso2 = ts.origin_country
+     |    LEFT JOIN countries c2 ON c2.iso2 = ts.destination_country
+     |    WHERE c1.id IS NULL OR c2.id IS NULL;
+     |
+     | 4) Locations have canonical country_id set where possible
+     |    SELECT id, name, country, country_id FROM locations WHERE country_id IS NULL LIMIT 25;
+     */
 
     private function createExpenses(array $projects, array $technicians, array $users): void
     {

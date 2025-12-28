@@ -1,5 +1,33 @@
 <?php
+/*
+IMPORTANT — READ FIRST
 
+Before modifying, creating, or refactoring ANY list endpoint
+(e.g. index(), search(), by-date, summary, picker, etc.):
+
+1. You MUST read and follow ACCESS_RULES.md.
+2. You MUST validate the endpoint against ALL list rules:
+   - Technician existence
+   - Project membership scoping
+   - Canonical project manager detection
+   - Manager segregation (managers must not see other managers)
+   - List query must be >= Policy::view rules
+   - System roles must NOT be used for data scoping
+
+3. If the current behavior violates ANY rule:
+   - Explicitly state: “BUG CONFIRMED”
+   - Explain which rule is violated and where (file + lines)
+   - DO NOT change code unless explicitly asked
+
+4. If behavior is compliant:
+   - Explicitly state: “ACCESS RULES COMPLIANT”
+
+5. Never invent alternative access models.
+6. When in doubt, return LESS data, not more.
+
+Failure to follow ACCESS_RULES.md is considered a regression.
+
+*/
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;

@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\HandlesConstraintExceptions;
 use App\Models\Technician;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\QueryException;
 
 class TechnicianController extends Controller
 {
+    use HandlesConstraintExceptions;
         /**
      * Display a listing of technicians visible to the authenticated user.
      * - Regular users: see only themselves
@@ -157,6 +160,7 @@ class TechnicianController extends Controller
                 'worker_id' => ['nullable', 'string', 'max:64', Rule::unique('technicians', 'worker_id')->ignore($existingTechnician->id)],
                 'worker_name' => 'nullable|string|max:255',
                 'worker_contract_country' => 'nullable|string|max:255',
+                'password' => 'nullable|string|min:6',
             ]);
 
             $existingTechnician->update([
@@ -171,7 +175,13 @@ class TechnicianController extends Controller
 
             // If has user relation, update user name too
             if ($existingTechnician->user) {
-                $existingTechnician->user->update(['name' => $validated['name']]);
+                $userUpdates = ['name' => $validated['name']];
+
+                if (!empty($validated['password'])) {
+                    $userUpdates['password'] = bcrypt($validated['password']);
+                }
+
+                $existingTechnician->user->update($userUpdates);
             }
 
             return response()->json([
@@ -213,13 +223,14 @@ class TechnicianController extends Controller
             'worker_id' => 'nullable|string|max:64|unique:technicians,worker_id',
             'worker_name' => 'nullable|string|max:255',
             'worker_contract_country' => 'nullable|string|max:255',
+            'password' => 'required|string|min:6',
         ]);
 
         // Create User for the Technician (REQUIRED for billing user count)
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'password' => bcrypt('password123'), // Default password - should be changed on first login
+            'password' => bcrypt($validated['password']),
             'email_verified_at' => now(),
         ]);
 
@@ -245,7 +256,7 @@ class TechnicianController extends Controller
     {
         $user = Auth::user();
         
-        // Owner can see all
+        // Prevent deleting Owner users (safety check)
         if ($user->hasRole('Owner')) {
             return response()->json($technician);
         }
@@ -253,11 +264,12 @@ class TechnicianController extends Controller
         // Admin can see all except Owners
         if ($user->hasRole('Admin')) {
             if ($technician->user && $technician->user->hasRole('Owner')) {
-                return response()->json(['message' => 'Resource not found.'], 404);
+                return response()->json(['message' => 'Unauthorized.'], 403);
             }
+
             return response()->json($technician);
         }
-        
+
         // Project Managers can see team members + self
         if ($user->isProjectManager()) {
             $managedProjectIds = $user->getManagedProjectIds();

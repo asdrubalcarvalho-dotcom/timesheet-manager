@@ -24,21 +24,25 @@ class TravelSegmentPolicy
      */
     public function view(User $user, TravelSegment $travelSegment): bool
     {
-        // Admins and Owners can view all
-        if ($user->hasRole(['Admin', 'Owner'])) {
-            return true;
+        if (!$user->can('view-timesheets')) {
+            return false;
         }
 
-        // User can view their own travel segments
+        if (!$travelSegment->project->isUserMember($user)) {
+            return false;
+        }
+
         $technician = $user->technician;
         if ($technician && $travelSegment->technician_id === $technician->id) {
             return true;
         }
 
-        // Managers can view travel segments for projects they manage
-        if ($user->hasPermissionTo('view-all-timesheets')) {
-            $managedProjectIds = $user->managedProjects()->pluck('id')->toArray();
-            return in_array($travelSegment->project_id, $managedProjectIds);
+        if ($travelSegment->project->isUserProjectManager($user)) {
+            if ($travelSegment->technician && $travelSegment->technician->user) {
+                $ownerRole = $travelSegment->project->getUserProjectRole($travelSegment->technician->user);
+                return $ownerRole === 'member';
+            }
+            return true;
         }
 
         return false;
@@ -57,26 +61,26 @@ class TravelSegmentPolicy
      */
     public function update(User $user, TravelSegment $travelSegment): bool
     {
-        // Admins and Owners can update all
-        if ($user->hasRole(['Admin', 'Owner'])) {
-            return true;
-        }
-
         // Completed or cancelled segments cannot be edited
         if (in_array($travelSegment->status, ['completed', 'cancelled'])) {
             return false;
         }
 
-        // User can update their own travel segments
+        if (!$travelSegment->project->isUserMember($user)) {
+            return false;
+        }
+
         $technician = $user->technician;
         if ($technician && $travelSegment->technician_id === $technician->id) {
             return true;
         }
 
-        // Managers can update travel segments for projects they manage
-        if ($user->hasPermissionTo('edit-all-timesheets')) {
-            $managedProjectIds = $user->managedProjects()->pluck('id')->toArray();
-            return in_array($travelSegment->project_id, $managedProjectIds);
+        if ($travelSegment->project->isUserProjectManager($user)) {
+            if ($travelSegment->technician && $travelSegment->technician->user) {
+                $ownerRole = $travelSegment->project->getUserProjectRole($travelSegment->technician->user);
+                return $ownerRole === 'member';
+            }
+            return true;
         }
 
         return false;
@@ -87,19 +91,25 @@ class TravelSegmentPolicy
      */
     public function delete(User $user, TravelSegment $travelSegment): bool
     {
-        // Admins and Owners can delete all
-        if ($user->hasRole(['Admin', 'Owner'])) {
-            return true;
-        }
-
         // Completed segments cannot be deleted
         if ($travelSegment->status === 'completed') {
             return false;
         }
 
-        // User can delete their own travel segments
+        if (!$travelSegment->project->isUserMember($user)) {
+            return false;
+        }
+
         $technician = $user->technician;
         if ($technician && $travelSegment->technician_id === $technician->id) {
+            return true;
+        }
+
+        if ($travelSegment->project->isUserProjectManager($user)) {
+            if ($travelSegment->technician && $travelSegment->technician->user) {
+                $ownerRole = $travelSegment->project->getUserProjectRole($travelSegment->technician->user);
+                return $ownerRole === 'member';
+            }
             return true;
         }
 

@@ -227,8 +227,8 @@ const UsersManager: React.FC = () => {
           await api.delete(`/api/technicians/${id}`);
           showSuccess('User deleted successfully');
           fetchUsers();
-        } catch (error) {
-          showError('Failed to delete user');
+        } catch (error: any) {
+          showError(error?.response?.data?.message || 'Failed to delete user');
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }

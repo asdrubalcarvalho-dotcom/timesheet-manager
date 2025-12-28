@@ -48,7 +48,12 @@ const TravelsList: React.FC = () => {
       const response = await travelsApi.getAll();
       setTravels(response.data || []);
     } catch (error) {
-      showError('Failed to load travel segments');
+      const err: any = error;
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Failed to load travel segments';
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -78,8 +83,8 @@ const TravelsList: React.FC = () => {
           await travelsApi.delete(id);
           showSuccess('Travel segment deleted successfully');
           fetchTravels();
-        } catch (error) {
-          showError('Failed to delete travel segment');
+        } catch (error: any) {
+          showError(error?.response?.data?.message || 'Failed to delete travel segment');
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       },
@@ -137,6 +142,7 @@ const TravelsList: React.FC = () => {
       headerName: 'Technician',
       flex: 1,
       minWidth: 150,
+      valueGetter: (_value, row: TravelSegment) => row.technician?.name || '',
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => row.technician?.name || '-',
     },
     {
@@ -298,7 +304,7 @@ const TravelsList: React.FC = () => {
       <TravelForm
         open={openDialog}
         onClose={handleCloseDialog}
-        onSave={fetchTravels}
+        onSave={() => fetchTravels()}
         editingTravel={editingTravel}
       />
 

@@ -32,6 +32,11 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(200)->by(optional($request->user())->id ?: $request->ip());
         });
 
+        // AI lightweight suggestions (modal usage)
+        RateLimiter::for('ai-read', function (Request $request) {
+            return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
+        });
+
         // Login mais restritivo
         RateLimiter::for('login', function (Request $request) {
             return Limit::perMinute(5)->by($request->ip());

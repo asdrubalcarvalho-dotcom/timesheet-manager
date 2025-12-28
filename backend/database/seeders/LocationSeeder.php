@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use App\Models\Country;
 use App\Models\Location;
+use Illuminate\Support\Facades\DB;
 
 class LocationSeeder extends Seeder
 {
@@ -12,6 +14,12 @@ class LocationSeeder extends Seeder
      */
     public function run(): void
     {
+        DB::purge('tenant');
+        DB::reconnect('tenant');
+        DB::setDefaultConnection('tenant');
+
+        $this->call(CountriesSeeder::class);
+
         $locations = [
             // PORTUGAL - Leiria
             [
@@ -221,24 +229,57 @@ class LocationSeeder extends Seeder
         ];
 
         foreach ($locations as $locationData) {
-            Location::create([
-                'name' => $locationData['name'],
-                'country' => $locationData['country'],
-                'city' => $locationData['city'],
-                'address' => $locationData['address'],
-                'postal_code' => $locationData['postal_code'],
-                'latitude' => $locationData['latitude'],
-                'longitude' => $locationData['longitude'],
-                'asset_id' => $locationData['asset_id'],
-                'oem_id' => $locationData['oem_id'],
-                'is_active' => rand(1, 10) > 1 // 90% active
-            ]);
+            $iso2 = $this->iso2FromLegacyCountry($locationData['country']);
+            $countryId = $iso2 ? Country::on('tenant')->where('iso2', $iso2)->value('id') : null;
+
+            Location::on('tenant')->updateOrCreate(
+                ['asset_id' => $locationData['asset_id']],
+                [
+                    'name' => $locationData['name'],
+                    // Legacy/display-only (do not remove or repurpose)
+                    // Keep legacy column, but prefer ISO2 to stay consistent with canonical Countries.
+                    'country' => $iso2 ?? $locationData['country'],
+                    // Canonical relation
+                    'country_id' => $countryId,
+                    'city' => $locationData['city'],
+                    'address' => $locationData['address'],
+                    'postal_code' => $locationData['postal_code'],
+                    'latitude' => $locationData['latitude'],
+                    'longitude' => $locationData['longitude'],
+                    'oem_id' => $locationData['oem_id'],
+                    // Deterministic ~90% active, safe to re-run
+                    'is_active' => (($locationData['asset_id'] % 10) !== 0),
+                ]
+            );
         }
 
-        $this->command->info('✅ Created ' . count($locations) . ' professional locations across 4 countries');
+        $this->command->info('✅ Created ' . count($locations) . ' professional locations across 3 countries');
         $this->command->info('   🇵🇹 Portugal: Leiria (3) + Lisboa (4) = 7 locations');
         $this->command->info('   🇫🇷 France: Paris (5) locations');  
         $this->command->info('   🇪🇸 Spain: Madrid (6) locations');
         $this->command->info('   📍 Total: ' . Location::count() . ' locations with coordinates');
+    }
+
+    private function iso2FromLegacyCountry(?string $legacyCountry): ?string
+    {
+        if (!$legacyCountry) {
+            return null;
+        }
+
+        $normalized = strtoupper(trim($legacyCountry));
+
+        // ISO-2 already
+        if (strlen($normalized) === 2) {
+            return $normalized;
+        }
+
+        // Common ISO-3 legacy values found in seed data
+        return match ($normalized) {
+            'PRT' => 'PT',
+            'ESP' => 'ES',
+            'FRA' => 'FR',
+            'DEU' => 'DE',
+            default => null,
+        };
     }
 }

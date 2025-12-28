@@ -11,7 +11,8 @@ import {
   FormControlLabel,
   Switch,
   Chip,
-  Fab
+  Fab,
+  MenuItem
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -31,12 +32,19 @@ interface Location {
   id: number;
   name: string;
   country: string;
+  country_id?: number | null;
   city: string;
   address?: string;
   postal_code?: string;
   latitude?: number | null;
   longitude?: number | null;
   is_active: boolean;
+}
+
+interface Country {
+  id: number;
+  name: string;
+  iso2: string;
 }
 
 const normalizeApiResponse = <T,>(payload: unknown): T[] => {
@@ -58,6 +66,7 @@ const normalizeApiResponse = <T,>(payload: unknown): T[] => {
 const LocationsManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const [locations, setLocations] = useState<Location[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
@@ -71,7 +80,7 @@ const LocationsManager: React.FC = () => {
   
   const [formData, setFormData] = useState({
     name: '',
-    country: '',
+    country_id: '',
     city: '',
     address: '',
     postal_code: '',
@@ -82,6 +91,7 @@ const LocationsManager: React.FC = () => {
 
   useEffect(() => {
     fetchLocations();
+    fetchCountries();
   }, []);
 
   const fetchLocations = async () => {
@@ -96,12 +106,21 @@ const LocationsManager: React.FC = () => {
     }
   };
 
+  const fetchCountries = async () => {
+    try {
+      const response = await api.get('/api/countries');
+      setCountries(normalizeApiResponse<Country>(response.data));
+    } catch {
+      showError('Failed to load countries');
+    }
+  };
+
   const handleOpenDialog = (location?: Location) => {
     if (location) {
       setEditingLocation(location);
       setFormData({
         name: location.name,
-        country: location.country,
+        country_id: location.country_id ? String(location.country_id) : '',
         city: location.city,
         address: location.address || '',
         postal_code: location.postal_code || '',
@@ -119,7 +138,7 @@ const LocationsManager: React.FC = () => {
       setEditingLocation(null);
       setFormData({
         name: '',
-        country: '',
+        country_id: '',
         city: '',
         address: '',
         postal_code: '',
@@ -142,15 +161,19 @@ const LocationsManager: React.FC = () => {
     }
 
     // Frontend validation
-    if (!formData.name || !formData.country || !formData.city) {
+    if (!formData.name || !formData.country_id || !formData.city) {
       showError('Name, Country, and City are required fields');
       return;
     }
 
     try {
+      const selectedCountry = countries.find(c => c.id === Number(formData.country_id));
+
       const payload = {
         name: formData.name,
-        country: formData.country,
+        country_id: Number(formData.country_id),
+        // Legacy/backward compatible field (also used for display in some places)
+        country: selectedCountry?.iso2 || null,
         city: formData.city,
         address: formData.address || null,
         postal_code: formData.postal_code || null,
@@ -191,8 +214,8 @@ const LocationsManager: React.FC = () => {
           await api.delete(`/api/locations/${id}`);
           showSuccess('Location deleted successfully');
           fetchLocations();
-        } catch {
-          showError('Failed to delete location');
+        } catch (error: any) {
+          showError(error?.response?.data?.message || 'Failed to delete location');
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }
@@ -380,9 +403,21 @@ const LocationsManager: React.FC = () => {
               label="Country"
               fullWidth
               required
-              value={formData.country}
-              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-            />
+              select
+              value={formData.country_id}
+              onChange={(e) => setFormData({ ...formData, country_id: e.target.value })}
+              disabled={countries.length === 0}
+              helperText={countries.length === 0 ? 'No countries available. Please add countries first.' : ''}
+            >
+              <MenuItem value="" disabled>
+                Select a country
+              </MenuItem>
+              {countries.map((country) => (
+                <MenuItem key={country.id} value={String(country.id)}>
+                  {country.name} ({country.iso2})
+                </MenuItem>
+              ))}
+            </TextField>
             <TextField
               label="City"
               fullWidth

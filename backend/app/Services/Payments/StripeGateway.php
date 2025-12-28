@@ -274,42 +274,9 @@ class StripeGateway implements PaymentGatewayInterface
                 'stripe_updated_at' => now()->toIso8601String(),
             ]);
 
-            // If payment succeeded, apply the plan upgrade/addon
+            // If payment succeeded, mark completion only; subscription mutations are centralized in checkoutConfirm()
             if ($payment->status === 'completed') {
                 $payment->completed_at = now();
-                
-                $metadata = $payment->metadata ?? [];
-                $mode = $metadata['mode'] ?? null;
-                $plan = $metadata['plan'] ?? null;
-                $addon = $metadata['addon'] ?? null;
-
-                // Get user_limit from metadata (will be sanitized by PlanManager)
-                $userLimit = $metadata['user_limit'] ?? 1;
-
-                // Apply plan upgrade (PlanManager handles sanitization)
-                if ($mode === 'plan' && $plan) {
-                    $tenant = $payment->tenant;
-                    $this->planManager->updatePlan($tenant, $plan, $userLimit);
-                    
-                    \Log::info('[StripeGateway] Plan upgraded after payment confirmation', [
-                        'payment_id' => $payment->id,
-                        'tenant_id' => $tenant->id,
-                        'plan' => $plan,
-                        'requested_user_limit' => $userLimit,
-                    ]);
-                }
-
-                // Apply addon toggle
-                if ($mode === 'addon' && $addon) {
-                    $tenant = $payment->tenant;
-                    $this->planManager->toggleAddon($tenant, $addon);
-                    
-                    \Log::info('[StripeGateway] Addon toggled after payment confirmation', [
-                        'payment_id' => $payment->id,
-                        'tenant_id' => $tenant->id,
-                        'addon' => $addon,
-                    ]);
-                }
             }
 
             $payment->save();

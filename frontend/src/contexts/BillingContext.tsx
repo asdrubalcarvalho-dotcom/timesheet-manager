@@ -1,4 +1,91 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+/**
+ * ============================================================================
+ * BILLING CONTEXT — CRITICAL BUSINESS LOGIC (COMMENTS-ONLY GUARD)
+ * ============================================================================
+ *
+ * ⚠️ DO NOT REFACTOR, SIMPLIFY, OR "CLEAN UP" THIS FILE WITHOUT FULL BILLING CONTEXT.
+ *
+ * This context is the SINGLE orchestration layer between:
+ * - Frontend UI (BillingPage, CheckoutModal, Add-on toggles)
+ * - Backend billing APIs (/api/billing/*)
+ * - Stripe checkout flows (plan, addon, license increment)
+ *
+ * ---------------------------------------------------------------------------
+ * CORE SEMANTICS (MUST NOT CHANGE)
+ * ---------------------------------------------------------------------------
+ *
+ * 1) user_limit vs user_count
+ * ---------------------------------------------------------------------------
+ * - user_limit:
+ *   = PURCHASED / BILLABLE LICENSES
+ *   = Comes from backend subscription.user_limit
+ *   = Used for ALL pricing, checkout, proration, and enforcement
+ *
+ * - user_count:
+ *   = ACTIVE USERS (technicians.is_active = true)
+ *   = DISPLAY-ONLY metric
+ *   = NEVER used for pricing or billing calculations
+ *
+ * If you see both together, this is INTENTIONAL.
+ *
+ * ---------------------------------------------------------------------------
+ * 2) Trial behavior (trial_enterprise)
+ * ---------------------------------------------------------------------------
+ * - trial_enterprise is a VIRTUAL plan (API-level only)
+ * - DB stores: plan = 'enterprise', is_trial = true
+ * - API returns: plan = 'trial_enterprise'
+ * - Frontend must treat trial_enterprise as Enterprise-equivalent
+ *
+ * This transformation happens in the backend PriceCalculator and MUST
+ * be mirrored correctly here.
+ *
+ * ---------------------------------------------------------------------------
+ * 3) Add-ons vs Tenant Toggles (AI)
+ * ---------------------------------------------------------------------------
+ * AI has THREE layers of control:
+ *
+ *   a) Billing entitlement  → billingSummary.entitlements.ai
+ *   b) Billing addon price  → billingSummary.addons.ai > 0
+ *   c) Tenant preference   → tenant.ai_enabled (stored separately)
+ *
+ * FINAL availability = entitlement AND tenant toggle.
+ *
+ * IMPORTANT:
+ * - Billing addon toggle controls PAYMENT / ENTITLEMENT
+ * - Tenant AI toggle controls FEATURE USAGE
+ * - One-way enforcement exists: Billing OFF → Tenant OFF
+ *
+ * This separation is INTENTIONAL.
+ *
+ * ---------------------------------------------------------------------------
+ * 4) Checkout modes (DO NOT MERGE)
+ * ---------------------------------------------------------------------------
+ * Checkout supports multiple explicit modes:
+ * - 'plan'     → plan upgrade / trial exit
+ * - 'addon'    → planning / AI addon activation
+ * - 'licenses' → license increment ONLY (no plan change)
+ *
+ * These modes MUST remain distinct.
+ * Do NOT infer mode implicitly or "simplify" the API.
+ *
+ * ---------------------------------------------------------------------------
+ * 5) Backend is the source of truth
+ * ---------------------------------------------------------------------------
+ * - NO pricing math is allowed here
+ * - NO license math beyond clamping UI inputs
+ * - ALL totals, subtotals, proration come from backend
+ *
+ * If logic here feels redundant, it is probably protecting billing integrity.
+ *
+ * ---------------------------------------------------------------------------
+ * TL;DR
+ * ---------------------------------------------------------------------------
+ * This file is intentionally explicit, verbose, and defensive.
+ * Any refactor here risks BILLING, STRIPE, or TRIAL BREAKAGE.
+ *
+ * ============================================================================
+ */
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import {
   getBillingSummary,
   upgradePlan,
@@ -8,6 +95,7 @@ import {
   scheduleDowngrade as scheduleDowngradeApi,
   cancelScheduledDowngrade as cancelScheduledDowngradeApi,
 } from '../api/billing';
+import { tenantApi } from '../services/api';
 import type { BillingSummary, CheckoutSession, BillingError } from '../api/billing';
 import type { BillingContextValue } from '../types/billing';
 import { useAuth } from '../components/Auth/AuthContext'; // Correct path to AuthContext
@@ -30,7 +118,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { user } = useAuth(); // Get auth state
   const { showError, showSuccess } = useNotification();
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  const [tenantAiEnabled, setTenantAiEnabled] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [initializing, setInitializing] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [checkoutState, setCheckoutState] = useState<{
     open: boolean;
@@ -44,6 +134,18 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     open: false,
     mode: 'plan',
   });
+  const firstLoadRef = useRef(true);
+
+  /**
+   * Bootstrap AI toggle state from authenticated tenant metadata.
+   * This runs whenever the tenant data in AuthContext changes and ensures
+   * the toggle isn't overridden by billing summary responses.
+   */
+  useEffect(() => {
+    if (typeof user?.tenant?.ai_enabled === 'boolean') {
+      setTenantAiEnabled(Boolean(user.tenant.ai_enabled));
+    }
+  }, [user?.tenant?.ai_enabled]);
 
   /**
    * Fetch billing summary from backend
@@ -67,6 +169,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setLoading(false);
       console.log('[BillingContext] 🔄 refreshSummary COMPLETED');
+      if (firstLoadRef.current) {
+        firstLoadRef.current = false;
+        setInitializing(false);
+      }
     }
   }, []);
 
@@ -135,6 +241,27 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     },
     [refreshSummary]
+  );
+
+  const updateTenantAiToggle = useCallback(
+    async (aiEnabled: boolean) => {
+      const previousTenantToggle = tenantAiEnabled;
+
+      try {
+        const response = await tenantApi.updateAiToggle(aiEnabled);
+        const serverToggle = Boolean(response?.tenant?.ai_enabled ?? aiEnabled);
+        setTenantAiEnabled(serverToggle);
+        await refreshSummary();
+        showSuccess(serverToggle ? 'AI suggestions enabled for this tenant.' : 'AI suggestions disabled for this tenant.');
+      } catch (error) {
+        setTenantAiEnabled(previousTenantToggle);
+        const message = error instanceof Error ? error.message : 'Failed to update AI preferences. Please try again.';
+        console.error('[BillingContext] Failed to update tenant AI toggle:', error);
+        showError(message);
+        throw error;
+      }
+    },
+    [refreshSummary, showError, showSuccess, tenantAiEnabled]
   );
 
   /**
@@ -352,9 +479,14 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Only fetch billing if user is authenticated
     if (user) {
       console.log('[BillingContext] User authenticated, fetching billing summary');
+      firstLoadRef.current = true;
+      setInitializing(true);
       refreshSummary();
     } else {
       console.log('[BillingContext] User not authenticated, skipping billing fetch');
+      setBillingSummary(null);
+      setTenantAiEnabled(false);
+      setInitializing(false);
     }
   }, [user, refreshSummary]);
 
@@ -362,7 +494,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const value: BillingContextValue = {
     // State (read-only from backend)
     billingSummary,
+    tenantAiEnabled,
     loading,
+    initializing,
     error,
     checkoutState,
 
@@ -372,6 +506,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     requestDowngrade: scheduleDowngrade,
     cancelDowngrade,
     toggleAddon,
+    updateTenantAiToggle,
     startCheckout,
     confirmCheckout,
     

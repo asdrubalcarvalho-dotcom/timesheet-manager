@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use Spatie\Permission\Models\Permission;
+use Illuminate\Support\Facades\DB;
 
 class TenantDatabaseSeeder extends Seeder
 {
@@ -15,9 +16,16 @@ class TenantDatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // DatabaseTenancyBootstrapper is disabled in this project.
+        // Ensure all seeding happens on the tenant connection.
+        DB::purge('tenant');
+        DB::reconnect('tenant');
+        DB::setDefaultConnection('tenant');
+
         // 1. Criar todas as roles + permissions necessárias no tenant
         $this->call([
             RolesAndPermissionsSeeder::class,
+            CountriesSeeder::class,
         ]);
 
         // 2. Garantir que existe o utilizador Admin (Owner) no tenant

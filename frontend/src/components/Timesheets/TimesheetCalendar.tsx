@@ -360,13 +360,24 @@ const TimesheetCalendar: React.FC = () => {
       return;
     }
 
-    loadTimesheets();
-    loadProjects();
     loadTasks();
     loadLocations();
     loadTechnicians();
     loadTravels(); // Load travel indicators for calendar
   }, [authLoading, user?.id]);
+
+  // Refetch projects and timesheets when technician selection changes (or on initial load)
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    loadTimesheets();
+  }, [authLoading, user?.id]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    loadProjects(selectedTechnicianId);
+  }, [authLoading, user?.id, selectedTechnicianId]);
 
   // Don't force scope - respect the default 'all' value from useState
   // Users can manually change scope using toggle buttons
@@ -421,6 +432,11 @@ const TimesheetCalendar: React.FC = () => {
     }
   };
 
+  const handleDialogClose = useCallback(async () => {
+    setDialogOpen(false);
+    await loadTimesheets();
+  }, [loadTimesheets]);
+
   // Handle view change - reload data when switching to Week view
   const handleViewChange = useCallback((info: any) => {
     console.log('View changed to:', info.view.type, 'Date range:', info.startStr, 'to', info.endStr);
@@ -439,9 +455,12 @@ const TimesheetCalendar: React.FC = () => {
     }
   }, [travelsByDate]);
 
-  const loadProjects = async () => {
+  const loadProjects = async (technicianId?: number | '') => {
     try {
-      const userProjectsResponse = await projectsApi.getForCurrentUser().catch(() => ([] as Project[]));
+      const technicianFilter = typeof technicianId === 'number' ? technicianId : (typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined);
+      const userProjectsResponse = await projectsApi.getForCurrentUser(
+        technicianFilter ? { technician_id: technicianFilter } : undefined
+      ).catch(() => ([] as Project[]));
 
       console.log('Loaded user projects:', userProjectsResponse);
 
@@ -529,11 +548,9 @@ const TimesheetCalendar: React.FC = () => {
         params.month = dayjs().format('YYYY-MM');
       }
       
-      // Use provided technician or current filter (optional - if omitted, loads all visible travels)
+      // Use provided technician filter when explicitly supplied
       if (technicianId) {
         params.technician_id = technicianId;
-      } else if (selectedTechnicianId) {
-        params.technician_id = selectedTechnicianId;
       }
       // If no technician specified, backend loads all travels based on user permissions
       
@@ -897,13 +914,46 @@ const TimesheetCalendar: React.FC = () => {
       console.log('Selected technician ID from state:', selectedTechnicianId);
       console.log('Available technicians:', availableTechnicians);
 
+      const requestedTechnicianId = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : null;
+
+      const extractWarningMessage = (result: any): string | null => {
+        const w = result?.warning;
+        if (!w) return null;
+        if (typeof w === 'string') return w;
+        if (typeof w?.message === 'string' && w.message.trim()) return w.message;
+        if (typeof w?.detail === 'string' && w.detail.trim()) return w.detail;
+        return null;
+      };
+
       if (selectedEntry) {
         // Update existing timesheet
-        await timesheetsApi.update(selectedEntry.id, timesheet);
+        const result: any = await timesheetsApi.update(selectedEntry.id, timesheet);
+        const warningMessage = extractWarningMessage(result);
+        if (warningMessage) {
+          showWarning(warningMessage);
+        }
         showSuccess('Timesheet updated successfully');
       } else {
         // Create new timesheet
-        await timesheetsApi.create(timesheet);
+        const result: any = await timesheetsApi.create(timesheet);
+        const warningMessage = extractWarningMessage(result);
+        if (warningMessage) {
+          showWarning(warningMessage);
+        }
+
+        const savedTechnicianId = Number(result?.data?.technician_id ?? result?.data?.technician?.id);
+        const hasOverride =
+          requestedTechnicianId !== null &&
+          Number.isFinite(savedTechnicianId) &&
+          savedTechnicianId > 0 &&
+          savedTechnicianId !== requestedTechnicianId;
+
+        if (hasOverride) {
+          setSelectedTechnicianId(savedTechnicianId);
+          if (!warningMessage) {
+            showWarning('Selected worker was not allowed; the timesheet was saved for your technician.');
+          }
+        }
         showSuccess('Timesheet created successfully');
       }
 
@@ -920,6 +970,17 @@ const TimesheetCalendar: React.FC = () => {
       console.error('Error saving timesheet:', err);
       const error = err as any; // Type assertion for axios error
       let shouldRefresh = false;
+
+      if (error.response?.status === 403) {
+        const message = error.response?.data?.message || error.response?.data?.error || 'Forbidden';
+        showError(message);
+      
+        // Provide negative feedback to AI if suggestion was used
+        if (!selectedEntry && aiSuggestion.suggestion) {
+          handleAIFeedback(false);
+        }
+        return;
+      }
       
       // Handle time overlap errors (422/409)
       if (error.response?.status === 422 || error.response?.status === 409) {
@@ -2154,7 +2215,7 @@ const TimesheetCalendar: React.FC = () => {
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en">
         <Dialog
           open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
+          onClose={handleDialogClose}
           maxWidth="sm"
           fullWidth
           PaperProps={{
@@ -2282,7 +2343,7 @@ const TimesheetCalendar: React.FC = () => {
                 )}
                 
                 <IconButton 
-                  onClick={() => setDialogOpen(false)}
+                  onClick={handleDialogClose}
                   sx={{ color: 'white' }}
                   size={isMobile ? "medium" : "small"}
                 >
@@ -2616,7 +2677,7 @@ const TimesheetCalendar: React.FC = () => {
 
           <DialogActions sx={{ p: 1.5, bgcolor: '#f5f5f5', gap: 1 }}>
             <Button
-              onClick={() => setDialogOpen(false)}
+              onClick={handleDialogClose}
               variant="outlined"
               size="small"
               sx={{ minWidth: 80 }}

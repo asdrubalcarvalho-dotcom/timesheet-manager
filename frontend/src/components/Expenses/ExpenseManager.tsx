@@ -11,16 +11,10 @@ import {
   Chip,
   IconButton,
   Fab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  TablePagination,
   Typography
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
+import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -30,7 +24,7 @@ import PageHeader from '../Common/PageHeader';
 import EmptyState from '../Common/EmptyState';
 import InputDialog from '../Common/InputDialog';
 import { useNotification } from '../../contexts/NotificationContext';
-import { getAuthHeaders, fetchWithAuth, API_URL } from '../../services/api';
+import { getAuthHeaders, fetchWithAuth, API_URL, techniciansApi, projectsApi } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 
 interface Project {
@@ -38,9 +32,17 @@ interface Project {
   name: string;
 }
 
+interface Technician {
+  id: number;
+  name: string;
+  email?: string;
+}
+
 interface ExpenseEntry {
   id?: number;
   project_id: number;
+  technician_id?: number;
+  technician?: Technician;
   date: string;
   expense_datetime?: string; // New datetime field
   amount: number | string;
@@ -56,11 +58,25 @@ interface ExpenseEntry {
   project?: Project;
 }
 
+const expenseCategories = [
+  { value: 'general', label: 'General' },
+  { value: 'travel', label: 'Travel' },
+  { value: 'meals', label: 'Meals' },
+  { value: 'lodging', label: 'Lodging' },
+  { value: 'fuel', label: 'Fuel' },
+  { value: 'parking', label: 'Parking' },
+  { value: 'materials', label: 'Materials' },
+  { value: 'tools', label: 'Tools' },
+  { value: 'other', label: 'Other' },
+];
+
 export const ExpenseManager: React.FC = () => {
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showWarning } = useNotification();
   useTenantGuard(); // Ensure tenant_slug exists
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | ''>('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseEntry | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,7 +93,7 @@ export const ExpenseManager: React.FC = () => {
   const [projectId, setProjectId] = useState<number>(0);
   const [expenseDate, setExpenseDate] = useState<Dayjs | null>(null);
   const [amount, setAmount] = useState<number>(0);
-  const [category, setCategory] = useState('General');
+  const [category, setCategory] = useState<string>('');
   const [description, setDescription] = useState('');
   const [expenseType, setExpenseType] = useState<'reimbursement' | 'mileage' | 'company_card'>('reimbursement');
   const [distanceKm, setDistanceKm] = useState<number>(0);
@@ -89,8 +105,8 @@ export const ExpenseManager: React.FC = () => {
 
   // Load data on mount
   useEffect(() => {
+    loadTechnicians();
     loadExpenses();
-    loadProjects();
   }, []);
 
   const loadExpenses = async () => {
@@ -109,7 +125,12 @@ export const ExpenseManager: React.FC = () => {
         console.error('Failed to load expenses - Status:', response.status);
         setExpenses([]); // Set empty array on error
         if (response.status !== 404) {
-          showError(`Failed to load expenses: ${response.statusText}`);
+          const errorData = await response.json().catch(() => null);
+          const message =
+            errorData?.message ||
+            errorData?.error ||
+            `Failed to load expenses: ${response.statusText}`;
+          showError(message);
         }
       }
     } catch (error) {
@@ -121,24 +142,47 @@ export const ExpenseManager: React.FC = () => {
     }
   };
 
-  const loadProjects = async () => {
+  const loadTechnicians = async () => {
     try {
-      // Get only projects where user is member or manager (same as timesheets)
-      const url = `${API_URL}/api/projects?my_projects=true`;
-      const response = await fetchWithAuth(url);
-      
-      if (response.ok) {
-        const result = await response.json();
-        setProjects(Array.isArray(result) ? result : []);
-      } else {
-        console.error('Failed to load projects - Status:', response.status);
-        setProjects([]); // Set empty array on error
+      const response = await techniciansApi.getAll();
+      const data = Array.isArray(response)
+        ? response
+        : (Array.isArray((response as any)?.data) ? (response as any).data : []);
+      setTechnicians(data as Technician[]);
+    } catch (error) {
+      console.error('Failed to load technicians:', error);
+      setTechnicians([]);
+    }
+  };
+
+  const loadProjects = async (technicianId?: number | '') => {
+    try {
+      const params = typeof technicianId === 'number' && technicianId > 0
+        ? { technician_id: technicianId }
+        : undefined;
+
+      const projectsData = await projectsApi
+        .getForCurrentUserExpenses(params)
+        .catch(() => [] as Project[]);
+
+      const normalized = Array.isArray(projectsData)
+        ? projectsData
+        : (Array.isArray((projectsData as any)?.data) ? (projectsData as any).data : []);
+      setProjects(normalized);
+
+      if (projectId && !normalized.find((project: Project) => project.id === projectId)) {
+        setProjectId(0);
       }
     } catch (error) {
       console.error('Failed to load projects:', error);
       setProjects([]); // Set empty array on error
+      setProjectId(0);
     }
   };
+
+  useEffect(() => {
+    loadProjects(selectedTechnicianId);
+  }, [selectedTechnicianId]);
 
   const handleAddNew = () => {
     setSelectedExpense(null);
@@ -149,6 +193,8 @@ export const ExpenseManager: React.FC = () => {
   const handleEdit = (expense: ExpenseEntry) => {
     setSelectedExpense(expense);
     setProjectId(expense.project_id);
+    const rawTechnicianId = Number((expense as any)?.technician_id ?? (expense as any)?.technician?.id);
+    setSelectedTechnicianId(Number.isFinite(rawTechnicianId) && rawTechnicianId > 0 ? rawTechnicianId : '');
     // Parse expense_datetime or fallback to date (date only, no time)
     if (expense.expense_datetime) {
       setExpenseDate(dayjs(expense.expense_datetime).startOf('day'));
@@ -158,7 +204,7 @@ export const ExpenseManager: React.FC = () => {
       setExpenseDate(null);
     }
     setAmount(Number(expense.amount));
-    setCategory(expense.category || 'General');
+    setCategory(expense.category || '');
     setDescription(expense.description || '');
     setExpenseType(expense.expense_type || 'reimbursement');
     setDistanceKm(expense.distance_km || 0);
@@ -170,9 +216,10 @@ export const ExpenseManager: React.FC = () => {
 
   const resetForm = () => {
     setProjectId(0);
+    setSelectedTechnicianId('');
     setExpenseDate(dayjs().startOf('day'));
     setAmount(0);
-    setCategory('General');
+    setCategory('');
     setDescription('');
     setExpenseType('reimbursement');
     setDistanceKm(0);
@@ -186,14 +233,29 @@ export const ExpenseManager: React.FC = () => {
       e.preventDefault();
     }
 
+    const isProjectValid = projectId > 0 && projects.some((project) => project.id === projectId);
+    if (!isProjectValid) {
+      setProjectId(0);
+      showError('Please select a valid project for the chosen technician.');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('project_id', projectId.toString());
+
+    const technicianIdForPayload = typeof selectedTechnicianId === 'number' && Number.isFinite(selectedTechnicianId)
+      ? selectedTechnicianId
+      : (selectedExpense?.technician_id ?? (selectedExpense as any)?.technician?.id ?? null);
+
+    if (technicianIdForPayload !== null) {
+      formData.append('technician_id', technicianIdForPayload.toString());
+    }
     
     // Send date-only string to backend (YYYY-MM-DD)
     if (expenseDate) {
       formData.append('date', expenseDate.format('YYYY-MM-DD'));
     }
-    
+
     formData.append('category', category);
     formData.append('description', description);
     formData.append('expense_type', expenseType);
@@ -234,13 +296,46 @@ export const ExpenseManager: React.FC = () => {
       }
 
       if (response.ok) {
+        const payload = await response.json().catch(() => null);
+        const saved = payload?.data ?? payload?.expense ?? payload;
+        const savedTechnicianId = Number(saved?.technician_id ?? saved?.technician?.id);
+
+        const warningMessage =
+          payload?.warning?.message ||
+          payload?.warning ||
+          saved?.warning?.message ||
+          saved?.warning ||
+          null;
+
+        if (typeof warningMessage === 'string' && warningMessage.trim()) {
+          showWarning(warningMessage);
+        }
+
+        if (
+          typeof selectedTechnicianId === 'number' &&
+          Number.isFinite(savedTechnicianId) &&
+          savedTechnicianId > 0 &&
+          savedTechnicianId !== selectedTechnicianId
+        ) {
+          showWarning(
+            'You are not allowed to create/edit expenses for that worker. The record was saved for a different technician.'
+          );
+        }
+
         showSuccess(`Expense ${selectedExpense ? 'updated' : 'created'} successfully`);
         loadExpenses();
         setDialogOpen(false);
         resetForm();
       } else {
-        const errorData = await response.json();
-        showError(errorData.message || `Failed to ${selectedExpense ? 'update' : 'create'} expense`);
+        const errorData = await response.json().catch(() => null);
+        const message =
+          errorData?.message ||
+          errorData?.error ||
+          (errorData?.details && typeof errorData.details === 'object'
+            ? Object.values(errorData.details).flat()?.[0]
+            : null) ||
+          `Failed to ${selectedExpense ? 'update' : 'create'} expense`;
+        showError(message);
       }
     } catch (error: any) {
       showError(error.response?.data?.message || `Failed to ${selectedExpense ? 'update' : 'create'} expense`);
@@ -259,7 +354,12 @@ export const ExpenseManager: React.FC = () => {
           showSuccess('Expense deleted successfully');
           loadExpenses();
         } else {
-          showError('Failed to delete expense');
+          try {
+            const data = await response.json();
+            showError(data?.message || 'Failed to delete expense');
+          } catch {
+            showError('Failed to delete expense');
+          }
         }
       } catch {
         showError('Failed to delete expense');
@@ -351,17 +451,132 @@ export const ExpenseManager: React.FC = () => {
     return <Chip label={config.label} color={config.color} size="small" />;
   };
 
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  const handleChangePage = (_event: unknown, newPage: number) => {
-    setPage(newPage);
+  const resolveTechnicianName = (expense: ExpenseEntry): string => {
+    const fromPayload = expense.technician?.name;
+    if (fromPayload) return fromPayload;
+    const id = Number((expense as any)?.technician_id);
+    if (Number.isFinite(id) && id > 0) {
+      const found = technicians.find((t) => t.id === id);
+      if (found?.name) return found.name;
+    }
+    return '—';
   };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
+  const columns: GridColDef<ExpenseEntry>[] = [
+    { field: 'id', headerName: 'ID', width: 80 },
+    {
+      field: 'date',
+      headerName: 'Date',
+      width: 120,
+      valueGetter: (_value, row) => row.date,
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => dayjs(params.row.date).format('DD/MM/YYYY'),
+    },
+    {
+      field: 'technician',
+      headerName: 'Technician',
+      minWidth: 160,
+      flex: 1,
+      valueGetter: (_value, row) => resolveTechnicianName(row),
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => resolveTechnicianName(params.row),
+    },
+    {
+      field: 'project',
+      headerName: 'Project',
+      minWidth: 180,
+      flex: 1,
+      valueGetter: (_value, row) => row.project?.name || 'Unknown',
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => params.row.project?.name || 'Unknown',
+    },
+    {
+      field: 'amount',
+      headerName: 'Amount',
+      width: 120,
+      valueGetter: (_value, row) => Number(row.amount),
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => `€${Number(params.row.amount).toFixed(2)}`,
+    },
+    {
+      field: 'description',
+      headerName: 'Description',
+      minWidth: 220,
+      flex: 2,
+    },
+    {
+      field: 'attachment',
+      headerName: 'Attachment',
+      width: 120,
+      sortable: false,
+      filterable: false,
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) =>
+        params.row.attachment_path ? (
+          <IconButton
+            size="small"
+            color="primary"
+            onClick={async () => {
+              try {
+                const response = await fetchWithAuth(`${API_URL}/api/expenses/${params.row.id}/attachment`);
+                if (response.ok) {
+                  const blob = await response.blob();
+                  const url = URL.createObjectURL(blob);
+                  setPreviewAttachmentUrl(url);
+                  setAttachmentPreviewOpen(true);
+                } else {
+                  showError('Failed to load attachment');
+                }
+              } catch {
+                showError('Failed to load attachment');
+              }
+            }}
+            title="View Attachment"
+          >
+            <Visibility fontSize="small" />
+          </IconButton>
+        ) : (
+          <Typography variant="caption" color="text.secondary">—</Typography>
+        ),
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 170,
+      valueGetter: (_value, row) => row.status,
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => (
+        <Box>
+          {getStatusChip(params.row.status)}
+          {params.row.status === 'rejected' && params.row.rejection_reason ? (
+            <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5, fontStyle: 'italic' }}>
+              Reason: {params.row.rejection_reason}
+            </Typography>
+          ) : null}
+        </Box>
+      ),
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      sortable: false,
+      filterable: false,
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => (
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <IconButton
+            onClick={() => handleEdit(params.row)}
+            disabled={params.row.status === 'approved'}
+            size="small"
+          >
+            <Edit />
+          </IconButton>
+          <IconButton
+            onClick={() => handleDelete(params.row.id!)}
+            disabled={params.row.status === 'approved'}
+            size="small"
+            color="error"
+          >
+            <Delete />
+          </IconButton>
+        </Box>
+      ),
+    },
+  ];
 
   return (
     <Box sx={{ 
@@ -396,107 +611,19 @@ export const ExpenseManager: React.FC = () => {
         )}
 
       {!loading && expenses.length > 0 && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Project</TableCell>
-                <TableCell>Amount</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Attachment</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {expenses
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((expense) => (
-                <TableRow key={expense.id}>
-                  <TableCell>{expense.id}</TableCell>
-                  <TableCell>
-                    {dayjs(expense.date).format('DD/MM/YYYY')}
-                  </TableCell>
-                  <TableCell>
-                    {expense.project?.name || 'Unknown'}
-                  </TableCell>
-                  <TableCell>
-                    €{Number(expense.amount).toFixed(2)}
-                  </TableCell>
-                  <TableCell>{expense.description}</TableCell>
-                  <TableCell>
-                    {expense.attachment_path ? (
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={async () => {
-                          try {
-                            const response = await fetchWithAuth(`${API_URL}/api/expenses/${expense.id}/attachment`);
-                            if (response.ok) {
-                              const blob = await response.blob();
-                              const url = URL.createObjectURL(blob);
-                              setPreviewAttachmentUrl(url);
-                              setAttachmentPreviewOpen(true);
-                            } else {
-                              showError('Failed to load attachment');
-                            }
-                          } catch (error) {
-                            showError('Failed to load attachment');
-                          }
-                        }}
-                        title="View Attachment"
-                      >
-                        <Visibility fontSize="small" />
-                      </IconButton>
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">—</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Box>
-                      {getStatusChip(expense.status)}
-                      {expense.status === 'rejected' && expense.rejection_reason && (
-                        <Box sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="error" display="block" sx={{ fontStyle: 'italic' }}>
-                            Reason: {expense.rejection_reason}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <IconButton
-                      onClick={() => handleEdit(expense)}
-                      disabled={expense.status === 'approved'}
-                      size="small"
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton
-                      onClick={() => handleDelete(expense.id!)}
-                      disabled={expense.status === 'approved'}
-                      size="small"
-                      color="error"
-                    >
-                      <Delete />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-          </TableBody>
-        </Table>
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={expenses.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-      </TableContainer>
+        <Box sx={{ height: 560, width: '100%' }}>
+          <DataGrid
+            rows={expenses}
+            columns={columns}
+            loading={loading}
+            disableRowSelectionOnClick
+            pageSizeOptions={[10, 25, 50]}
+            getRowHeight={() => 'auto'}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            }}
+          />
+        </Box>
       )}
 
       {/* Floating Action Button - always visible when there are expenses */}
@@ -603,6 +730,24 @@ export const ExpenseManager: React.FC = () => {
             <TextField
               select
               fullWidth
+              label="Technician"
+              value={selectedTechnicianId === '' ? '' : selectedTechnicianId}
+              onChange={(e) => {
+                const nextValue = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                setSelectedTechnicianId(nextValue);
+              }}
+            >
+              <MenuItem value="">(Default)</MenuItem>
+              {technicians.map((tech) => (
+                <MenuItem key={tech.id} value={tech.id}>
+                  {tech.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              fullWidth
               label="Project"
               value={projectId}
               onChange={(e) => setProjectId(Number(e.target.value))}
@@ -643,20 +788,20 @@ export const ExpenseManager: React.FC = () => {
             </TextField>
 
             <TextField
+              select
               fullWidth
               label="Category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               required
-            />
-
-            <TextField
-              fullWidth
-              label="Category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-            />
+            >
+              <MenuItem value="">Select a category</MenuItem>
+              {expenseCategories.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
 
             {/* Conditional fields based on expense_type */}
             {expenseType === 'mileage' ? (

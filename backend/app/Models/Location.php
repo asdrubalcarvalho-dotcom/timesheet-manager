@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -14,6 +15,7 @@ class Location extends Model
     protected $fillable = [
         'name',
         'country',
+        'country_id',
         'city',
         'address',
         'postal_code',
@@ -38,6 +40,11 @@ class Location extends Model
     public function timesheets(): HasMany
     {
         return $this->hasMany(Timesheet::class);
+    }
+
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
     }
 
     public function isActive(): bool

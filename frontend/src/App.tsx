@@ -25,6 +25,8 @@ import SuperAdminApp from './components/SuperAdmin/SuperAdminApp';
 const TimesheetCalendar = React.lazy(() => import('./components/Timesheets/TimesheetCalendar'));
 const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
 const PlanningGantt = React.lazy(() => import('./components/Planning/PlanningGantt'));
+const PlanningGanttLocations = React.lazy(() => import('./components/Planning/PlanningGanttLocations'));
+const PlanningGanttUsers = React.lazy(() => import('./components/Planning/PlanningGanttUsers'));
 const ExpenseManager = React.lazy(() => import('./components/Expenses/ExpenseManager'));
 const ApprovalManager = React.lazy(() => import('./components/Approvals/ApprovalManager'));
 const AIInsights = React.lazy(() => import('./components/AIInsights/AIInsights'));
@@ -32,6 +34,7 @@ const AdminDashboard = React.lazy(() => import('./components/Admin/AdminDashboar
 const ProjectsManager = React.lazy(() => import('./components/Admin/ProjectsManager'));
 const TasksManager = React.lazy(() => import('./components/Admin/TasksManager'));
 const LocationsManager = React.lazy(() => import('./components/Admin/LocationsManager'));
+const CountriesManager = React.lazy(() => import('./components/Admin/CountriesManager'));
 const UsersManager = React.lazy(() => import('./components/Admin/UsersManager'));
 const AdminAccessManagerPage = React.lazy(() => import('./pages/AdminAccessManager'));
 const TravelsList = React.lazy(() => import('./components/Travels/TravelsList'));
@@ -69,7 +72,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-users' | 'planning' | 'admin-access' | 'travels' | 'billing' | 'payment-methods';
+type Page = 'timesheets' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -81,6 +84,8 @@ const pageToPath: Record<Page, string> = {
   'ai-insights': '/ai-insights',
   team: '/team',
   planning: '/planning',
+  'planning-locations': '/planning/locations',
+  'planning-users': '/planning/users',
   travels: '/travels',
   billing: '/billing',
   'payment-methods': '/settings/billing/payment-methods',
@@ -88,6 +93,7 @@ const pageToPath: Record<Page, string> = {
   'admin-projects': '/admin/projects',
   'admin-tasks': '/admin/tasks',
   'admin-locations': '/admin/locations',
+  'admin-countries': '/admin/countries',
   'admin-users': '/admin/users',
   'admin-access': '/admin/access'
 };
@@ -201,6 +207,18 @@ const AppContent: React.FC = () => {
             <PlanningGantt />
           </RequireFeature>
         );
+      case 'planning-locations':
+        return (
+          <RequireFeature feature="planning">
+            <PlanningGanttLocations />
+          </RequireFeature>
+        );
+      case 'planning-users':
+        return (
+          <RequireFeature feature="planning">
+            <PlanningGanttUsers />
+          </RequireFeature>
+        );
       case 'travels':
         return (
           <RequireFeature feature="travels">
@@ -215,6 +233,8 @@ const AppContent: React.FC = () => {
         return <TasksManager />;
       case 'admin-locations':
         return <LocationsManager />;
+      case 'admin-countries':
+        return <CountriesManager />;
       case 'admin-users':
         return <UsersManager />;
       case 'admin-access':

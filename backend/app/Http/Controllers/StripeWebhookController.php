@@ -129,8 +129,12 @@ class StripeWebhookController extends Controller
         
         // Run operation in tenant context
         $tenant->run(function () use ($paymentIntent) {
-            // Check idempotency: skip if payment already recorded
-            $existingPayment = Payment::where('transaction_id', $paymentIntent->id)->first();
+            // Idempotency guard: skip if this PaymentIntent was already processed (transaction_id or stored intent refs)
+            $existingPayment = Payment::where(function ($query) use ($paymentIntent) {
+                $query->where('transaction_id', $paymentIntent->id)
+                    ->orWhere('stripe_payment_intent_id', $paymentIntent->id)
+                    ->orWhere('gateway_reference', $paymentIntent->id);
+            })->first();
             
             if ($existingPayment) {
                 Log::info('[StripeWebhook] Payment already processed (idempotent skip)', [
@@ -219,6 +223,21 @@ class StripeWebhookController extends Controller
         
         // Run operation in tenant context
         $tenant->run(function () use ($paymentIntent) {
+            // Idempotency guard: skip if this PaymentIntent was already processed (transaction_id or stored intent refs)
+            $existingPayment = Payment::where(function ($query) use ($paymentIntent) {
+                $query->where('transaction_id', $paymentIntent->id)
+                    ->orWhere('stripe_payment_intent_id', $paymentIntent->id)
+                    ->orWhere('gateway_reference', $paymentIntent->id);
+            })->first();
+
+            if ($existingPayment) {
+                Log::info('[StripeWebhook] Payment already processed (idempotent skip)', [
+                    'payment_intent_id' => $paymentIntent->id,
+                    'payment_id' => $existingPayment->id,
+                ]);
+                return;
+            }
+
             // Extract subscription_id from metadata
             $subscriptionId = $paymentIntent->metadata->subscription_id ?? null;
             

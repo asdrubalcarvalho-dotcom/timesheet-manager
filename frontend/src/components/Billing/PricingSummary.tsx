@@ -17,6 +17,7 @@ interface PricingSummaryProps {
   // Optional: detailed breakdown from BillingSummary
   pricePerUser?: number;
   userLimit?: number;
+  userCount?: number;
   addons?: {
     planning: number;
     ai: number;
@@ -41,6 +42,7 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
   total, 
   pricePerUser,
   userLimit,
+  userCount,
   addons,
   nextRenewalAt,
   isTrial = false,
@@ -50,10 +52,13 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
   const safeBaseSubtotal = baseSubtotal ?? 0;
   const safeTotal = total ?? 0;
   const safeUserLimit = userLimit ?? 0;
+  const safeUserCount = userCount ?? 0;
   const safePricePerUser = pricePerUser ?? 0;
   const planningAddon = addons?.planning ?? 0;
   const aiAddon = addons?.ai ?? 0;
   const addonsTotal = planningAddon + aiAddon;
+  // Use user_limit when available, fallback to user_count for display
+  const displayLicenses = safeUserLimit > 0 ? safeUserLimit : safeUserCount;
 
   return (
     <Card
@@ -75,14 +80,14 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
           {safeTotal > 0 ? (
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body1" sx={{ fontWeight: 600 }}>Base Plan × {safeUserLimit} licenses</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>Base Plan × {displayLicenses} licenses</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   €{safeBaseSubtotal.toFixed(2)}
                 </Typography>
               </Box>
-              {safeUserLimit > 0 && safePricePerUser > 0 && (
+              {displayLicenses > 0 && safePricePerUser > 0 && (
                 <Typography variant="caption" sx={{ opacity: 0.9, mt: 0.5, display: 'block' }}>
-                  €{safePricePerUser.toFixed(2)}/user × {safeUserLimit} license{safeUserLimit !== 1 ? 's' : ''}
+                  €{safePricePerUser.toFixed(2)}/user × {displayLicenses} license{displayLicenses !== 1 ? 's' : ''}
                 </Typography>
               )}
             </Box>

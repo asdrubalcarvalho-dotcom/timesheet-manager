@@ -51,6 +51,8 @@ const TenantRegistration: React.FC = () => {
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState<string>('');
   const [expiresInHours, setExpiresInHours] = useState<number>(24);
+  const [verificationUrl, setVerificationUrl] = useState<string>('');
+  const [verificationToken, setVerificationToken] = useState<string>('');
 
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
@@ -156,8 +158,13 @@ const TenantRegistration: React.FC = () => {
       });
 
       // Show confirmation screen instead of redirecting
+      console.log('[TenantRegistration] API Response:', res.data);
+      console.log('[TenantRegistration] Verification URL:', res.data?.verification_url);
+      
       setRegisteredEmail(formData.admin_email);
       setExpiresInHours(res.data?.expires_in_hours ?? 24);
+      setVerificationUrl(res.data?.verification_url || '');
+      setVerificationToken(res.data?.verification_token || '');
       setRegistrationComplete(true);
 
       showSuccess(res.data?.message || 'Verification email sent! Please check your inbox.');
@@ -204,6 +211,28 @@ const TenantRegistration: React.FC = () => {
   ];
 
   if (registrationComplete) {
+    const copyToClipboard = async (text: string) => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+
+        // Fallback for older browsers / restricted contexts
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch (e) {
+        throw e;
+      }
+    };
+
     return (
       <Box
         sx={{
@@ -238,12 +267,52 @@ const TenantRegistration: React.FC = () => {
             The verification link will expire in {expiresInHours} hours.
           </Typography>
 
+          {verificationUrl && (
+            <Box sx={{ mb: 3, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+              <Typography variant="caption" display="block" fontWeight="bold" sx={{ mb: 1 }}>
+                🔧 DEV MODE - Direct Verification Link:
+              </Typography>
+              <Button
+                variant="contained"
+                color="warning"
+                size="small"
+                fullWidth
+                onClick={async () => {
+                  try {
+                    const payload = [
+                      `URL: ${verificationUrl}`,
+                      verificationToken ? `TOKEN: ${verificationToken}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join('\n');
+                    await copyToClipboard(payload);
+                    showSuccess('Verification URL + token copied to clipboard');
+                  } catch {
+                    showError('Failed to copy to clipboard');
+                  }
+                }}
+                sx={{ textTransform: 'none' }}
+              >
+                Copy verification URL + token
+              </Button>
+              <Typography variant="caption" display="block" sx={{ mt: 1, wordBreak: 'break-all' }}>
+                {verificationUrl}
+              </Typography>
+              {verificationToken && (
+                <Typography variant="caption" display="block" sx={{ mt: 1, wordBreak: 'break-all' }}>
+                  Token: {verificationToken}
+                </Typography>
+              )}
+            </Box>
+          )}
+
           <Typography variant="caption" display="block">
             Didn't receive the email? Check your spam folder or{' '}
             <Button
               onClick={() => {
                 setRegistrationComplete(false);
                 setRegisteredEmail('');
+                setVerificationUrl('');
               }}
               sx={{ textTransform: 'none', p: 0 }}
             >

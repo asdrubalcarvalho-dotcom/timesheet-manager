@@ -62,18 +62,12 @@ class PaymentSnapshot
             ?? $subscription->plan
             ?? 'starter';
         
-        $userCount = $targetUserLimit
+        $userLimit = $targetUserLimit
             ?? $subscription->user_limit
             ?? 1;
 
-        // Build addons array
-        $addons = [];
-        if ($subscription->planning_addon_enabled ?? false) {
-            $addons[] = 'planning';
-        }
-        if ($subscription->ai_addon_enabled ?? false) {
-            $addons[] = 'ai';
-        }
+        // Build addons array from subscription JSON column (canonical source)
+        $addons = $subscription->addons ?? [];
 
         \Log::info('[PaymentSnapshot] Creating snapshot', [
             'tenant_id' => $tenant->id,
@@ -82,7 +76,7 @@ class PaymentSnapshot
             'target_plan' => $targetPlan,
             'target_user_limit' => $targetUserLimit,
             'snapshot_plan' => $plan,
-            'snapshot_user_count' => $userCount,
+            'snapshot_user_limit' => $userLimit,
             'amount' => $amount,
         ]);
 
@@ -90,7 +84,7 @@ class PaymentSnapshot
         $paymentData = [
             'tenant_id' => $tenant->id,
             'plan' => $plan,
-            'user_count' => $userCount,
+            'user_limit' => $userLimit,
             'addons' => $addons,
             'amount' => $amount,
             'currency' => 'EUR',
@@ -111,7 +105,7 @@ class PaymentSnapshot
         \Log::info('[PaymentSnapshot] Payment created', [
             'id' => $payment->id,
             'plan' => $payment->plan,
-            'user_count' => $payment->user_count,
+            'user_limit' => $payment->user_limit,
             'cycle_start' => $payment->cycle_start,
         ]);
         
@@ -136,12 +130,17 @@ class PaymentSnapshot
         // Update subscription with snapshot values
         $subscription->update([
             'plan' => $payment->plan,
-            'user_limit' => $payment->user_count, // Use snapshot user_count, NOT plan default
-            'planning_addon_enabled' => in_array('planning', $payment->addons ?? []),
-            'ai_addon_enabled' => in_array('ai', $payment->addons ?? []),
-            'billing_cycle_start' => $payment->cycle_start,
+            'user_limit' => $payment->user_limit, // Purchased licenses are stored as user_limit on payments
+            'addons' => $payment->addons ?? [],
+            'next_renewal_at' => $payment->cycle_end,
             'status' => 'active',
         ]);
+
+        // Ensure tenant feature flags stay in sync with updated subscription
+        $tenant = $subscription->tenant ?? Tenant::find($subscription->tenant_id);
+        if ($tenant) {
+            app(PlanManager::class)->resyncFeatures($tenant, $subscription);
+        }
     }
 
     /**
@@ -202,14 +201,15 @@ class PaymentSnapshot
             return false;
         }
 
-        // Check addons
+        // Check addons (JSON field mirrors billing state)
+        $currentAddons = $subscription->addons ?? [];
         $planningEnabled = in_array('planning', $payment->addons ?? []);
-        if ($planningEnabled !== ($subscription->planning_addon_enabled ?? false)) {
+        if ($planningEnabled !== in_array('planning', $currentAddons, true)) {
             return false;
         }
 
         $aiEnabled = in_array('ai', $payment->addons ?? []);
-        if ($aiEnabled !== ($subscription->ai_addon_enabled ?? false)) {
+        if ($aiEnabled !== in_array('ai', $currentAddons, true)) {
             return false;
         }
 

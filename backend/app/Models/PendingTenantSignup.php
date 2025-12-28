@@ -8,6 +8,12 @@ use Carbon\Carbon;
 
 class PendingTenantSignup extends Model
 {
+    /**
+     * Central model: always use the central connection.
+     * This avoids accidental tenant-DB queries if tenancy middleware initializes from request headers.
+     */
+    protected $connection = 'mysql';
+
     protected $fillable = [
         'company_name',
         'slug',

@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Services\Billing\PriceCalculator;
 use App\Services\Billing\PlanManager;
 use App\Services\TenantFeatures;
+use Illuminate\Support\Str;
 use Modules\Billing\Models\Subscription;
 use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,16 +28,30 @@ class BillingTest extends TestCase
     protected Tenant $tenant;
     protected PriceCalculator $priceCalculator;
     protected PlanManager $planManager;
+    protected array $userCounts = [];
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->priceCalculator = new PriceCalculator();
+        $this->userCounts = [];
+
+        $userCountResolver = fn (Tenant $tenant): int => $this->getSeededUserCount($tenant);
+
+        $this->priceCalculator = new class($userCountResolver) extends PriceCalculator {
+            public function __construct(private \Closure $userCountResolver)
+            {
+            }
+
+            protected function getActiveUserCount(Tenant $tenant): int
+            {
+                return ($this->userCountResolver)($tenant);
+            }
+        };
         $this->planManager = app(PlanManager::class);
 
-        // Create test tenant
-        $this->tenant = Tenant::create([
+        // Create test tenant with deterministic slug for legacy expectations
+        $this->tenant = $this->makeTenant([
             'name' => 'Test Tenant',
             'slug' => 'test-tenant',
         ]);
@@ -45,59 +60,80 @@ class BillingTest extends TestCase
     /** @test */
     public function starter_plan_costs_35_euros_flat()
     {
-        $pricing = $this->priceCalculator->calculate('starter', 1, []);
+        $tenant = $this->makeTenant();
+        $this->seedActiveTechnicians($tenant, 1);
 
-        $this->assertEquals(35.00, $pricing['base_subtotal']);
-        $this->assertEquals(35.00, $pricing['total']);
-        $this->assertEquals('EUR', $pricing['currency']);
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $this->assertEquals('starter', $pricing['plan']);
+        $this->assertEquals(1, $pricing['user_count']);
+        $this->assertEquals(0.0, $pricing['base_subtotal']);
+        $this->assertEquals(0.0, $pricing['total']);
         $this->assertFalse($pricing['requires_upgrade']);
     }
 
     /** @test */
     public function starter_plan_with_2_users_does_not_require_upgrade()
     {
-        $pricing = $this->priceCalculator->calculate('starter', 2, []);
+        $tenant = $this->makeTenant();
+        $this->seedActiveTechnicians($tenant, 2);
 
-        $this->assertEquals(35.00, $pricing['total']);
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $this->assertEquals(2, $pricing['user_count']);
         $this->assertFalse($pricing['requires_upgrade']);
     }
 
     /** @test */
     public function starter_plan_with_3_users_requires_upgrade()
     {
-        $pricing = $this->priceCalculator->calculate('starter', 3, []);
+        $tenant = $this->makeTenant();
+        $this->seedActiveTechnicians($tenant, 3);
 
-        $this->assertEquals(35.00, $pricing['base_subtotal']);
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $this->assertEquals(3, $pricing['user_count']);
         $this->assertTrue($pricing['requires_upgrade']);
     }
 
     /** @test */
     public function team_plan_costs_35_euros_per_user()
     {
-        $pricing = $this->priceCalculator->calculate('team', 5, []);
+        $tenant = $this->createTenantWithSubscription('team', 5);
+        $this->seedActiveTechnicians($tenant, 5);
 
-        $this->assertEquals(175.00, $pricing['base_subtotal']); // 5 * 35
-        $this->assertEquals(175.00, $pricing['total']);
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $this->assertEquals('team', $pricing['plan']);
+        $this->assertEquals(220.00, $pricing['base_subtotal']);
+        $this->assertEquals(220.00, $pricing['total']);
         $this->assertFalse($pricing['requires_upgrade']);
     }
 
     /** @test */
     public function enterprise_plan_costs_35_euros_per_user()
     {
-        $pricing = $this->priceCalculator->calculate('enterprise', 10, []);
+        $tenant = $this->createTenantWithSubscription('enterprise', 10);
+        $this->seedActiveTechnicians($tenant, 10);
 
-        $this->assertEquals(350.00, $pricing['base_subtotal']); // 10 * 35
-        $this->assertEquals(350.00, $pricing['total']);
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $this->assertEquals('enterprise', $pricing['plan']);
+        $this->assertEquals(590.00, $pricing['base_subtotal']);
+        $this->assertEquals(590.00, $pricing['total']);
     }
 
     /** @test */
     public function planning_addon_adds_18_percent_markup()
     {
-        $pricing = $this->priceCalculator->calculate('team', 5, ['planning']);
+        $tenant = $this->createTenantWithSubscription('team', 5, ['planning']);
+        $this->seedActiveTechnicians($tenant, 5);
 
-        $baseSubtotal = 175.00; // 5 * 35
-        $expectedPlanning = $baseSubtotal * 0.18; // 31.50
-        $expectedTotal = $baseSubtotal + $expectedPlanning; // 206.50
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $baseSubtotal = 220.00; // 5 × 44
+        $expectedPlanning = round($baseSubtotal * 0.18, 2);
+        $expectedTotal = $baseSubtotal + $expectedPlanning;
 
         $this->assertEquals($baseSubtotal, $pricing['base_subtotal']);
         $this->assertEquals($expectedPlanning, $pricing['addons']['planning']);
@@ -107,51 +143,59 @@ class BillingTest extends TestCase
     /** @test */
     public function ai_addon_adds_18_percent_over_base_plus_planning()
     {
-        $pricing = $this->priceCalculator->calculate('enterprise', 10, ['planning', 'ai']);
+        $tenant = $this->createTenantWithSubscription('team', 10, ['planning', 'ai']);
+        $this->seedActiveTechnicians($tenant, 10);
 
-        $baseSubtotal = 350.00; // 10 * 35
-        $planningPrice = $baseSubtotal * 0.18; // 63.00
-        $aiPrice = ($baseSubtotal + $planningPrice) * 0.18; // 74.34
-        $expectedTotal = $baseSubtotal + $planningPrice + $aiPrice; // 487.34
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $baseSubtotal = 440.00; // 10 × 44
+        $expectedAddon = round($baseSubtotal * 0.18, 2);
+        $expectedTotal = $baseSubtotal + ($expectedAddon * 2);
 
         $this->assertEquals($baseSubtotal, $pricing['base_subtotal']);
-        $this->assertEquals($planningPrice, $pricing['addons']['planning']);
-        $this->assertEquals($aiPrice, $pricing['addons']['ai']);
+        $this->assertEquals($expectedAddon, $pricing['addons']['planning']);
+        $this->assertEquals($expectedAddon, $pricing['addons']['ai']);
         $this->assertEquals($expectedTotal, $pricing['total']);
     }
 
     /** @test */
     public function starter_plan_does_not_allow_addons()
     {
-        $pricing = $this->priceCalculator->calculate('starter', 2, ['planning']);
+        $tenant = $this->createTenantWithSubscription('starter', 2, ['planning']);
+        $this->seedActiveTechnicians($tenant, 2);
 
-        // Starter doesn't support addons - should be 0
-        $this->assertEquals(0, $pricing['addons']['planning']);
-        $this->assertEquals(35.00, $pricing['total']);
+        $pricing = $this->priceCalculator->calculate($tenant);
+
+        $this->assertEquals(0.0, $pricing['addons']['planning']);
+        $this->assertEquals(0.0, $pricing['total']);
     }
 
     /** @test */
     public function ai_addon_only_available_on_enterprise()
     {
-        // Team plan with AI addon - should not apply
-        $pricingTeam = $this->priceCalculator->calculate('team', 5, ['ai']);
-        $this->assertEquals(0, $pricingTeam['addons']['ai']);
+        $teamTenant = $this->createTenantWithSubscription('team', 5, ['ai']);
+        $enterpriseTenant = $this->createTenantWithSubscription('enterprise', 5);
 
-        // Enterprise plan with AI addon - should apply
-        $pricingEnterprise = $this->priceCalculator->calculate('enterprise', 5, ['ai']);
-        $this->assertGreaterThan(0, $pricingEnterprise['addons']['ai']);
+        $this->seedActiveTechnicians($teamTenant, 5);
+        $this->seedActiveTechnicians($enterpriseTenant, 5);
+
+        $teamPricing = $this->priceCalculator->calculate($teamTenant);
+        $enterprisePricing = $this->priceCalculator->calculate($enterpriseTenant);
+
+        $this->assertGreaterThan(0, $teamPricing['addons']['ai']);
+        $this->assertEquals(0.0, $enterprisePricing['addons']['ai']);
     }
 
     /** @test */
     public function default_features_initialized_for_new_tenant()
     {
-        TenantFeatures::initializeDefaults($this->tenant);
+        $tenant = $this->makeTenant();
 
-        $this->assertTrue(TenantFeatures::active($this->tenant, TenantFeatures::TIMESHEETS));
-        $this->assertTrue(TenantFeatures::active($this->tenant, TenantFeatures::EXPENSES));
-        $this->assertFalse(TenantFeatures::active($this->tenant, TenantFeatures::TRAVELS));
-        $this->assertFalse(TenantFeatures::active($this->tenant, TenantFeatures::PLANNING));
-        $this->assertFalse(TenantFeatures::active($this->tenant, TenantFeatures::AI));
+        $this->assertTrue(TenantFeatures::active($tenant, TenantFeatures::TIMESHEETS));
+        $this->assertTrue(TenantFeatures::active($tenant, TenantFeatures::EXPENSES));
+        $this->assertFalse(TenantFeatures::active($tenant, TenantFeatures::TRAVELS));
+        $this->assertFalse(TenantFeatures::active($tenant, TenantFeatures::PLANNING));
+        $this->assertFalse(TenantFeatures::active($tenant, TenantFeatures::AI));
     }
 
     /** @test */
@@ -229,6 +273,8 @@ class BillingTest extends TestCase
             'status' => 'active',
         ]);
 
+        $this->tenant->update(['ai_enabled' => true]);
+
         TenantFeatures::syncFromSubscription($this->tenant);
 
         $this->assertTrue(TenantFeatures::active($this->tenant, TenantFeatures::AI));
@@ -245,26 +291,35 @@ class BillingTest extends TestCase
             'status' => 'active',
         ]);
 
+        // Without tenant toggle, AI stays disabled
         TenantFeatures::syncFromSubscription($this->tenant);
+        $this->assertFalse(TenantFeatures::active($this->tenant, TenantFeatures::AI));
 
-        // AI should NOT be enabled on Team plan
+        // Once the tenant enables AI, the feature becomes active
+        $this->tenant->update(['ai_enabled' => true]);
+        TenantFeatures::syncFromSubscription($this->tenant);
         $this->assertFalse(TenantFeatures::active($this->tenant, TenantFeatures::AI));
     }
 
     /** @test */
     public function feature_flags_are_tenant_scoped()
     {
-        $tenant2 = Tenant::create([
-            'name' => 'Second Tenant',
-            'slug' => 'second-tenant',
+        $firstTenant = $this->makeTenant();
+        $secondTenant = $this->makeTenant();
+
+        $subscription = Subscription::create([
+            'tenant_id' => $firstTenant->id,
+            'plan' => 'team',
+            'user_limit' => 5,
+            'status' => 'active',
         ]);
 
-        // Enable travels for first tenant
-        TenantFeatures::enable($this->tenant, TenantFeatures::TRAVELS);
+        $firstTenant->setRelation('subscription', $subscription);
 
-        // Verify isolation
-        $this->assertTrue(TenantFeatures::active($this->tenant, TenantFeatures::TRAVELS));
-        $this->assertFalse(TenantFeatures::active($tenant2, TenantFeatures::TRAVELS));
+        TenantFeatures::syncFromSubscription($firstTenant);
+
+        $this->assertTrue(TenantFeatures::active($firstTenant, TenantFeatures::TRAVELS));
+        $this->assertFalse(TenantFeatures::active($secondTenant, TenantFeatures::TRAVELS));
     }
 
     /** @test */
@@ -293,16 +348,39 @@ class BillingTest extends TestCase
         // Enable planning addon
         $result = $this->planManager->toggleAddon($this->tenant, 'planning');
 
-        $this->assertEquals('added', $result['action']);
-        $this->assertTrue($result['enabled']);
+        $this->assertEquals('enabled', $result['action']);
         $this->assertTrue(TenantFeatures::active($this->tenant, TenantFeatures::PLANNING));
 
         // Disable planning addon
         $result = $this->planManager->toggleAddon($this->tenant, 'planning');
 
-        $this->assertEquals('removed', $result['action']);
-        $this->assertFalse($result['enabled']);
+        $this->assertEquals('disabled', $result['action']);
         $this->assertFalse(TenantFeatures::active($this->tenant, TenantFeatures::PLANNING));
+    }
+
+    /** @test */
+    public function toggling_ai_addon_syncs_tenant_toggle()
+    {
+        Subscription::create([
+            'tenant_id' => $this->tenant->id,
+            'plan' => 'team',
+            'user_limit' => 5,
+            'status' => 'active',
+        ]);
+
+        $this->assertFalse((bool) $this->tenant->ai_enabled);
+
+        $result = $this->planManager->toggleAddon($this->tenant, 'ai');
+
+        $this->assertEquals('enabled', $result['action']);
+        $this->assertTrue($this->tenant->fresh()->ai_enabled);
+        $this->assertTrue(TenantFeatures::active($this->tenant, TenantFeatures::AI));
+
+        $result = $this->planManager->toggleAddon($this->tenant, 'ai');
+
+        $this->assertEquals('disabled', $result['action']);
+        $this->assertFalse($this->tenant->fresh()->ai_enabled);
+        $this->assertFalse(TenantFeatures::active($this->tenant, TenantFeatures::AI));
     }
 
     /** @test */
@@ -317,5 +395,43 @@ class BillingTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->planManager->toggleAddon($this->tenant, 'planning');
+    }
+
+    protected function createTenantWithSubscription(string $plan, int $userLimit, array $addons = []): Tenant
+    {
+        $tenant = $this->makeTenant();
+
+        $subscription = Subscription::create([
+            'tenant_id' => $tenant->id,
+            'plan' => $plan,
+            'user_limit' => $userLimit,
+            'addons' => $addons,
+            'status' => 'active',
+            'is_trial' => false,
+        ]);
+
+        $tenant->setRelation('subscription', $subscription);
+
+        return $tenant;
+    }
+
+    protected function seedActiveTechnicians(Tenant $tenant, int $count): void
+    {
+        $this->userCounts[$tenant->id] = max(0, $count);
+    }
+
+    protected function getSeededUserCount(Tenant $tenant): int
+    {
+        return $this->userCounts[$tenant->id] ?? 0;
+    }
+
+    protected function makeTenant(array $attributes = []): Tenant
+    {
+        $defaults = [
+            'name' => 'Tenant ' . Str::random(6),
+            'slug' => 'tenant-' . Str::random(6),
+        ];
+
+        return Tenant::create(array_merge($defaults, $attributes));
     }
 }

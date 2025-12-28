@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Task;
 use App\Models\Project;
+use App\Http\Controllers\Concerns\HandlesConstraintExceptions;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Database\QueryException;
 
 class TaskController extends Controller
 {
+    use HandlesConstraintExceptions;
     /**
      * Display a listing of tasks.
      */
@@ -119,12 +122,22 @@ class TaskController extends Controller
             ], 422);
         }
 
-        $task->delete();
+        try {
+            $task->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Task deleted successfully'
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Task deleted successfully'
+            ]);
+        } catch (QueryException $e) {
+            if ($this->isForeignKeyConstraint($e)) {
+                return $this->constraintConflictResponse(
+                    'This task cannot be deleted because it is referenced by related records (timesheets or planning links).'
+                );
+            }
+
+            throw $e;
+        }
     }
 
     /**

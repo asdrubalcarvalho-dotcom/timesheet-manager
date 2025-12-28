@@ -24,8 +24,9 @@ class StoreExpenseRequest extends FormRequest
     {
         $rules = [
             'project_id' => ['required', 'exists:projects,id'],
+            'technician_id' => ['nullable', 'integer', 'exists:technicians,id'],
             'date' => ['required', 'date'],
-            'category' => ['required', 'string', 'max:100'],
+            'category' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'attachment' => ['nullable', 'file', 'mimes:jpeg,jpg,png,pdf,doc,docx', 'max:5120'],
             'expense_type' => ['required', Rule::in(['reimbursement', 'mileage', 'company_card'])],

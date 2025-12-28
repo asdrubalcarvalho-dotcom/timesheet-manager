@@ -1,17 +1,50 @@
 <?php
+/*
+IMPORTANT — READ FIRST
 
+Before modifying, creating, or refactoring ANY list endpoint
+(e.g. index(), search(), by-date, summary, picker, etc.):
+
+1. You MUST read and follow ACCESS_RULES.md.
+2. You MUST validate the endpoint against ALL list rules:
+   - Technician existence
+   - Project membership scoping
+   - Canonical project manager detection
+   - Manager segregation (managers must not see other managers)
+   - List query must be >= Policy::view rules
+   - System roles must NOT be used for data scoping
+
+3. If the current behavior violates ANY rule:
+   - Explicitly state: “BUG CONFIRMED”
+   - Explain which rule is violated and where (file + lines)
+   - DO NOT change code unless explicitly asked
+
+4. If behavior is compliant:
+   - Explicitly state: “ACCESS RULES COMPLIANT”
+
+5. Never invent alternative access models.
+6. When in doubt, return LESS data, not more.
+
+Failure to follow ACCESS_RULES.md is considered a regression.
+
+*/
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\HandlesConstraintExceptions;
 use App\Http\Requests\StoreTravelSegmentRequest;
 use App\Http\Requests\UpdateTravelSegmentRequest;
 use App\Models\TravelSegment;
+use App\Models\Project;
 use App\Models\Technician;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 
 class TravelSegmentController extends Controller
 {
+    use HandlesConstraintExceptions;
     /**
      * Display a listing of travel segments.
      */
@@ -20,6 +53,57 @@ class TravelSegmentController extends Controller
         $this->authorize('viewAny', TravelSegment::class);
 
         $query = TravelSegment::with(['technician', 'project', 'originLocation', 'destinationLocation']);
+
+        $user = $request->user();
+        $isOwnerGlobalView = $user->hasRole('Owner');
+
+        // Optional subject context (used to scope projects when viewing another technician)
+        $subjectTechnician = $request->filled('technician_id')
+            ? Technician::find($request->technician_id)
+            : null;
+
+        if (!$subjectTechnician && $request->filled('user_id')) {
+            $subjectTechnician = Technician::where('user_id', $request->user_id)->first();
+        }
+
+        $subjectUser = $subjectTechnician?->user;
+        if (!$subjectUser && $request->filled('user_id')) {
+            $subjectUser = User::find($request->user_id);
+        }
+
+        $subjectManagedProjectIds = $subjectUser ? $subjectUser->getManagedProjectIds() : [];
+        $subjectVisibleProjectIds = $subjectUser
+            ? array_values(array_unique(array_merge(
+                $subjectUser->projects()->pluck('projects.id')->toArray(),
+                $subjectManagedProjectIds
+            )))
+            : null;
+
+        if ($isOwnerGlobalView) {
+            if ($subjectVisibleProjectIds !== null) {
+                $query->whereIn('project_id', $subjectVisibleProjectIds);
+            }
+        } else {
+            $technician = $user->technician;
+
+            if (!$technician) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
+                $managedProjectIds = $user->getManagedProjectIds();
+                $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
+
+                if ($subjectVisibleProjectIds !== null) {
+                    $visibleProjectIds = array_values(array_intersect($visibleProjectIds, $subjectVisibleProjectIds));
+                }
+
+                if (empty($visibleProjectIds)) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->whereIn('project_id', $visibleProjectIds);
+                }
+            }
+        }
 
         // Filter by technician
         if ($request->has('technician_id')) {
@@ -44,21 +128,6 @@ class TravelSegmentController extends Controller
             $query->where('travel_date', '<=', $request->end_date);
         }
 
-        // Apply user-based filtering
-        $user = $request->user();
-        if (!$user->hasRole(['Admin', 'Owner'])) {
-            $technician = $user->technician;
-            if ($technician) {
-                // Users see their own travels + travels from projects they manage
-                $managedProjectIds = $user->managedProjects()->pluck('id')->toArray();
-                
-                $query->where(function ($q) use ($technician, $managedProjectIds) {
-                    $q->where('technician_id', $technician->id)
-                      ->orWhereIn('project_id', $managedProjectIds);
-                });
-            }
-        }
-
         $travelSegments = $query->orderBy('travel_date', 'desc')->get();
 
         return response()->json(['data' => $travelSegments]);
@@ -72,14 +141,42 @@ class TravelSegmentController extends Controller
         $this->authorize('create', TravelSegment::class);
 
         $validated = $request->validated();
+        $user = $request->user();
+        $project = Project::with('memberRecords')->findOrFail($validated['project_id']);
 
-        // Auto-resolve technician_id if not provided
-        if (!isset($validated['technician_id'])) {
-            $technician = Technician::where('user_id', auth()->id())->first();
-            if (!$technician) {
-                return response()->json(['message' => 'No technician profile found for current user.'], 400);
+        if (!$project->isUserMember($user)) {
+            return response()->json(['error' => 'You are not assigned to this project.'], 403);
+        }
+
+        $authTechnician = Technician::where('user_id', $user->id)->first()
+            ?? Technician::where('email', $user->email)->first();
+
+        if (!$authTechnician) {
+            return response()->json(['error' => 'Technician profile not found'], 404);
+        }
+
+        $requestedTechnicianId = (int) ($validated['technician_id'] ?? 0);
+        $isProjectManager = $project->isUserProjectManager($user);
+
+        if ($requestedTechnicianId === 0) {
+            $validated['technician_id'] = $authTechnician->id;
+        } elseif ($requestedTechnicianId !== (int) $authTechnician->id) {
+            if (!$isProjectManager) {
+                return response()->json([
+                    'error' => 'Only project managers can create records for other technicians.'
+                ], 403);
             }
-            $validated['technician_id'] = $technician->id;
+
+            $targetTechnician = Technician::find($requestedTechnicianId);
+            if (!$targetTechnician) {
+                return response()->json(['error' => 'Worker not found'], 404);
+            }
+
+            if ($targetTechnician->user && !$project->memberRecords()->where('user_id', $targetTechnician->user->id)->exists()) {
+                return response()->json(['error' => 'This worker is not a member of the selected project.'], 422);
+            }
+
+            $validated['technician_id'] = $targetTechnician->id;
         }
 
         // Load technician to get contract country
@@ -100,7 +197,7 @@ class TravelSegmentController extends Controller
         $travelSegment = TravelSegment::create($validated);
 
         return response()->json([
-            'data' => $travelSegment->fresh(['technician', 'project', 'originLocation', 'destinationLocation'])
+            'data' => $travelSegment->fresh(['technician', 'project', 'originLocation', 'destinationLocation']),
         ], 201);
     }
 
@@ -123,6 +220,43 @@ class TravelSegmentController extends Controller
 
         $validated = $request->validated();
 
+        $user = $request->user();
+        $projectId = $validated['project_id'] ?? $travelSegment->project_id;
+        $project = Project::with('memberRecords')->findOrFail($projectId);
+
+        if (!$project->isUserMember($user)) {
+            return response()->json(['error' => 'You are not assigned to this project.'], 403);
+        }
+
+        $authTechnician = Technician::where('user_id', $user->id)->first()
+            ?? Technician::where('email', $user->email)->first();
+
+        if (!$authTechnician) {
+            return response()->json(['error' => 'Technician profile not found'], 404);
+        }
+
+        $requestedTechnicianId = (int) ($validated['technician_id'] ?? $travelSegment->technician_id);
+        $isProjectManager = $project->isUserProjectManager($user);
+
+        if ($requestedTechnicianId !== (int) $authTechnician->id && !$isProjectManager) {
+            return response()->json([
+                'error' => 'Only project managers can create records for other technicians.'
+            ], 403);
+        }
+
+        if (array_key_exists('technician_id', $validated) && $requestedTechnicianId !== (int) $authTechnician->id) {
+            $targetTechnician = Technician::find($requestedTechnicianId);
+            if (!$targetTechnician) {
+                return response()->json(['error' => 'Worker not found'], 404);
+            }
+
+            if ($targetTechnician->user && !$project->memberRecords()->where('user_id', $targetTechnician->user->id)->exists()) {
+                return response()->json(['error' => 'This worker is not a member of the selected project.'], 422);
+            }
+        } else {
+            $validated['technician_id'] = $travelSegment->technician_id;
+        }
+
         // Re-classify direction if countries changed
         if (isset($validated['origin_country']) || isset($validated['destination_country'])) {
             $originCountry = $validated['origin_country'] ?? $travelSegment->origin_country;
@@ -144,7 +278,7 @@ class TravelSegmentController extends Controller
         $travelSegment->update($validated);
 
         return response()->json([
-            'data' => $travelSegment->fresh(['technician', 'project', 'originLocation', 'destinationLocation'])
+            'data' => $travelSegment->fresh(['technician', 'project', 'originLocation', 'destinationLocation']),
         ]);
     }
 
@@ -155,9 +289,19 @@ class TravelSegmentController extends Controller
     {
         $this->authorize('delete', $travelSegment);
 
-        $travelSegment->delete();
+        try {
+            $travelSegment->delete();
 
-        return response()->json(['message' => 'Travel segment deleted successfully']);
+            return response()->json(['message' => 'Travel segment deleted successfully']);
+        } catch (QueryException $e) {
+            if ($this->isForeignKeyConstraint($e)) {
+                return $this->constraintConflictResponse(
+                    'This travel segment cannot be deleted because it has related records (timesheets or linked data).'
+                );
+            }
+
+            throw $e;
+        }
     }
 
     /**
@@ -264,17 +408,40 @@ class TravelSegmentController extends Controller
             $query->where('project_id', $validated['project_id']);
         }
 
-        // Apply authorization filter (same as index)
         $user = $request->user();
-        if (!$user->hasRole(['Admin', 'Owner'])) {
+        $isGlobalView = $user->hasRole(['Owner', 'Admin']);
+
+        if (!$isGlobalView) {
             $technician = $user->technician;
-            if ($technician) {
+
+            if (!$technician) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
                 $managedProjectIds = $user->getManagedProjectIds();
-                
-                $query->where(function ($q) use ($technician, $managedProjectIds) {
-                    $q->where('technician_id', $technician->id)
-                      ->orWhereIn('project_id', $managedProjectIds);
-                });
+                $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
+
+                if (empty($visibleProjectIds)) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->whereIn('project_id', $visibleProjectIds);
+
+                    $query->where(function ($q) use ($technician, $managedProjectIds) {
+                        $q->where('technician_id', $technician->id);
+
+                        if (!empty($managedProjectIds)) {
+                            $q->orWhere(function ($managedQuery) use ($managedProjectIds) {
+                                $managedQuery
+                                    ->whereIn('project_id', $managedProjectIds)
+                                    ->whereHas('technician.user.memberRecords', function ($memberQuery) {
+                                        $memberQuery
+                                            ->whereColumn('project_members.project_id', 'travel_segments.project_id')
+                                            ->where('project_role', 'member');
+                                    });
+                            });
+                        }
+                    });
+                }
             }
         }
 

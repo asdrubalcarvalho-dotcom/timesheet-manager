@@ -24,9 +24,9 @@ class StoreTravelSegmentRequest extends FormRequest
             'project_id' => ['required', 'integer', 'exists:projects,id'],
             'start_at' => ['required', 'date'],
             'end_at' => ['nullable', 'date', 'after_or_equal:start_at'],
-            'origin_country' => ['required', 'string', 'size:2'],
+            'origin_country' => ['required', 'string', 'size:2', 'exists:countries,iso2'],
             'origin_location_id' => ['nullable', 'integer', 'exists:locations,id'],
-            'destination_country' => ['required', 'string', 'size:2'],
+            'destination_country' => ['required', 'string', 'size:2', 'exists:countries,iso2'],
             'destination_location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'status' => ['nullable', 'in:planned,completed,cancelled'],
         ];

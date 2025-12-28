@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import AlertSnackbar from '../components/Common/AlertSnackbar';
 import type { AlertColor } from '@mui/material';
+import { setGlobalNotifier } from '../services/globalNotifications';
 
 interface Notification {
   id: number;
@@ -55,6 +56,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   const showInfo = useCallback((message: string) => {
     showNotification(message, 'info');
+  }, [showNotification]);
+
+  useEffect(() => {
+    setGlobalNotifier((message: string, severity: AlertColor) => {
+      showNotification(message, severity);
+    });
+
+    return () => {
+      setGlobalNotifier(null);
+    };
   }, [showNotification]);
 
   const handleClose = useCallback(() => {

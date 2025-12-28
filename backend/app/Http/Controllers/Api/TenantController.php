@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateTenantAiRequest;
 use App\Models\Company;
 use App\Models\PendingTenantSignup;
 use App\Models\Tenant;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Modules\Billing\Models\Subscription;
 use Stancl\Tenancy\Database\Models\Domain;
 
 class TenantController extends Controller
@@ -31,7 +33,8 @@ class TenantController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'company_name' => 'required|string|max:255',
-            'slug' => 'required|string|max:100|unique:tenants,slug|regex:/^[a-z0-9-]+$/',
+            // Central endpoint: target central DB explicitly in case tenancy is initialized from request headers.
+            'slug' => 'required|string|max:100|unique:mysql.tenants,slug|regex:/^[a-z0-9-]+$/',
             'admin_name' => 'required|string|max:255',
             'admin_email' => 'required|string|email|max:255',
             'admin_password' => 'required|string|min:8|confirmed',
@@ -185,16 +188,16 @@ class TenantController extends Controller
                 $connection = $dbConfig->connection();
                 \Log::info('Connection config generated', ['connection' => $connection]);
             } catch (\Exception $e) {
-                \Log::error('Failed to get connection config', [
+                \Log::warning('DatabaseConfig test failed', [
+                    'tenant_id' => $tenant->id,
                     'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
+                    'trace' => $e->getTraceAsString(),
                 ]);
             }
 
             $tenant->run(function () use ($request, $tenant, &$adminToken, $databaseName) {
                 // MANUAL DATABASE CONNECTION (DatabaseTenancyBootstrapper disabled)
                 // Set the tenant connection to use the newly created database
-                config(['database.connections.tenant.database' => $databaseName]);
                 DB::purge('tenant'); // Clear any cached connection
                 DB::reconnect('tenant'); // Reconnect with new database
                 DB::setDefaultConnection('tenant'); // Switch to tenant connection
@@ -369,15 +372,45 @@ class TenantController extends Controller
     }
 
     /**
+     * Toggle AI addon availability for a tenant.
+     */
+    public function updateAiToggle(UpdateTenantAiRequest $request, ?Tenant $tenant = null): JsonResponse
+    {
+        $tenant ??= tenancy()->tenant;
+
+        if (!$tenant) {
+            return response()->json([
+                'message' => 'Tenant context is required to update AI preferences.',
+            ], 400);
+        }
+
+        // AI add-on follows the same tenant-scoped control model as Planning.
+        // No system-level role is required for tenant feature management.
+        $tenant->update([
+            'ai_enabled' => $request->boolean('ai_enabled'),
+        ]);
+
+        return response()->json([
+            'tenant' => [
+                'ai_enabled' => (bool) $tenant->ai_enabled,
+            ],
+        ]);
+    }
+
+    /**
      * Request tenant signup - creates pending signup and sends verification email.
      */
     public function requestSignup(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'company_name' => 'required|string|max:255',
-            'slug' => 'required|string|max:100|unique:tenants,slug|unique:pending_tenant_signups,slug|regex:/^[a-z0-9-]+$/',
+            // IMPORTANT: This endpoint is CENTRAL (no tenant context required).
+            // A frontend request may still include X-Tenant (e.g. from <tenant>.localhost),
+            // which can initialize tenancy and change the default DB connection to `tenant`.
+            // Explicitly target the central connection to avoid querying `tenants` inside a tenant DB.
+            'slug' => 'required|string|max:100|unique:mysql.tenants,slug|unique:mysql.pending_tenant_signups,slug|regex:/^[a-z0-9-]+$/',
             'admin_name' => 'required|string|max:255',
-            'admin_email' => 'required|string|email|max:255|unique:pending_tenant_signups,admin_email',
+            'admin_email' => 'required|string|email|max:255|unique:mysql.pending_tenant_signups,admin_email',
             'admin_password' => 'required|string|min:8|confirmed',
             'industry' => 'nullable|string|max:100',
             'country' => 'nullable|string|size:2',
@@ -436,12 +469,21 @@ class TenantController extends Controller
                 'expires_at' => $pendingSignup->expires_at,
             ]);
 
-            return response()->json([
+            $response = [
                 'status' => 'pending',
                 'message' => 'Verification email sent successfully',
                 'email' => $request->admin_email,
                 'expires_in_hours' => 24,
-            ], 200);
+            ];
+
+            // DEV/TEST helper: return the exact same link/token used in the email,
+            // so the test button can copy/paste it reliably.
+            if (app()->environment(['local', 'testing'])) {
+                $response['verification_url'] = $verificationUrl;
+                $response['verification_token'] = $verificationToken;
+            }
+
+            return response()->json($response, 200);
 
         } catch (\Exception $e) {
             \Log::error('Pending tenant signup failed', [
@@ -509,16 +551,22 @@ class TenantController extends Controller
                 ], 400);
             }
 
-            // Check if slug was taken in the meantime
-            if (Tenant::where('slug', $pendingSignup->slug)->exists()) {
-                return response()->json([
-                    'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
-                    'error' => 'slug_taken',
-                ], 409);
-            }
+            // If a previous verify attempt partially created the tenant, resume provisioning
+            // instead of blocking the user with slug_taken.
+            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+            if ($existingTenant) {
+                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
+                    return response()->json([
+                        'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
+                        'error' => 'slug_taken',
+                    ], 409);
+                }
 
-            // All checks passed - create the tenant using existing logic
-            $tenant = $this->createTenantFromPendingSignup($pendingSignup);
+                $tenant = $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup);
+            } else {
+                // All checks passed - create the tenant using existing logic
+                $tenant = $this->createTenantFromPendingSignup($pendingSignup);
+            }
 
             // Mark as verified and delete pending signup
             $pendingSignup->delete();
@@ -590,7 +638,7 @@ class TenantController extends Controller
 
         // 4. Run tenant migrations (MUST be done before accessing tenant tables)
         try {
-            Artisan::call('tenants:migrate', ['--tenants' => $tenant->id]);
+            Artisan::call('tenants:migrate', ['tenant' => $tenant->id]);
         } catch (\Exception $e) {
             \Log::error('Failed to run tenant migrations', [
                 'tenant_id' => $tenant->id,
@@ -703,6 +751,107 @@ class TenantController extends Controller
                 'created_by' => $owner->id,
                 'updated_by' => $owner->id,
             ]);
+        });
+
+        return $tenant;
+    }
+
+    /**
+     * Resume tenant provisioning for an already-created tenant that matches the pending signup.
+     * This makes the email verification flow robust to partial failures (e.g. DB permission issues).
+     */
+    private function ensureTenantProvisionedFromPendingSignup(Tenant $tenant, PendingTenantSignup $pendingSignup): Tenant
+    {
+        $tenant->refresh();
+
+        $databaseName = $tenant->getInternal('db_name');
+
+        DB::statement("CREATE DATABASE IF NOT EXISTS `{$databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+        try {
+            Artisan::call('tenants:migrate', ['tenant' => $tenant->id]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to run tenant migrations (resume)', [
+                'tenant_id' => $tenant->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Ensure trial subscription exists (central)
+        if (!Subscription::where('tenant_id', $tenant->id)->exists()) {
+            $planManager = app(PlanManager::class);
+            $planManager->startTrialForTenant($tenant);
+        }
+
+        // Configure tenant connection
+        config(['database.connections.tenant' => [
+            'driver' => 'mysql',
+            'host' => config('database.connections.mysql.host'),
+            'port' => config('database.connections.mysql.port'),
+            'database' => $databaseName,
+            'username' => config('database.connections.mysql.username'),
+            'password' => config('database.connections.mysql.password'),
+            'unix_socket' => config('database.connections.mysql.unix_socket'),
+            'charset' => config('database.connections.mysql.charset'),
+            'collation' => config('database.connections.mysql.collation'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => config('database.connections.mysql.options', []),
+        ]]);
+
+        // Provision tenant DB (idempotently)
+        $tenant->run(function () use ($pendingSignup, $tenant, $databaseName) {
+            config(['database.connections.tenant.database' => $databaseName]);
+            DB::purge('tenant');
+            DB::reconnect('tenant');
+            DB::setDefaultConnection('tenant');
+
+            \Artisan::call('migrate', [
+                '--path'  => 'database/migrations/tenant',
+                '--force' => true,
+            ]);
+
+            \Artisan::call('db:seed', [
+                '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
+                '--force' => true,
+            ]);
+
+            // Create Company if missing
+            if (!Company::where('tenant_id', $tenant->id)->exists()) {
+                Company::create([
+                    'tenant_id' => $tenant->id,
+                    'name'      => $pendingSignup->company_name,
+                    'industry'  => $pendingSignup->industry,
+                    'country'   => $pendingSignup->country,
+                    'timezone'  => $pendingSignup->timezone,
+                    'status'    => 'active',
+                ]);
+            }
+
+            // Create owner if missing
+            if (!User::where('email', $pendingSignup->admin_email)->exists()) {
+                $owner = User::create([
+                    'name'              => $pendingSignup->admin_name,
+                    'email'             => $pendingSignup->admin_email,
+                    'password'          => $pendingSignup->password_hash,
+                    'email_verified_at' => now(),
+                    'role'              => 'Owner',
+                ]);
+
+                $owner->assignRole('Owner');
+
+                \App\Models\Technician::create([
+                    'name'       => $owner->name,
+                    'email'      => $owner->email,
+                    'role'       => 'owner',
+                    'phone'      => null,
+                    'user_id'    => $owner->id,
+                    'created_by' => $owner->id,
+                    'updated_by' => $owner->id,
+                ]);
+            }
         });
 
         return $tenant;

@@ -25,6 +25,7 @@ interface User {
   is_admin: boolean;
   managed_projects: number[];
   tenant_id?: string;
+  tenant?: Tenant;
   project_memberships?: Array<{
     project_id: number;
     project_role: 'member' | 'manager';
@@ -39,6 +40,7 @@ interface Tenant {
   name: string;
   status: string;
   plan?: string;
+  ai_enabled?: boolean;
 }
 
 interface AuthContextType {

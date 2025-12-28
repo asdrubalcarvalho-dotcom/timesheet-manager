@@ -66,7 +66,7 @@ return [
 
     'allowed_origins_patterns' => [
         '/^https?:\/\/([a-z0-9-]+\.)?vendaslive\.com$/',
-        '/^http:\/\/[a-z0-9-]+\.localhost:8082$/',  // Dev tenant subdomains
+        '/^http:\/\/.+\.localhost:8082$/',  // Dev tenant subdomains (any subdomain)
     ],
 
     /*

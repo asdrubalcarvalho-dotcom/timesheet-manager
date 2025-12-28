@@ -41,7 +41,16 @@ class SetupDatabasePermissions extends Command
             $grants = $this->getCurrentGrants($username, $host);
             
             if (empty($grants)) {
-                $this->error("❌ Could not retrieve grants. Make sure you have root/admin access.");
+                // In many environments the current DB user cannot run:
+                //   SHOW GRANTS FOR 'user'@'%'
+                // but it can still run:
+                //   SHOW GRANTS
+                // Use that as a best-effort read-only fallback to avoid noisy failures.
+                $grants = $this->getCurrentUserGrants();
+            }
+
+            if (empty($grants)) {
+                $this->error("❌ Could not retrieve grants. This usually requires root/admin access.");
                 return 1;
             }
 
@@ -113,6 +122,24 @@ class SetupDatabasePermissions extends Command
             }, $results);
         } catch (\Exception $e) {
             // If we can't get grants, return empty array
+            return [];
+        }
+    }
+
+    /**
+     * Best-effort fallback: get grants for the currently authenticated MySQL user.
+     */
+    private function getCurrentUserGrants(): array
+    {
+        try {
+            $pdo = DB::connection('mysql')->getPdo();
+            $stmt = $pdo->query('SHOW GRANTS');
+            $results = $stmt->fetchAll(\PDO::FETCH_NUM);
+
+            return array_map(function ($row) {
+                return (object) ['Grant' => $row[0]];
+            }, $results);
+        } catch (\Exception $e) {
             return [];
         }
     }

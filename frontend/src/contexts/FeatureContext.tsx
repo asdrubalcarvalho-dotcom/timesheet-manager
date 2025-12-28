@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useBilling } from './BillingContext';
+import type { FeatureFlagValue } from '../api/billing';
 
 /**
  * FeatureContext - Read-only computed feature flags
@@ -45,6 +46,13 @@ export interface FeatureContextValue {
 
 const FeatureContext = createContext<FeatureContextValue | undefined>(undefined);
 
+const resolveFeatureEnabled = (value: FeatureFlagValue | boolean | undefined): boolean => {
+  if (value && typeof value === 'object') {
+    return Boolean(value.enabled);
+  }
+  return Boolean(value);
+};
+
 export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { billingSummary, loading } = useBilling();
 
@@ -58,11 +66,15 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ai: false,
     };
 
+    const enabledModules = Object.entries(features)
+      .filter(([, featureValue]) => resolveFeatureEnabled(featureValue as FeatureFlagValue))
+      .map(([featureName]) => featureName);
+
     return {
-      hasTravels: !!features.travels,
-      hasPlanning: !!features.planning,
-      hasAI: !!features.ai,
-      enabledModules: Object.keys(features).filter((f) => features[f as keyof typeof features] === true),
+      hasTravels: resolveFeatureEnabled(features.travels),
+      hasPlanning: resolveFeatureEnabled(features.planning),
+      hasAI: resolveFeatureEnabled(features.ai),
+      enabledModules,
       loading,
     };
   }, [billingSummary?.features, loading]);

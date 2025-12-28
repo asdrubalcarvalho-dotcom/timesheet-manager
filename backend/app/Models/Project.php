@@ -116,12 +116,6 @@ class Project extends Model
      */
     public function isUserProjectManager(User $user): bool
     {
-        // Check if user is the direct manager of the project
-        if ($this->manager_id === $user->id) {
-            return true;
-        }
-
-        // Check if user is a manager via project_members table
         return $this->memberRecords()
                     ->where('user_id', $user->id)
                     ->where('project_role', 'manager')
@@ -133,12 +127,6 @@ class Project extends Model
      */
     public function isUserExpenseManager(User $user): bool
     {
-        // Check if user is the direct manager of the project
-        if ($this->manager_id === $user->id) {
-            return true;
-        }
-
-        // Check if user is a manager via project_members table
         return $this->memberRecords()
                     ->where('user_id', $user->id)
                     ->where('expense_role', 'manager')

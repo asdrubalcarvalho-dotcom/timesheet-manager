@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'can.edit.timesheets' => \App\Http\Middleware\CanEditTimesheets::class,
             'can.edit.expenses' => \App\Http\Middleware\CanEditExpenses::class,
+            'can_edit_planning' => \App\Http\Middleware\CanEditPlanning::class,
             'can.manage.project.members' => \App\Http\Middleware\CanManageProjectMembers::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'tenant.domain' => \App\Http\Middleware\InitializeTenancyByDomainWithFallback::class,
