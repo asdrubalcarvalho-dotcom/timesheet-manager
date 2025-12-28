@@ -9,9 +9,20 @@ SQLSTATE[42000]: Syntax error or access violation: 1044 Access denied for user '
 
 **Causa**: O user `timesheet` do MySQL não tem permissões para criar novos databases (necessário para multi-tenancy).
 
+> 📌 **Requisito obrigatório** — O utilizador MySQL configurado no `.env` **precisa** de:
+> - `GRANT CREATE ON *.* TO 'timesheet'@'%'` (permite criar `timesheet_<ULID>`)
+> - `GRANT DROP ON *.* TO 'timesheet'@'%'` ou, no mínimo, `GRANT DROP ON \`timesheet_%\`.*` (permite apagar DBs de tenant durante testes)
+> - `GRANT ALL PRIVILEGES ON \`timesheet_%\`.* TO 'timesheet'@'%'` (CRUD completo dentro de cada schema)
+
+Sem estes três grants o fluxo `Tenant::create()` falha ao provisionar a base dedicada.
+
 ---
 
 ## ✅ Solução Automática (Recomendada)
+
+> ✅ **Atualização (Dez 2025)**: as permissões de multi-tenancy passaram a ser
+> aplicadas automaticamente no bootstrap do MySQL via `docker-entrypoint-initdb.d`.
+> Isto elimina o problema recorrente após `docker-compose down -v`.
 
 ### 1. Comando Artisan (Mais Rápido)
 
@@ -22,6 +33,11 @@ docker-compose exec app php artisan db:setup-permissions
 # Forçar reconfiguração mesmo se já existirem
 docker-compose exec app php artisan db:setup-permissions --force
 ```
+
+**Nota importante:** em ambientes onde o utilizador do MySQL *não tem* privilégios de admin,
+o comando pode não conseguir aplicar `GRANT` (precisa de root/DBA). Ele continua útil para
+diagnóstico e agora faz fallback para `SHOW GRANTS` do utilizador atual quando não consegue
+executar `SHOW GRANTS FOR 'timesheet'@'%'`.
 
 **O que o comando faz:**
 - ✅ Verifica permissões atuais do user `timesheet`
@@ -58,7 +74,7 @@ FLUSH PRIVILEGES;
 ```yaml
 database:
   volumes:
-    - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-multi-tenancy-grants.sql:ro
 ```
 
 ⚠️ **Atenção**: O script só roda em **primeiro setup**. Se já existe volume MySQL, precisa usar:
@@ -67,6 +83,9 @@ database:
 docker-compose down -v
 docker-compose up -d
 ```
+
+✅ **Depois de `down -v`**: não precisas de correr nada manualmente — o `init.sql` volta a correr
+quando o MySQL inicializa o volume novo.
 
 ---
 
@@ -175,8 +194,8 @@ docker-compose exec database mysql -u root -proot < docker/mysql/init.sql
 **Causa**: `docker-compose down -v` remove volumes, incluindo permissões do MySQL
 
 **Solução permanente**:
-1. ✅ `init.sql` é remontado automaticamente no próximo `up`
-2. ✅ Rodar `php artisan db:setup-permissions` após cada `down -v`
+1. ✅ Manter o `init.sql` montado em `/docker-entrypoint-initdb.d` (como em `docker-compose.yml`)
+2. ✅ Após `down -v`, as permissões voltam automaticamente no próximo `up`
 3. ✅ Evitar usar `-v` se não quer perder dados
 
 ### Database já existe mas sem permissões
