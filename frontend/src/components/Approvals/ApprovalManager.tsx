@@ -46,7 +46,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import type { TimesheetManagerRow, TimesheetManagerSummary, Technician, Expense, Project, Task, Location, Timesheet, TravelSegment } from '../../types';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
-import { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth, API_URL } from '../../services/api';
+import api, { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth, API_URL } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 import TimesheetEditDialog from '../Timesheets/TimesheetEditDialog';
 import PageHeader from '../Common/PageHeader';
@@ -54,6 +54,7 @@ import { useApprovalCounts } from '../../hooks/useApprovalCounts';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
 import InputDialog from '../Common/InputDialog';
 import ExpenseApprovalPanel from './ExpenseApprovalPanel';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 type TabKey = 'timesheets' | 'expenses';
 
@@ -63,8 +64,13 @@ const ApprovalManager: React.FC = () => {
   const { isManager, isAdmin, user } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para counts
   useTenantGuard(); // Ensure tenant_slug exists
-  const canManageTimesheets = isManager() || isAdmin();
+  // Use permission first (owners may not be in Manager/Admin role but still can approve).
+  const canManageTimesheets =
+    isManager() ||
+    isAdmin() ||
+    (Array.isArray((user as any)?.permissions) && (user as any).permissions.includes('approve-timesheets'));
   const { showSuccess, showError } = useNotification();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('approvals');
 
   const [tabValue, setTabValue] = useState<TabKey>('timesheets');
   const [managerRows, setManagerRows] = useState<TimesheetManagerRow[]>([]);
@@ -237,6 +243,7 @@ const ApprovalManager: React.FC = () => {
   }, [tabValue, loadExpensePending]);
 
   const handleApproveSingle = async (id: number) => {
+    if (!ensureWritable()) return;
     try {
       await timesheetsApi.approve(id);
       fetchManagerData();
@@ -246,12 +253,14 @@ const ApprovalManager: React.FC = () => {
   };
 
   const handleRejectSingle = async (id: number) => {
+    if (!ensureWritable()) return;
     setInputDialog({
       open: true,
       title: 'Reject Entry',
       message: 'Please provide a reason for rejecting this entry:',
       action: async (reason: string) => {
         try {
+          if (!ensureWritable()) return;
           await timesheetsApi.reject(id, reason);
           fetchManagerData();
           showSuccess('Entry rejected successfully');
@@ -265,6 +274,7 @@ const ApprovalManager: React.FC = () => {
   };
 
   const handleBulkAction = async (action: 'approve' | 'reject') => {
+    if (!ensureWritable()) return;
     if (!selectionModel.length) {
       return;
     }
@@ -306,6 +316,7 @@ const ApprovalManager: React.FC = () => {
   };
 
   const executeBulkAction = async (action: 'approve' | 'reject', ids: GridRowSelectionModel) => {
+    if (!ensureWritable()) return;
     if (action === 'reject') {
       // Open input dialog for rejection reason
       setInputDialog({
@@ -314,6 +325,7 @@ const ApprovalManager: React.FC = () => {
         message: 'Please provide a reason for rejecting the selected entries:',
         action: async (rejectionReason: string) => {
           try {
+            if (!ensureWritable()) return;
             for (const id of ids) {
               await timesheetsApi.reject(Number(id), rejectionReason);
             }
@@ -483,20 +495,42 @@ const ApprovalManager: React.FC = () => {
     setTravelDetailsOpen(true);
     
     try {
+      let sawUpgradeRequired = false;
+      let sawNonUpgradeError = false;
+
       // Fetch full travel segment details using the segment_ids
       const travelPromises = row.travels.segment_ids.map(async (id) => {
-        const response = await fetchWithAuth(`${API_URL}/api/travels/${id}`);
-        if (response.ok) {
-          return response.json();
+        try {
+          const response = await api.get(`/api/travels/${id}`);
+          return response.data;
+        } catch (error: any) {
+          const status = error?.response?.status;
+          const data = error?.response?.data;
+
+          if (status === 403 && data?.upgrade_required === true) {
+            sawUpgradeRequired = true;
+            return null;
+          }
+
+          sawNonUpgradeError = true;
+          return null;
         }
-        return null;
       });
       
       const travels = await Promise.all(travelPromises);
       setSelectedTravels(travels.filter(Boolean));
+
+      if (sawNonUpgradeError && !sawUpgradeRequired) {
+        showError('Failed to load travel details');
+      }
     } catch (error) {
       console.error('Error loading travel details:', error);
-      showError('Failed to load travel details');
+      const status = (error as any)?.response?.status;
+      const data = (error as any)?.response?.data;
+      const isUpgradeRequired = status === 403 && data?.upgrade_required === true;
+      if (!isUpgradeRequired) {
+        showError('Failed to load travel details');
+      }
     } finally {
       setLoadingTravels(false);
     }
@@ -1015,7 +1049,7 @@ const ApprovalManager: React.FC = () => {
             color="success"
             size="small"
             startIcon={<Check />}
-            disabled={!selectionModel.length}
+            disabled={isReadOnly || !selectionModel.length}
             onClick={() => handleBulkAction('approve')}
             sx={{ px: 2, fontSize: '0.875rem' }}
           >
@@ -1026,7 +1060,7 @@ const ApprovalManager: React.FC = () => {
             color="error"
             size="small"
             startIcon={<Close />}
-            disabled={!selectionModel.length}
+            disabled={isReadOnly || !selectionModel.length}
             onClick={() => handleBulkAction('reject')}
             sx={{ px: 2, fontSize: '0.875rem' }}
           >
@@ -1156,7 +1190,7 @@ const ApprovalManager: React.FC = () => {
         projects={projects}
         tasks={tasks}
         locations={locations}
-        readOnly={false}
+        readOnly={isReadOnly}
         showApprovalButtons={selectedRow?.status === 'submitted'}
         onApprove={handleApproveTimesheet}
         onReject={handleRejectTimesheet}

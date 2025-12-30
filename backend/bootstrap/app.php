@@ -38,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'sanctum.tenant' => \App\Http\Middleware\SetSanctumTenantConnection::class,
             'auth.token' => \App\Http\Middleware\AuthenticateViaToken::class,
             'module' => \App\Http\Middleware\EnsureModuleEnabled::class, // Billing: Feature-based module access control
+            'subscription.write' => \App\Http\Middleware\EnsureSubscriptionWriteAccess::class, // Billing: Read-only mode hardening
             'telemetry.internal' => \App\Http\Middleware\TelemetryInternalMiddleware::class, // Telemetry API authentication
             'telemetry.superadmin' => \App\Http\Middleware\EnsureSuperAdminAccess::class, // SuperAdmin telemetry access control
         ]);

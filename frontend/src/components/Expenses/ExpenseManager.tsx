@@ -26,6 +26,7 @@ import InputDialog from '../Common/InputDialog';
 import { useNotification } from '../../contexts/NotificationContext';
 import { getAuthHeaders, fetchWithAuth, API_URL, techniciansApi, projectsApi } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface Project {
   id: number;
@@ -73,6 +74,7 @@ const expenseCategories = [
 export const ExpenseManager: React.FC = () => {
   const { showSuccess, showError, showWarning } = useNotification();
   useTenantGuard(); // Ensure tenant_slug exists
+  const { isReadOnly: isReadOnlyMode, warn: showReadOnlyWarning } = useReadOnlyGuard('expenses');
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
@@ -185,12 +187,20 @@ export const ExpenseManager: React.FC = () => {
   }, [selectedTechnicianId]);
 
   const handleAddNew = () => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     setSelectedExpense(null);
     resetForm();
     setDialogOpen(true);
   };
 
   const handleEdit = (expense: ExpenseEntry) => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     setSelectedExpense(expense);
     setProjectId(expense.project_id);
     const rawTechnicianId = Number((expense as any)?.technician_id ?? (expense as any)?.technician?.id);
@@ -229,6 +239,10 @@ export const ExpenseManager: React.FC = () => {
   };
 
   const handleSave = async (e?: React.FormEvent) => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     if (e) {
       e.preventDefault();
     }
@@ -343,6 +357,10 @@ export const ExpenseManager: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
         const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}`, {
@@ -368,6 +386,10 @@ export const ExpenseManager: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     if (!selectedExpense?.id) return;
     
     try {
@@ -387,6 +409,10 @@ export const ExpenseManager: React.FC = () => {
   };
 
   const handleApprove = async () => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     if (!selectedExpense?.id) return;
     
     try {
@@ -406,6 +432,10 @@ export const ExpenseManager: React.FC = () => {
   };
 
   const handleReject = async () => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     if (!selectedExpense?.id) return;
     
     setInputDialog({
@@ -414,6 +444,10 @@ export const ExpenseManager: React.FC = () => {
       message: 'Please provide a reason for rejecting this expense:',
       action: async (reason: string) => {
         try {
+          if (isReadOnlyMode) {
+            showReadOnlyWarning();
+            return;
+          }
           const response = await fetchWithAuth(`${API_URL}/api/expenses/${selectedExpense.id}/reject`, {
             method: 'PUT',
             headers: {
@@ -560,14 +594,14 @@ export const ExpenseManager: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           <IconButton
             onClick={() => handleEdit(params.row)}
-            disabled={params.row.status === 'approved'}
+            disabled={isReadOnlyMode || params.row.status === 'approved'}
             size="small"
           >
             <Edit />
           </IconButton>
           <IconButton
             onClick={() => handleDelete(params.row.id!)}
-            disabled={params.row.status === 'approved'}
+            disabled={isReadOnlyMode || params.row.status === 'approved'}
             size="small"
             color="error"
           >
@@ -606,7 +640,7 @@ export const ExpenseManager: React.FC = () => {
             title="No expenses yet"
             subtitle="Click the + button to submit your first expense entry"
             actionLabel="Add Expense"
-            onAction={handleAddNew}
+            onAction={isReadOnlyMode ? showReadOnlyWarning : handleAddNew}
           />
         )}
 
@@ -632,11 +666,17 @@ export const ExpenseManager: React.FC = () => {
           color="primary"
           aria-label="add expense"
           onClick={handleAddNew}
+          disabled={isReadOnlyMode}
           sx={{ 
             position: 'fixed', 
             bottom: 32, 
             right: 32,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&.Mui-disabled': {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
+              opacity: 0.5,
+            },
             '&:hover': {
               background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
             }
@@ -891,6 +931,7 @@ export const ExpenseManager: React.FC = () => {
               form="expense-form"
               variant="contained"
               color="primary"
+              disabled={isReadOnlyMode}
             >
               {selectedExpense ? 'Update' : 'Save as Draft'}
             </Button>
@@ -898,21 +939,21 @@ export const ExpenseManager: React.FC = () => {
           
           {/* Submit button (only for draft/rejected) */}
           {selectedExpense && (selectedExpense.status === 'draft' || selectedExpense.status === 'rejected') && (
-            <Button onClick={handleSubmit} variant="contained" color="primary">
+            <Button onClick={handleSubmit} variant="contained" color="primary" disabled={isReadOnlyMode}>
               Submit for Approval
             </Button>
           )}
           
           {/* Approve button (only for submitted - Manager) */}
           {selectedExpense && selectedExpense.status === 'submitted' && (
-            <Button onClick={handleApprove} variant="contained" color="success">
+            <Button onClick={handleApprove} variant="contained" color="success" disabled={isReadOnlyMode}>
               Approve (Send to Finance)
             </Button>
           )}
           
           {/* Reject button (only for submitted or finance_review) */}
           {selectedExpense && (selectedExpense.status === 'submitted' || selectedExpense.status === 'finance_review') && (
-            <Button onClick={handleReject} variant="contained" color="error">
+            <Button onClick={handleReject} variant="contained" color="error" disabled={isReadOnlyMode}>
               Reject
             </Button>
           )}

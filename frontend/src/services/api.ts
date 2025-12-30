@@ -132,6 +132,37 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// In-memory dedupe for upgrade-required toasts to avoid spamming on auto-load pages
+const UPGRADE_TOAST_DEDUPE_WINDOW_MS = 60_000;
+const upgradeToastLastShownAt = new Map<string, number>();
+
+const shouldShowUpgradeToast = (key: string): boolean => {
+  const now = Date.now();
+  const lastShownAt = upgradeToastLastShownAt.get(key);
+
+  if (lastShownAt && now - lastShownAt < UPGRADE_TOAST_DEDUPE_WINDOW_MS) {
+    return false;
+  }
+
+  upgradeToastLastShownAt.set(key, now);
+  return true;
+};
+
+const READ_ONLY_STORAGE_KEY = 'tenant_read_only_mode';
+
+const setReadOnlyModeFlag = (enabled: boolean): void => {
+  try {
+    if (enabled) {
+      localStorage.setItem(READ_ONLY_STORAGE_KEY, '1');
+    } else {
+      localStorage.removeItem(READ_ONLY_STORAGE_KEY);
+    }
+    window.dispatchEvent(new Event('tenant-read-only-mode-changed'));
+  } catch {
+    // ignore storage/event errors
+  }
+};
+
 // Global 403 handling (UX-only): show backend message, then re-throw.
 api.interceptors.response.use(
   (response) => response,
@@ -139,6 +170,41 @@ api.interceptors.response.use(
     const status = error?.response?.status;
     if (status === 403) {
       const data = error?.response?.data;
+      const upgradeRequired = data?.upgrade_required === true;
+
+      if (upgradeRequired) {
+        const reason = typeof data?.reason === 'string' ? data.reason : undefined;
+
+        if (reason === 'subscription_expired') {
+          setReadOnlyModeFlag(true);
+
+          const dedupeKey = 'subscription_expired';
+          if (shouldShowUpgradeToast(dedupeKey)) {
+            notifyGlobal('Your subscription has expired. You are in read-only mode.', 'warning');
+          }
+
+          return Promise.reject(error);
+        }
+
+        const moduleValue = typeof data?.module === 'string' ? data.module.trim() : '';
+        const planValue = typeof data?.plan === 'string' ? data.plan.trim() : '';
+        const msg = data?.message ?? data?.error;
+
+        const moduleLabel = moduleValue || 'this feature';
+        const dedupeKey = planValue ? `${moduleLabel}:${planValue}` : moduleLabel;
+
+        if (shouldShowUpgradeToast(dedupeKey)) {
+          const finalMessage =
+            typeof msg === 'string' && msg.trim()
+              ? `Feature locked: ${moduleLabel}. ${msg.trim()}`
+              : `Feature locked: ${moduleLabel}. Upgrade required.`;
+
+          notifyGlobal(finalMessage, 'warning');
+        }
+
+        return Promise.reject(error);
+      }
+
       const msg = data?.message ?? data?.error;
 
       if (typeof msg === 'string' && msg.trim()) {

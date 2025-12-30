@@ -117,6 +117,9 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
   }, [taskId, locationId, tasks]);
 
   const handleSave = async () => {
+    if (readOnly) {
+      return;
+    }
     if (!projectId || !taskId || !locationId || !selectedDate || !startTimeObj || !endTimeObj) {
       console.error('Please fill all required fields');
       return;

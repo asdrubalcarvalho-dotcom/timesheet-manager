@@ -17,7 +17,7 @@ class ExpireTrials extends Command
     /**
      * The console command description.
      */
-    protected $description = 'Expire tenant trials and downgrade to Starter when trial_ends_at has passed';
+    protected $description = 'Expire tenant trials (enter read-only mode) when trial_ends_at has passed';
 
     /**
      * Execute the console command.
@@ -48,11 +48,11 @@ class ExpireTrials extends Command
                 continue;
             }
 
-            // End trial and downgrade to Starter
+            // End trial due to expiration (do NOT downgrade plan)
             $updatedSubscription = $planManager->endTrialForTenant($tenant);
 
             if ($updatedSubscription) {
-                $this->info("Expired trial for tenant {$tenant->id} ({$tenant->slug}), downgraded to Starter.");
+                $this->info("Expired trial for tenant {$tenant->id} ({$tenant->slug}), entered read-only mode.");
                 $count++;
             } else {
                 $this->warn("Failed to end trial for tenant {$tenant->id} ({$tenant->slug}).");

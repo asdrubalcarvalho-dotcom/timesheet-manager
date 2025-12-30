@@ -55,7 +55,7 @@ const DRAWER_WIDTH_COLLAPSED = 72;
 export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange }) => {
   const { user, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
-  const { hasTravels, hasAI } = useFeatures(); // Billing-controlled feature flags
+  const { hasTravels, hasAI, hasPlanning } = useFeatures(); // Billing-controlled feature flags
   const { billingSummary } = useBilling(); // Get billing info to check trial status
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -189,7 +189,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   ];
 
   const visiblePlanningItems = planningItems.filter((item) => item.show);
-  const showPlanningSection = visiblePlanningItems.length > 0;
+  const showPlanningSection = hasPlanning && visiblePlanningItems.length > 0;
 
   const administrationItems = [
     {

@@ -59,7 +59,7 @@ Route::middleware([
     });
 
     // Protected tenant routes
-    Route::middleware(['auth:sanctum'])->group(function () {
+    Route::middleware(['auth:sanctum', 'subscription.write'])->group(function () {
         
         // Dashboard
         Route::get('/dashboard/statistics', [App\Http\Controllers\Api\DashboardController::class, 'getStatistics']);

@@ -160,6 +160,12 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.log('[BillingContext] 📡 Calling getBillingSummary API...');
       const summary = await getBillingSummary();
       console.log('[BillingContext] ✅ API response received:', summary);
+      // Keep local read-only marker in sync with backend source-of-truth
+      if (summary?.read_only === true) {
+        localStorage.setItem('tenant_read_only_mode', '1');
+      } else {
+        localStorage.removeItem('tenant_read_only_mode');
+      }
       setBillingSummary(summary);
       console.log('[BillingContext] ✅ State updated with new summary');
     } catch (err) {

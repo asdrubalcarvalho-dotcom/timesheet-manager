@@ -28,6 +28,7 @@ import { Link } from 'react-router-dom';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../Auth/AuthContext';
 import { useBilling } from '../../contexts/BillingContext';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface UserRecord {
   id: number;
@@ -57,6 +58,7 @@ const UsersManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const { user: currentUser } = useAuth();
   const { billingSummary, loading: billingLoading } = useBilling();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-users');
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -97,6 +99,9 @@ const UsersManager: React.FC = () => {
   };
 
   const handleOpenDialog = (user?: UserRecord) => {
+    if (!ensureWritable()) {
+      return;
+    }
     // Prevent editing Owner users (except by themselves)
     if (user?.is_owner && user.user_id !== currentUser?.id) {
       showError('Owner users can only be edited by themselves');
@@ -155,6 +160,10 @@ const UsersManager: React.FC = () => {
       e.preventDefault();
     }
 
+    if (!ensureWritable()) {
+      return;
+    }
+
     try {
       const payload: any = {
         name: formData.name,
@@ -206,6 +215,9 @@ const UsersManager: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (!ensureWritable()) {
+      return;
+    }
     const user = users.find(u => u.id === id);
     
     // Prevent deleting Owner users
@@ -223,6 +235,9 @@ const UsersManager: React.FC = () => {
         role: user?.role
       },
       action: async () => {
+        if (!ensureWritable()) {
+          return;
+        }
         try {
           await api.delete(`/api/technicians/${id}`);
           showSuccess('User deleted successfully');
@@ -358,13 +373,14 @@ const UsersManager: React.FC = () => {
         const isOwnUser = user.user_id === currentUser?.id;
         const canEdit = !isOwner || isOwnUser; // Owner can only edit themselves
         const canDelete = !isOwner; // Owner cannot be deleted
+        const canWrite = !isReadOnly;
         
         return (
           <Box>
             <IconButton
               size="small"
               onClick={() => handleOpenDialog(user)}
-              disabled={!canEdit}
+              disabled={!canEdit || !canWrite}
               sx={{ 
                 color: canEdit ? '#667eea' : '#ccc',
                 '&:disabled': { color: '#ccc' }
@@ -375,7 +391,7 @@ const UsersManager: React.FC = () => {
             <IconButton
               size="small"
               onClick={() => handleDelete(user.id)}
-              disabled={!canDelete}
+              disabled={!canDelete || !canWrite}
               sx={{ 
                 color: canDelete ? '#f44336' : '#ccc',
                 '&:disabled': { color: '#ccc' }
@@ -397,7 +413,12 @@ const UsersManager: React.FC = () => {
           title="No users yet"
           subtitle="Create your first user to start managing your team"
           actionLabel="New User"
-          onAction={() => handleOpenDialog()}
+          onAction={() => {
+            if (!ensureWritable()) {
+              return;
+            }
+            handleOpenDialog();
+          }}
         />
       ) : (
         <>
@@ -452,10 +473,20 @@ const UsersManager: React.FC = () => {
         <Fab
           color="primary"
           onClick={() => handleOpenDialog()}
+          disabled={isReadOnly}
           sx={{
             position: 'fixed',
             bottom: 32,
-            right: 32
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&.Mui-disabled': {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
+              opacity: 0.5,
+            },
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
           }}
         >
           <AddIcon />
@@ -549,6 +580,7 @@ const UsersManager: React.FC = () => {
             form="user-form"
             variant="contained"
             color="primary"
+            disabled={isReadOnly}
           >
             {editingUser ? 'Update' : 'Create'}
           </Button>

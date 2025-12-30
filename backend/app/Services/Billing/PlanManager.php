@@ -20,6 +20,54 @@ use App\Models\User;
 class PlanManager
 {
     /**
+     * Resolve the effective subscription state for a tenant.
+     *
+     * States are independent from plan.
+     * active | trial | expired | past_due | cancelled
+     */
+    private function resolveSubscriptionState(Tenant $tenant, ?Subscription $subscription): string
+    {
+        if (!$subscription) {
+            // No paid subscription record.
+            // If tenant trial is still active, this is NOT read-only.
+            if ($tenant->trial_ends_at && now()->lt($tenant->trial_ends_at)) {
+                return 'trial';
+            }
+
+            // No active paid subscription AND trial is past or missing => expired (read-only)
+            return 'expired';
+        }
+
+        // Trial window
+        if ($subscription->is_trial) {
+            if ($subscription->trial_ends_at && now()->lt($subscription->trial_ends_at)) {
+                return 'trial';
+            }
+            return 'expired';
+        }
+
+        // Past due / cancelled
+        if (in_array($subscription->status, ['past_due', 'unpaid'], true)) {
+            return 'past_due';
+        }
+        if (in_array($subscription->status, ['canceled', 'cancelled'], true)) {
+            return 'cancelled';
+        }
+
+        // Paid period ended
+        if ($subscription->billing_period_ends_at && now()->gt($subscription->billing_period_ends_at)) {
+            // Guard against stale billing_period_ends_at after upgrades: if renewal is in the future,
+            // the subscription should be treated as active.
+            if ($subscription->next_renewal_at && now()->lt($subscription->next_renewal_at)) {
+                return 'active';
+            }
+            return 'expired';
+        }
+
+        return 'active';
+    }
+
+    /**
      * Start a 15‑day Enterprise trial for a tenant.
      */
     public function startTrialForTenant(Tenant $tenant): Subscription
@@ -39,19 +87,20 @@ class PlanManager
         $subscription->addons        = []; // All included during trial
         $subscription->save();
 
+        // Track lifecycle separately from plan
+        $tenant->subscription_state = 'trial';
+        $tenant->save();
+
         $this->syncFeaturesForSubscription($tenant, $subscription);
 
         return $subscription;
     }
 
     /**
-     * End trial and downgrade to Starter plan.
-     * 
-     * Called when trial expires (either manually or via scheduled command).
-     * Idempotent: safe to call multiple times, will not error if trial already ended.
-     * 
-     * @param Tenant $tenant
-     * @return Subscription|null Returns updated subscription, or null if no subscription exists
+     * End trial due to expiration.
+     *
+     * IMPORTANT RULE: Expiration is NOT a plan downgrade.
+     * We set subscription_state='expired' and block writes via middleware.
      */
     public function endTrialForTenant(Tenant $tenant): ?Subscription
     {
@@ -62,47 +111,29 @@ class PlanManager
             return null;
         }
 
-        // Already ended = idempotent, return as-is
+        // Not a trial anymore = nothing to do
         if (!$subscription->is_trial) {
             return $subscription;
         }
 
-        // End trial only if trial_ends_at has passed (or is null)
+        // Only end trial if trial_ends_at has passed (or is null)
         if ($subscription->trial_ends_at && $subscription->trial_ends_at->isFuture()) {
-            // Trial still active, don't end it
             return $subscription;
         }
 
-        // Store previous plan for history logging
-        $previousPlan = $subscription->plan;
-        
-        // Downgrade to Starter plan
-        $subscription->plan          = 'starter';
-        $subscription->is_trial      = false;
-        $subscription->trial_ends_at = null;
-        $subscription->addons        = []; // Starter has no addons
-        $subscription->user_limit    = 2;  // Starter allows max 2 users
-        $subscription->status        = 'active'; // Keep active
-        
-        // Clear any pending downgrade (trial expiration takes precedence)
-        $subscription->pending_plan = null;
-        $subscription->pending_user_limit = null;
-        
+        // Mark trial ended, but do not touch plan.
+        $subscription->is_trial = false;
+
+        // Trial expiration should enter read-only mode.
+        // Mark the billing period as ended so lifecycle resolution stays `expired`
+        // even if status is still `active`.
+        if (!$subscription->billing_period_ends_at) {
+            $subscription->billing_period_ends_at = now()->subSecond();
+        }
         $subscription->save();
 
-        // Log the trial expiration as a plan change
-        $this->logPlanChange(
-            $tenant,
-            $previousPlan,
-            'starter',
-            null, // trial has no user limit
-            2,    // starter has 2 users
-            'system',
-            'Trial expired - downgraded to Starter plan'
-        );
-
-        // Sync Pennant features to Starter (only timesheets + expenses)
-        $this->syncPennantFeatures($tenant, $subscription);
+        $tenant->subscription_state = 'expired';
+        $tenant->save();
 
         return $subscription;
     }
@@ -311,16 +342,21 @@ class PlanManager
      */
     public function getSubscriptionSummary(Tenant $tenant): array
     {
-        // Auto-expire trial if past end date (ensures API never shows expired trial as active)
+        // Ensure subscription_state reflects current subscription lifecycle
         $subscription = $tenant->subscription;
-        if ($subscription && $subscription->is_trial && $subscription->trial_ends_at) {
-            if ($subscription->trial_ends_at->isPast()) {
-                $this->endTrialForTenant($tenant);
-                // Reload both tenant and subscription relationship after changes
-                $tenant->refresh();
-                $tenant->load('subscription');
-                $subscription = $tenant->subscription; // Re-assign to get fresh data
-            }
+        $resolvedState = $this->resolveSubscriptionState($tenant, $subscription);
+        if (($tenant->subscription_state ?: 'active') !== $resolvedState) {
+            $tenant->subscription_state = $resolvedState;
+            $tenant->save();
+        }
+
+        // Auto-end trial when past end date (expiration is NOT a plan downgrade)
+        if ($subscription && $subscription->is_trial && $subscription->trial_ends_at && $subscription->trial_ends_at->isPast()) {
+            $this->endTrialForTenant($tenant);
+            $tenant->refresh();
+            $tenant->load('subscription');
+            $subscription = $tenant->subscription;
+            $resolvedState = $this->resolveSubscriptionState($tenant, $subscription);
         }
         
         // Get pricing calculation from PriceCalculator (never duplicate logic)
@@ -333,6 +369,10 @@ class PlanManager
         $summary['entitlements']['ai'] = $aiEntitled;
         $summary['toggles']['ai_enabled'] = $aiToggle;
         $summary['features']['ai'] = $aiEntitled && $aiToggle;
+
+        // Read-only mode ONLY when trial is not active and there is no active paid subscription
+        $summary['subscription_state'] = $resolvedState;
+        $summary['read_only'] = !in_array($resolvedState, ['active', 'trial'], true);
         
         // Add subscription metadata
         $subscription = $tenant->subscription;
@@ -424,6 +464,25 @@ class PlanManager
         
         // CRITICAL: Set next_renewal_at = now + 30 days for IMMEDIATE upgrades
         $subscription->next_renewal_at = Carbon::now()->addDays(30);
+
+        // Ensure paid subscriptions are not stuck in read-only due to stale billing_period_ends_at.
+        // Prefer using the same date already computed for next_renewal_at.
+        if ($subscription->status === 'active' && !$subscription->is_trial) {
+            $periodEnd = $subscription->next_renewal_at;
+
+            if (!$subscription->billing_period_started_at) {
+                $subscription->billing_period_started_at = Carbon::now();
+            }
+
+            if (!$subscription->billing_period_ends_at || $subscription->billing_period_ends_at->isPast()) {
+                $subscription->billing_period_ends_at = $periodEnd;
+            }
+
+            if (($tenant->subscription_state ?: 'active') !== 'active') {
+                $tenant->subscription_state = 'active';
+                $tenant->save();
+            }
+        }
         
         $subscription->save();
         
@@ -560,6 +619,14 @@ class PlanManager
             throw new \InvalidArgumentException('No active subscription found.');
         }
 
+        // EXPIRED REACTIVATION SEMANTICS:
+        // If the subscription lifecycle is expired, "scheduling" a downgrade makes no sense
+        // (there is no next renewal date). Allow immediate activation of the free Starter plan.
+        $resolvedState = $this->resolveSubscriptionState($tenant, $subscription);
+        if ($resolvedState === 'expired' && $targetPlan === 'starter') {
+            return $this->applyExpiredToStarterActivation($tenant, $subscription);
+        }
+
         // SPECIAL CASE: Trial → Paid Plan (IMMEDIATE conversion)
         if ($subscription->is_trial) {
             return $this->applyTrialToPaidConversion($tenant, $subscription, $targetPlan, $targetUserLimit);
@@ -650,6 +717,75 @@ class PlanManager
             'current_plan' => $subscription->plan,
             'next_plan' => $targetPlan,
             'pending_user_limit' => $subscription->pending_user_limit,
+        ];
+    }
+
+    /**
+     * Immediate activation path for expired subscriptions selecting the free Starter plan.
+     *
+     * This intentionally avoids creating a Stripe payment for a €0.00 plan and avoids
+     * storing pending downgrade fields (no next renewal when expired).
+     */
+    private function applyExpiredToStarterActivation(Tenant $tenant, Subscription $subscription): array
+    {
+        // Validate active users (Starter hard cap)
+        $currentUserCount = $tenant->run(function () {
+            return \App\Models\Technician::where('is_active', 1)->count();
+        });
+
+        if ($currentUserCount > 2) {
+            throw new \InvalidArgumentException(
+                "Cannot convert to Starter plan. You have {$currentUserCount} active users, but Starter supports only 2. Please reduce users first or select another plan."
+            );
+        }
+
+        $previousPlan = $subscription->plan;
+        $previousUserLimit = $subscription->user_limit;
+
+        // Apply Starter immediately
+        $subscription->plan = 'starter';
+        $subscription->is_trial = false;
+        $subscription->trial_ends_at = null;
+        $subscription->user_limit = 2;
+        $subscription->addons = [];
+        $subscription->status = 'active';
+
+        // Clear any pending downgrade and lifecycle dates that keep the tenant in read-only mode
+        $subscription->pending_plan = null;
+        $subscription->pending_user_limit = null;
+        $subscription->next_renewal_at = null;
+        $subscription->billing_period_started_at = null;
+        $subscription->billing_period_ends_at = null;
+
+        $subscription->save();
+
+        // Mark tenant active so write-guards unblock immediately.
+        if (($tenant->subscription_state ?: 'active') !== 'active') {
+            $tenant->subscription_state = 'active';
+            $tenant->save();
+        }
+
+        $this->logPlanChange(
+            $tenant,
+            $previousPlan,
+            'starter',
+            $previousUserLimit,
+            2,
+            auth()->user()?->email ?? 'system',
+            'Expired subscription reactivated to Starter (immediate)'
+        );
+
+        $this->syncPennantFeatures($tenant, $subscription);
+
+        return [
+            'success' => true,
+            'message' => 'Starter plan activated immediately.',
+            'is_immediate' => true,
+            'plan' => $subscription->plan,
+            'user_limit' => $subscription->user_limit,
+            'subscription_start_date' => $this->toIso8601($subscription->subscription_start_date),
+            'next_renewal_at' => $this->toIso8601($subscription->next_renewal_at),
+            'is_trial' => false,
         ];
     }
 

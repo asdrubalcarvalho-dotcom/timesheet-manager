@@ -127,14 +127,31 @@ class PaymentSnapshot
             throw new InvalidArgumentException('Cannot apply unpaid payment snapshot');
         }
 
-        // Update subscription with snapshot values
-        $subscription->update([
+        $updates = [
             'plan' => $payment->plan,
             'user_limit' => $payment->user_limit, // Purchased licenses are stored as user_limit on payments
             'addons' => $payment->addons ?? [],
             'next_renewal_at' => $payment->cycle_end,
+            // Keep billing period fields in sync with snapshot to avoid stale-period read-only regressions.
+            'billing_period_started_at' => $payment->cycle_start,
+            'billing_period_ends_at' => $payment->cycle_end,
             'status' => 'active',
-        ]);
+        ];
+
+        // Successful paid checkout must end an active Enterprise trial.
+        // Otherwise PriceCalculator will keep returning trial_enterprise (total=0).
+        if ($subscription->is_trial) {
+            $updates['is_trial'] = false;
+            $updates['trial_ends_at'] = null;
+        }
+
+        // Update subscription with snapshot values
+        $subscription->update($updates);
+
+        // Ensure subscription_start_date is set once the tenant is on a paid plan.
+        if ($subscription->plan !== 'starter') {
+            app(PlanManager::class)->setSubscriptionStartDate($subscription);
+        }
 
         // Ensure tenant feature flags stay in sync with updated subscription
         $tenant = $subscription->tenant ?? Tenant::find($subscription->tenant_id);

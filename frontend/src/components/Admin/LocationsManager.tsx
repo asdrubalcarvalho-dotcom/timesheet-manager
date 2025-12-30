@@ -27,6 +27,7 @@ import ConfirmationDialog from '../Common/ConfirmationDialog';
 import EmptyState from '../Common/EmptyState';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface Location {
   id: number;
@@ -65,6 +66,7 @@ const normalizeApiResponse = <T,>(payload: unknown): T[] => {
 
 const LocationsManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-locations');
   const [locations, setLocations] = useState<Location[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +118,9 @@ const LocationsManager: React.FC = () => {
   };
 
   const handleOpenDialog = (location?: Location) => {
+    if (!ensureWritable()) {
+      return;
+    }
     if (location) {
       setEditingLocation(location);
       setFormData({
@@ -160,6 +165,10 @@ const LocationsManager: React.FC = () => {
       e.preventDefault();
     }
 
+    if (!ensureWritable()) {
+      return;
+    }
+
     // Frontend validation
     if (!formData.name || !formData.country_id || !formData.city) {
       showError('Name, Country, and City are required fields');
@@ -199,6 +208,9 @@ const LocationsManager: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (!ensureWritable()) {
+      return;
+    }
     const location = locations.find(l => l.id === id);
     setConfirmDialog({
       open: true,
@@ -210,6 +222,9 @@ const LocationsManager: React.FC = () => {
         country: location?.country
       },
       action: async () => {
+        if (!ensureWritable()) {
+          return;
+        }
         try {
           await api.delete(`/api/locations/${id}`);
           showSuccess('Location deleted successfully');
@@ -308,6 +323,7 @@ const LocationsManager: React.FC = () => {
           <IconButton
             size="small"
             onClick={() => handleOpenDialog(params.row as Location)}
+            disabled={isReadOnly}
             sx={{ color: '#ff9800' }}
           >
             <EditIcon fontSize="small" />
@@ -315,6 +331,7 @@ const LocationsManager: React.FC = () => {
           <IconButton
             size="small"
             onClick={() => handleDelete(params.row.id)}
+            disabled={isReadOnly}
             sx={{ color: '#f44336' }}
           >
             <DeleteIcon fontSize="small" />
@@ -332,7 +349,12 @@ const LocationsManager: React.FC = () => {
           title="No locations yet"
           subtitle="Create your first location to track where work is performed"
           actionLabel="New Location"
-          onAction={() => handleOpenDialog()}
+          onAction={() => {
+            if (!ensureWritable()) {
+              return;
+            }
+            handleOpenDialog();
+          }}
         />
       ) : (
         <Box sx={{ width: '100%', overflowX: 'auto' }}>
@@ -370,10 +392,20 @@ const LocationsManager: React.FC = () => {
       <Fab
           color="primary"
           onClick={() => handleOpenDialog()}
+          disabled={isReadOnly}
           sx={{
             position: 'fixed',
             bottom: 32,
-            right: 32
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&.Mui-disabled': {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
+              opacity: 0.5,
+            },
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
           }}
         >
           <AddIcon />
@@ -475,6 +507,7 @@ const LocationsManager: React.FC = () => {
             form="location-form"
             variant="contained"
             color="primary"
+            disabled={isReadOnly}
           >
             {editingLocation ? 'Update' : 'Create'}
           </Button>

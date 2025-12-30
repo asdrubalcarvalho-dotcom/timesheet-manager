@@ -166,7 +166,7 @@ class StripeGateway implements PaymentGatewayInterface
         }
 
         // Create Stripe customer if not exists
-        $stripeCustomerId = $this->ensureStripeCustomer($tenant);
+        $stripeCustomerId = $this->ensureStripeCustomerId($tenant);
 
         // Create payment in database first
         $payment = new Payment();
@@ -228,6 +228,44 @@ class StripeGateway implements PaymentGatewayInterface
                 'tenant_id' => $tenant->id,
             ]);
             throw new \RuntimeException('Failed to create Stripe payment: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Ensure tenant has a Stripe customer ID.
+     *
+     * Public wrapper used by controllers/services.
+     * Returns a structured result to avoid throwing fatals in calling code.
+     */
+    public function ensureStripeCustomer(Tenant $tenant): array
+    {
+        if (!$this->isConfigured) {
+            return [
+                'success' => false,
+                'customer_id' => null,
+                'error' => 'Stripe is not configured.',
+            ];
+        }
+
+        try {
+            $customerId = $this->ensureStripeCustomerId($tenant);
+
+            return [
+                'success' => true,
+                'customer_id' => $customerId,
+                'error' => null,
+            ];
+        } catch (\Throwable $e) {
+            \Log::error('[StripeGateway] Failed to ensure Stripe customer', [
+                'tenant_id' => $tenant->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'customer_id' => null,
+                'error' => $e->getMessage(),
+            ];
         }
     }
 
@@ -314,7 +352,7 @@ class StripeGateway implements PaymentGatewayInterface
             throw new \RuntimeException('Stripe is not configured.');
         }
 
-        $stripeCustomerId = $this->ensureStripeCustomer($tenant);
+        $stripeCustomerId = $this->ensureStripeCustomerId($tenant);
 
         try {
             $setupIntent = $this->stripe->setupIntents->create([
@@ -399,7 +437,7 @@ class StripeGateway implements PaymentGatewayInterface
             throw new \RuntimeException('Stripe is not configured.');
         }
 
-        $stripeCustomerId = $this->ensureStripeCustomer($tenant);
+        $stripeCustomerId = $this->ensureStripeCustomerId($tenant);
 
         try {
             // Attach payment method to customer
@@ -512,7 +550,7 @@ class StripeGateway implements PaymentGatewayInterface
     /**
      * Ensure tenant has a Stripe customer ID.
      */
-    protected function ensureStripeCustomer(Tenant $tenant): string
+    protected function ensureStripeCustomerId(Tenant $tenant): string
     {
         if ($tenant->stripe_customer_id) {
             return $tenant->stripe_customer_id;

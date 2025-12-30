@@ -23,6 +23,7 @@ import ConfirmationDialog from '../Common/ConfirmationDialog';
 import EmptyState from '../Common/EmptyState';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface Country {
   id: number;
@@ -61,6 +62,7 @@ const normalizeApiResponse = <T,>(payload: unknown): T[] => {
 
 const CountriesManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-countries');
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +103,9 @@ const CountriesManager: React.FC = () => {
   };
 
   const handleOpenDialog = (country?: Country) => {
+    if (!ensureWritable()) {
+      return;
+    }
     if (country) {
       setEditingCountry(country);
       setFormData({
@@ -122,6 +127,10 @@ const CountriesManager: React.FC = () => {
   const handleSave = async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
+    }
+
+    if (!ensureWritable()) {
+      return;
     }
 
     const name = formData.name.trim();
@@ -157,6 +166,9 @@ const CountriesManager: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (!ensureWritable()) {
+      return;
+    }
     const country = countries.find(c => c.id === id);
     if (!country) return;
 
@@ -183,6 +195,9 @@ const CountriesManager: React.FC = () => {
           confirmText: 'Force delete',
           confirmColor: 'warning',
           action: async () => {
+            if (!ensureWritable()) {
+              return;
+            }
             try {
               await attemptDelete(country, true);
               showSuccess('Country deleted successfully');
@@ -210,10 +225,10 @@ const CountriesManager: React.FC = () => {
       sortable: false,
       renderCell: ({ row }: GridRenderCellParams<Country>) => (
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton size="small" onClick={() => handleOpenDialog(row)}>
+          <IconButton size="small" onClick={() => handleOpenDialog(row)} disabled={isReadOnly}>
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" color="error" onClick={() => handleDelete(row.id)}>
+          <IconButton size="small" color="error" onClick={() => handleDelete(row.id)} disabled={isReadOnly}>
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -229,7 +244,12 @@ const CountriesManager: React.FC = () => {
           title="No countries"
           subtitle="Create your first country to use it in dropdowns."
           actionLabel="Add Country"
-          onAction={() => handleOpenDialog()}
+          onAction={() => {
+            if (!ensureWritable()) {
+              return;
+            }
+            handleOpenDialog();
+          }}
         />
       ) : (
         <Box sx={{ height: 560, width: '100%' }}>
@@ -250,10 +270,20 @@ const CountriesManager: React.FC = () => {
         <Fab
           color="primary"
           onClick={() => handleOpenDialog()}
+          disabled={isReadOnly}
           sx={{
             position: 'fixed',
             bottom: 32,
             right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&.Mui-disabled': {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
+              opacity: 0.5,
+            },
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
           }}
         >
           <AddIcon />
@@ -284,7 +314,7 @@ const CountriesManager: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-            <Button type="submit" variant="contained">
+            <Button type="submit" variant="contained" disabled={isReadOnly}>
               {editingCountry ? 'Update' : 'Create'}
             </Button>
           </DialogActions>

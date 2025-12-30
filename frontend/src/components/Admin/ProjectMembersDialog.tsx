@@ -20,6 +20,7 @@ import { Delete as DeleteIcon } from '@mui/icons-material';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
 import api from '../../services/api';
 import type { ProjectMember, Technician } from '../../types';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface ProjectSummary {
   id: number;
@@ -51,6 +52,7 @@ const normalizeArray = <T,>(payload: unknown): T[] => {
 };
 
 const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, project, onClose }) => {
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-project-members');
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<Technician[]>([]);
@@ -120,6 +122,9 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
 
   const handleMemberRoleChange = async (member: ProjectMember, field: 'project_role' | 'expense_role' | 'finance_role', value: Role) => {
     if (!project) return;
+    if (!ensureWritable()) {
+      return;
+    }
 
     setUpdatingMemberId(member.user_id);
     try {
@@ -140,6 +145,9 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
 
   const handleRemoveMember = async (member: ProjectMember) => {
     if (!project) return;
+    if (!ensureWritable()) {
+      return;
+    }
     
     setConfirmDialog({
       open: true,
@@ -153,6 +161,9 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
         finance_role: member.finance_role
       },
       action: async () => {
+        if (!ensureWritable()) {
+          return;
+        }
         setUpdatingMemberId(member.user_id);
         try {
           await api.delete(`/api/projects/${project.id}/members/${member.user_id}`);
@@ -170,6 +181,9 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
 
   const handleAddMember = async () => {
     if (!project || formData.user_id === '') return;
+    if (!ensureWritable()) {
+      return;
+    }
 
     setSavingNewMember(true);
     try {
@@ -238,7 +252,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                     color="error"
                     size="small"
                     onClick={() => handleRemoveMember(member)}
-                    disabled={updatingMemberId === member.user_id}
+                    disabled={isReadOnly || updatingMemberId === member.user_id}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -253,7 +267,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                     onChange={(event) =>
                       handleMemberRoleChange(member, 'project_role', event.target.value as Role)
                     }
-                    disabled={updatingMemberId === member.user_id}
+                    disabled={isReadOnly || updatingMemberId === member.user_id}
                   >
                     <MenuItem value="none">
                       <em>None</em>
@@ -270,7 +284,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                     onChange={(event) =>
                       handleMemberRoleChange(member, 'expense_role', event.target.value as Role)
                     }
-                    disabled={updatingMemberId === member.user_id}
+                    disabled={isReadOnly || updatingMemberId === member.user_id}
                   >
                     <MenuItem value="none">
                       <em>None</em>
@@ -287,7 +301,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                     onChange={(event) =>
                       handleMemberRoleChange(member, 'finance_role', event.target.value as Role)
                     }
-                    disabled={updatingMemberId === member.user_id}
+                    disabled={isReadOnly || updatingMemberId === member.user_id}
                   >
                     <MenuItem value="none">
                       <em>None</em>
@@ -321,7 +335,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
               onChange={(event) =>
                 setFormData({ ...formData, user_id: Number(event.target.value) })
               }
-              disabled={savingNewMember}
+              disabled={isReadOnly || savingNewMember}
             >
               {assignableUsers.map((user) => (
                 <MenuItem key={user.user_id} value={user.user_id}>
@@ -339,7 +353,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                 onChange={(event) =>
                   setFormData({ ...formData, project_role: event.target.value as Role })
                 }
-                disabled={savingNewMember}
+                disabled={isReadOnly || savingNewMember}
               >
                 <MenuItem value="none">
                   <em>None</em>
@@ -356,7 +370,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                 onChange={(event) =>
                   setFormData({ ...formData, expense_role: event.target.value as Role })
                 }
-                disabled={savingNewMember}
+                disabled={isReadOnly || savingNewMember}
               >
                 <MenuItem value="none">
                   <em>None</em>
@@ -373,7 +387,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                 onChange={(event) =>
                   setFormData({ ...formData, finance_role: event.target.value as Role })
                 }
-                disabled={savingNewMember}
+                disabled={isReadOnly || savingNewMember}
               >
                 <MenuItem value="none">
                   <em>None</em>
@@ -390,7 +404,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
         <Button
           variant="contained"
           onClick={handleAddMember}
-          disabled={savingNewMember || formData.user_id === ''}
+          disabled={isReadOnly || savingNewMember || formData.user_id === ''}
         >
           Assign user
         </Button>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { aiService } from '../services/aiService';
 import type { AISuggestion, SuggestionRequest } from '../services/aiService';
+import { useFeatures } from '../contexts/FeatureContext';
 
 export interface UseAISuggestionOptions {
   autoLoad?: boolean;
@@ -23,6 +24,7 @@ export const useAISuggestion = (
   options: UseAISuggestionOptions = {}
 ): UseAISuggestionReturn => {
   const { minConfidence = 0.3 } = options;
+  const { hasAI, loading: featuresLoading } = useFeatures();
   
   const [suggestion, setSuggestion] = useState<AISuggestion | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,6 +34,15 @@ export const useAISuggestion = (
 
   // Check AI availability on mount
   useEffect(() => {
+    if (featuresLoading) {
+      return;
+    }
+
+    if (!hasAI) {
+      setIsAIAvailable(false);
+      return;
+    }
+
     const checkAIStatus = async () => {
       try {
         const status = await aiService.checkStatus();
@@ -47,7 +58,7 @@ export const useAISuggestion = (
     };
 
     checkAIStatus();
-  }, []);
+  }, [hasAI, featuresLoading]);
 
   const loadSuggestion = async (request: SuggestionRequest) => {
     setIsLoading(true);

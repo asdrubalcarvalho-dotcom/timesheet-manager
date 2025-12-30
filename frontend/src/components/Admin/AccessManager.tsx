@@ -21,6 +21,7 @@ import api from '../../services/api';
 import AdminLayout from './AdminLayout';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useFeatures } from '../../contexts/FeatureContext';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface Role {
   id: number;
@@ -37,6 +38,7 @@ interface RolePermissions {
 const AccessManager: React.FC = () => {
   const { showSuccess, showError, showInfo } = useNotification();
   const { hasAI } = useFeatures();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-access');
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<RolePermissions>({});
@@ -99,6 +101,9 @@ const AccessManager: React.FC = () => {
   const handleMatrixClose = () => setMatrixOpen(false);
 
   const handleTogglePermission = async (role: string, permission: string) => {
+    if (!ensureWritable()) {
+      return;
+    }
     setMatrixLoading(true);
     try {
       const hasPerm = rolePermissions[role]?.includes(permission);
@@ -191,6 +196,7 @@ const AccessManager: React.FC = () => {
                           checked={rolePermissions[role.name]?.includes(perm.name) || false}
                           onChange={() => handleTogglePermission(role.name, perm.name)}
                           color="primary"
+                          disabled={isReadOnly}
                         />
                       </TableCell>
                     ))}

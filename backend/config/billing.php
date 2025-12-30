@@ -319,7 +319,7 @@ return [
 
     'portal' => [
         'enabled' => env('BILLING_PORTAL_ENABLED', true),
-        'return_url' => env('APP_URL') . '/billing',
+        'return_url' => env('BILLING_PORTAL_RETURN_URL', env('APP_URL') . '/billing'),
     ],
 
     /*

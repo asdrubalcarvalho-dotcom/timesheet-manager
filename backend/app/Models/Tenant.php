@@ -34,6 +34,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'ai_enabled',
         'subscription_renews_at',
         'subscription_status',
+        'subscription_state',
         'subscription_last_event',
         'subscription_last_status_change_at',
         'is_paused',
@@ -62,6 +63,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'deactivated_at' => 'datetime',
         'is_paused' => 'boolean',
         'ai_enabled' => 'boolean',
+        'subscription_state' => 'string',
         // Stripe Tax fields
         'billing_country' => 'string',
         'billing_address' => 'string',

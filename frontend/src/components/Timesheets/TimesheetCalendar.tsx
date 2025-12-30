@@ -11,6 +11,8 @@ import type { TravelSegment } from '../../services/travels';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
+import { useFeatures } from '../../contexts/FeatureContext';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 // API Response types
 interface ApiResponse<T> {
@@ -155,6 +157,7 @@ const DAILY_HOUR_CAP = 12;
 
 const TimesheetCalendar: React.FC = () => {
   const { user, isManager, isAdmin, loading: authLoading } = useAuth();
+  const { hasTravels } = useFeatures();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
@@ -175,6 +178,7 @@ const TimesheetCalendar: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<Timesheet | null>(null);
+  const [currentCalendarViewType, setCurrentCalendarViewType] = useState<string>('dayGridMonth');
   
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState({ 
@@ -187,6 +191,8 @@ const TimesheetCalendar: React.FC = () => {
   
   // Global notification hook
   const { showSuccess, showError, showWarning } = useNotification();
+
+  const { isReadOnly: isReadOnlyMode, warn: showReadOnlyWarning } = useReadOnlyGuard('timesheets');
   
   // Form state
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
@@ -440,6 +446,9 @@ const TimesheetCalendar: React.FC = () => {
   // Handle view change - reload data when switching to Week view
   const handleViewChange = useCallback((info: any) => {
     console.log('View changed to:', info.view.type, 'Date range:', info.startStr, 'to', info.endStr);
+
+    // Track active view type to allow view-specific header formatting
+    setCurrentCalendarViewType(info.view.type);
     
     // Don't reload timesheets on view change - let the existing data render
     // Timesheets are already loaded and will display correctly in any view
@@ -538,6 +547,11 @@ const TimesheetCalendar: React.FC = () => {
 
   const loadTravels = async (month?: string, technicianId?: number) => {
     // Load travels for calendar month view integration
+    if (!hasTravels) {
+      setTravelsByDate({});
+      return;
+    }
+
     try {
       const params: any = {};
       
@@ -687,6 +701,10 @@ const TimesheetCalendar: React.FC = () => {
   }, [dialogOpen, selectedEntry, selectedDate, projectId, taskId, locationId, projects, tasks, locations, user]);
 
   const handleDateSelect = (selectInfo: DateSelectArg) => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     console.log('Date select:', selectInfo.startStr, 'allDay:', selectInfo.allDay, 'isMobile:', isMobile);
     
     const startDateTime = dayjs(selectInfo.startStr);
@@ -711,6 +729,10 @@ const TimesheetCalendar: React.FC = () => {
   };
 
   const handleDateClick = (clickInfo: any) => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     // Ignore click if it's on a travel indicator
     if (clickInfo.jsEvent?.target?.classList?.contains('travel-indicator')) {
       console.log('🛫 Ignoring dateClick - clicked on travel indicator');
@@ -749,6 +771,10 @@ const TimesheetCalendar: React.FC = () => {
   };
 
   const handleEventClick = (clickInfo: EventClickArg) => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     const timesheetId = parseInt(clickInfo.event.id);
     console.log('Event clicked:', timesheetId);
     
@@ -838,6 +864,10 @@ const TimesheetCalendar: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     // Sequential validation: focus first invalid field and show error
     if (!projectId) {
       showError('Project is required');
@@ -1043,6 +1073,10 @@ const TimesheetCalendar: React.FC = () => {
   };
 
   const handleDelete = async () => {
+    if (isReadOnlyMode) {
+      showReadOnlyWarning();
+      return;
+    }
     if (!selectedEntry) return;
 
     const project = projects.find(p => p.id === selectedEntry.project_id);
@@ -2151,7 +2185,7 @@ const TimesheetCalendar: React.FC = () => {
             listMonth: 'Month List'
           }}
           events={calendarEvents}
-          selectable={true}
+          selectable={!isReadOnlyMode}
           selectMirror={true}
           selectOverlap={true}
           selectConstraint={{
@@ -2190,6 +2224,9 @@ const TimesheetCalendar: React.FC = () => {
           scrollTime="08:00:00"
           scrollTimeReset={false}
           selectAllow={(selectInfo) => {
+            if (isReadOnlyMode) {
+              return false;
+            }
             const start = dayjs(selectInfo.start);
             const end = dayjs(selectInfo.end);
             return start.isSame(end, 'day') || start.add(1, 'second').isSame(end, 'day');
@@ -2205,7 +2242,11 @@ const TimesheetCalendar: React.FC = () => {
           eventDurationEditable={false}
           // Additional mobile optimizations
           stickyHeaderDates={true} // Headers das datas também sticky
-          dayHeaderFormat={isMobile ? { weekday: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric' }}
+          dayHeaderFormat={
+            currentCalendarViewType === 'dayGridMonth'
+              ? (isMobile ? { weekday: 'short' } : { weekday: 'long' })
+              : (isMobile ? { weekday: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric' })
+          }
           allDaySlot={false} // Remove all-day slot - not used
           nowIndicator={true} // Mostrar linha do horário atual
         />
@@ -2690,7 +2731,7 @@ const TimesheetCalendar: React.FC = () => {
                 color="error"
                 variant="outlined"
                 size="small"
-                disabled={loading || (selectedEntry.status === 'approved')}
+                disabled={loading || isReadOnlyMode || (selectedEntry.status === 'approved')}
                 sx={{ minWidth: 80 }}
               >
                 Delete
@@ -2701,7 +2742,7 @@ const TimesheetCalendar: React.FC = () => {
               form="timesheet-form"
               variant="contained"
               size="small"
-              disabled={loading}
+              disabled={loading || isReadOnlyMode}
               startIcon={loading ? null : <SaveIcon />}
               sx={{ 
                 minWidth: 90,

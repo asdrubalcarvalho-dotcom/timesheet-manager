@@ -5,11 +5,15 @@ namespace Tests\Feature\Billing;
 use App\Models\Tenant;
 use App\Services\Billing\PriceCalculator;
 use App\Services\Billing\PlanManager;
+use App\Services\Billing\PaymentSnapshot as PaymentSnapshotService;
 use App\Services\TenantFeatures;
 use Illuminate\Support\Str;
+use Illuminate\Http\Request;
+use Modules\Billing\Models\Payment;
 use Modules\Billing\Models\Subscription;
 use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Http\Middleware\EnsureSubscriptionWriteAccess;
 
 /**
  * BillingTest
@@ -48,6 +52,10 @@ class BillingTest extends TestCase
                 return ($this->userCountResolver)($tenant);
             }
         };
+
+        // Ensure PlanManager uses the test calculator (avoids querying tenant DB tables).
+        $this->app->instance(PriceCalculator::class, $this->priceCalculator);
+
         $this->planManager = app(PlanManager::class);
 
         // Create test tenant with deterministic slug for legacy expectations
@@ -333,6 +341,168 @@ class BillingTest extends TestCase
 
         // Verify features synced
         $this->assertTrue(TenantFeatures::active($this->tenant, TenantFeatures::TRAVELS));
+    }
+
+    /** @test */
+    public function active_trial_is_not_read_only()
+    {
+        $tenant = $this->makeTenant([
+            'trial_ends_at' => now()->addDays(7),
+        ]);
+
+        $summary = app(PlanManager::class)->getSubscriptionSummary($tenant);
+
+        $this->assertEquals('trial', $summary['subscription_state']);
+        $this->assertFalse($summary['read_only']);
+    }
+
+    /** @test */
+    public function expired_trial_is_read_only()
+    {
+        $tenant = $this->makeTenant([
+            'trial_ends_at' => now()->subDay(),
+        ]);
+
+        $summary = app(PlanManager::class)->getSubscriptionSummary($tenant);
+
+        $this->assertNotEquals('trial', $summary['subscription_state']);
+        $this->assertTrue($summary['read_only']);
+    }
+
+    /** @test */
+    public function expiring_enterprise_trial_subscription_sets_tenant_state_to_expired()
+    {
+        $tenant = $this->makeTenant([
+            'trial_ends_at' => now()->subDay(),
+        ]);
+
+        Subscription::create([
+            'tenant_id' => $tenant->id,
+            'plan' => 'enterprise',
+            'user_limit' => null,
+            'status' => 'active',
+            'is_trial' => true,
+            'trial_ends_at' => now()->subDay(),
+        ]);
+
+        $summary = app(PlanManager::class)->getSubscriptionSummary($tenant);
+
+        $tenant->refresh();
+
+        $this->assertEquals('expired', $summary['subscription_state']);
+        $this->assertTrue($summary['read_only']);
+        $this->assertEquals('expired', $tenant->subscription_state);
+    }
+
+    /** @test */
+    public function active_subscription_is_not_read_only_even_if_trial_expired()
+    {
+        $tenant = $this->makeTenant([
+            'trial_ends_at' => now()->subDays(10),
+        ]);
+
+        Subscription::create([
+            'tenant_id' => $tenant->id,
+            'plan' => 'team',
+            'user_limit' => 5,
+            'status' => 'active',
+        ]);
+
+        $summary = app(PlanManager::class)->getSubscriptionSummary($tenant);
+
+        $this->assertEquals('active', $summary['subscription_state']);
+        $this->assertFalse($summary['read_only']);
+    }
+
+    /** @test */
+    public function upgrading_to_paid_plan_clears_stale_billing_period_end_and_unblocks_writes()
+    {
+        // Start from an expired state with a stale billing period end in the past.
+        $this->tenant->update([
+            'subscription_state' => 'expired',
+        ]);
+
+        Subscription::create([
+            'tenant_id' => $this->tenant->id,
+            'plan' => 'enterprise',
+            'user_limit' => 5,
+            'status' => 'active',
+            'is_trial' => false,
+            'trial_ends_at' => null,
+            'billing_period_ends_at' => now()->subDay(),
+        ]);
+
+        // Upgrade to TEAM (immediate upgrade path)
+        $subscription = $this->planManager->updatePlan($this->tenant->fresh(), 'team', 5);
+        $subscription->refresh();
+
+        $this->assertEquals('team', $subscription->plan);
+        $this->assertEquals('active', $subscription->status);
+        $this->assertNotNull($subscription->billing_period_ends_at);
+        $this->assertTrue($subscription->billing_period_ends_at->gte(now()));
+
+        $summary = $this->planManager->getSubscriptionSummary($this->tenant->fresh());
+        $this->assertEquals('active', $summary['subscription_state']);
+        $this->assertFalse($summary['read_only']);
+
+        // Middleware should allow writes after upgrade.
+        tenancy()->initialize($this->tenant->fresh()->load('subscription'));
+        $middleware = new EnsureSubscriptionWriteAccess();
+        $request = Request::create('/api/timesheets', 'POST');
+
+        $response = $middleware->handle($request, fn () => response()->json(['ok' => true], 200));
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    /** @test */
+    public function applying_paid_checkout_snapshot_ends_trial_and_updates_summary()
+    {
+        $this->seedActiveTechnicians($this->tenant, 3);
+
+        $subscription = Subscription::create([
+            'tenant_id' => $this->tenant->id,
+            'plan' => 'enterprise',
+            'user_limit' => null,
+            'status' => 'active',
+            'is_trial' => true,
+            'trial_ends_at' => now()->addDays(10),
+        ]);
+
+        $payment = Payment::create([
+            'tenant_id' => $this->tenant->id,
+            'amount' => 132.00,
+            'currency' => 'EUR',
+            'status' => 'completed',
+            'gateway' => 'stripe',
+            'gateway_reference' => 'pi_test_123',
+            'plan' => 'team',
+            'user_limit' => 3,
+            'addons' => [],
+            'cycle_start' => now()->startOfDay(),
+            'cycle_end' => now()->addMonth()->startOfDay(),
+            'stripe_payment_intent_id' => 'pi_test_123',
+            'metadata' => [
+                'mode' => 'plan',
+                'plan' => 'team',
+                'user_limit' => 3,
+            ],
+        ]);
+
+        app(PaymentSnapshotService::class)->applySnapshot($payment, $subscription);
+
+        $subscription->refresh();
+        $this->assertFalse($subscription->is_trial);
+        $this->assertNull($subscription->trial_ends_at);
+        $this->assertEquals('team', $subscription->plan);
+        $this->assertEquals(3, $subscription->user_limit);
+        $this->assertNotNull($subscription->billing_period_started_at);
+        $this->assertNotNull($subscription->billing_period_ends_at);
+
+        $summary = $this->planManager->getSubscriptionSummary($this->tenant->fresh()->load('subscription'));
+
+        $this->assertEquals('team', $summary['plan']);
+        $this->assertFalse($summary['is_trial']);
+        $this->assertEquals(132.00, $summary['total']);
     }
 
     /** @test */

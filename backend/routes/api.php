@@ -102,7 +102,7 @@ Route::middleware(['tenant.initialize'])->group(function () {
 
     // Protected routes with tenant context and authentication
     // Note: SetSanctumTenantConnection runs globally via bootstrap/app.php prependToGroup('api')
-    Route::middleware(['tenant.initialize', 'auth:sanctum', 'tenant.auth'])->group(function () {
+    Route::middleware(['tenant.initialize', 'auth:sanctum', 'tenant.auth', 'subscription.write'])->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('user', [AuthController::class, 'user']);
 

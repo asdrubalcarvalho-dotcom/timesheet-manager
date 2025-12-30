@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import api from '../../services/api';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 type MemberRoleDefaults = {
   project_role: 'member' | 'manager';
@@ -59,6 +60,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({
   onClose,
   onSaved,
 }) => {
+  const { isReadOnly, ensureWritable, warn } = useReadOnlyGuard('project-members');
   const initialSet = useMemo(() => asSet(initialMemberIds), [initialMemberIds]);
 
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -111,6 +113,10 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({
 
   const handleSave = async () => {
     if (!project) return;
+
+    if (!ensureWritable()) {
+      return;
+    }
 
     const nextSet = checked;
 
@@ -205,7 +211,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({
         <Button onClick={onClose} disabled={saving}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={handleSave} disabled={saving || !project}>
+        <Button variant="contained" onClick={isReadOnly ? warn : handleSave} disabled={saving || !project || isReadOnly}>
           {saving ? 'Saving…' : 'Save'}
         </Button>
       </DialogActions>

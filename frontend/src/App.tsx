@@ -2,7 +2,7 @@ import React, { Suspense, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import 'dayjs/locale/pt';
@@ -14,6 +14,7 @@ dayjs.locale('pt');
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { BillingProvider } from './contexts/BillingContext';
+import { useBilling } from './contexts/BillingContext';
 import { FeatureProvider } from './contexts/FeatureContext';
 import RequireFeature from './components/Guards/RequireFeature';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -134,8 +135,17 @@ const ModuleLoader: React.FC<{ label?: string }> = ({ label = 'A carregar módul
 // Main App Content with Side Menu
 const AppContent: React.FC = () => {
   const { user } = useAuth();
+  const { billingSummary } = useBilling();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isTrialActive = (() => {
+    if (!billingSummary?.is_trial) return false;
+    const endsAt = billingSummary?.trial?.ends_at;
+    if (!endsAt) return false;
+    const parsed = Date.parse(endsAt);
+    return Number.isFinite(parsed) && parsed > Date.now();
+  })();
 
   // COPILOT GLOBAL RULES: Detect SuperAdmin host
     const host = window.location.hostname;
@@ -274,6 +284,19 @@ const AppContent: React.FC = () => {
           overflowX: 'hidden'
         }}
       >
+        {billingSummary?.read_only === true && !isTrialActive && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => navigate('/billing')}>
+                Upgrade
+              </Button>
+            }
+          >
+            Your subscription has expired. You are in read-only mode.
+          </Alert>
+        )}
         <Suspense fallback={<ModuleLoader />}>
           {renderPage()}
         </Suspense>

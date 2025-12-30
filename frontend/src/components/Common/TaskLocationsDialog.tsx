@@ -32,6 +32,7 @@ import api, {
 import { useNotification } from '../../contexts/NotificationContext';
 import { useBilling } from '../../contexts/BillingContext';
 import { useFeatures } from '../../contexts/FeatureContext';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 export type TaskLocationsDialogTask = {
   id: number;
@@ -63,6 +64,7 @@ const TaskLocationsDialog: React.FC<Props> = ({ open, task, onClose, onSaved }) 
   const { showSuccess, showError } = useNotification();
   const { billingSummary } = useBilling();
   const { hasAI } = useFeatures();
+  const { isReadOnly, ensureWritable, warn } = useReadOnlyGuard('task-locations');
 
   const [allLocations, setAllLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
@@ -199,6 +201,10 @@ const TaskLocationsDialog: React.FC<Props> = ({ open, task, onClose, onSaved }) 
 
   const handleSave = async () => {
     if (!task) return;
+
+    if (!ensureWritable()) {
+      return;
+    }
 
     try {
       setSaving(true);
@@ -506,6 +512,7 @@ const TaskLocationsDialog: React.FC<Props> = ({ open, task, onClose, onSaved }) 
                 id="location-select"
                 multiple
                 value={selectedLocationIds}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   const value = e.target.value;
                   setSelectedLocationIds(typeof value === 'string' ? [] : (value as number[]));
@@ -518,7 +525,7 @@ const TaskLocationsDialog: React.FC<Props> = ({ open, task, onClose, onSaved }) 
               >
                 {allLocations.map((location) => (
                   <MenuItem key={location.id} value={location.id}>
-                    <Checkbox checked={selectedLocationIds.indexOf(location.id) > -1} />
+                    <Checkbox checked={selectedLocationIds.indexOf(location.id) > -1} disabled={isReadOnly} />
                     <ListItemText
                       primary={location.name}
                       secondary={
@@ -541,10 +548,10 @@ const TaskLocationsDialog: React.FC<Props> = ({ open, task, onClose, onSaved }) 
           Cancel
         </Button>
         <Button
-          onClick={handleSave}
+          onClick={isReadOnly ? warn : handleSave}
           variant="contained"
           color="primary"
-          disabled={saving || loading || allLocations.length === 0 || !task}
+          disabled={isReadOnly || saving || loading || allLocations.length === 0 || !task}
         >
           Save
         </Button>

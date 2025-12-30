@@ -62,6 +62,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import type { Expense } from '../../types';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 dayjs.extend(isBetween);
 
@@ -90,6 +91,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
   userRole
 }) => {
   const { showSuccess, showError } = useNotification();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('approvals-expenses');
   const [selectedExpenses, setSelectedExpenses] = useState<Set<number>>(new Set());
   const [dateFrom, setDateFrom] = useState<Dayjs>(dayjs().subtract(1, 'month'));
   const [dateTo, setDateTo] = useState<Dayjs>(dayjs().add(1, 'month'));
@@ -273,6 +275,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
 
   // Handle approve
   const handleApprove = async () => {
+    if (!ensureWritable()) {
+      return;
+    }
     try {
       await onApprove(Array.from(selectedExpenses));
       clearSelection();
@@ -284,6 +289,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
 
   // Handle reject
   const handleReject = async () => {
+    if (!ensureWritable()) {
+      return;
+    }
     if (!rejectReason.trim()) {
       showError('Please provide a rejection reason');
       return;
@@ -302,6 +310,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
 
   // Handle mark paid
   const handleMarkPaid = async () => {
+    if (!ensureWritable()) {
+      return;
+    }
     if (!paymentReference.trim()) {
       showError('Please provide a payment reference');
       return;
@@ -710,7 +721,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                       color="error"
                       size="small"
                       startIcon={<Cancel />}
-                      onClick={() => setRejectDialogOpen(true)}
+                      onClick={() => {
+                        if (!ensureWritable()) {
+                          return;
+                        }
+                        setRejectDialogOpen(true);
+                      }}
+                      disabled={isReadOnly}
                       sx={{ bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}
                     >
                       Reject
@@ -722,6 +739,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                         size="small"
                         startIcon={<CheckCircle />}
                         onClick={handleApprove}
+                        disabled={isReadOnly}
                         sx={{ bgcolor: 'white', color: '#667eea', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
                       >
                         Approve
@@ -733,7 +751,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                         variant="contained"
                         size="small"
                         startIcon={<AccountBalanceWallet />}
-                        onClick={() => setPaymentDialogOpen(true)}
+                        onClick={() => {
+                          if (!ensureWritable()) {
+                            return;
+                          }
+                          setPaymentDialogOpen(true);
+                        }}
+                        disabled={isReadOnly}
                         sx={{ bgcolor: 'white', color: '#667eea', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
                       >
                         Mark Paid
@@ -1029,12 +1053,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
             label="Rejection Reason"
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
+            disabled={isReadOnly}
             sx={{ mt: 2 }}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleReject} variant="contained" color="error">
+          <Button onClick={handleReject} variant="contained" color="error" disabled={isReadOnly}>
             Reject
           </Button>
         </DialogActions>
@@ -1057,12 +1082,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
             value={paymentReference}
             onChange={(e) => setPaymentReference(e.target.value)}
             placeholder="e.g., TRF-2025-001234"
+            disabled={isReadOnly}
             sx={{ mt: 2 }}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPaymentDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleMarkPaid} variant="contained" color="primary">
+          <Button onClick={handleMarkPaid} variant="contained" color="primary" disabled={isReadOnly}>
             Mark Paid
           </Button>
         </DialogActions>

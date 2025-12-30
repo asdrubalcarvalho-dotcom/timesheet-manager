@@ -24,9 +24,11 @@ import TravelForm from './TravelForm.tsx';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
 import EmptyState from '../Common/EmptyState';
 import PageHeader from '../Common/PageHeader';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 const TravelsList: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const { isReadOnly, ensureWritable, warn } = useReadOnlyGuard('travels');
   const [travels, setTravels] = useState<TravelSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -60,6 +62,9 @@ const TravelsList: React.FC = () => {
   };
 
   const handleOpenDialog = (travel?: TravelSegment) => {
+    if (!ensureWritable()) {
+      return;
+    }
     setEditingTravel(travel || null);
     setOpenDialog(true);
   };
@@ -70,6 +75,9 @@ const TravelsList: React.FC = () => {
   };
 
   const handleDelete = (id: number) => {
+    if (!ensureWritable()) {
+      return;
+    }
     const travel = travels.find(t => t.id === id);
     const originName = travel?.origin_location?.name || travel?.origin_country || 'origin';
     const destName = travel?.destination_location?.name || travel?.destination_country || 'destination';
@@ -219,7 +227,7 @@ const TravelsList: React.FC = () => {
             <IconButton
               size="small"
               onClick={() => handleOpenDialog(travel)}
-              disabled={!canEdit}
+              disabled={isReadOnly || !canEdit}
               sx={{ color: canEdit ? '#667eea' : '#ccc' }}
             >
               <EditIcon fontSize="small" />
@@ -227,7 +235,7 @@ const TravelsList: React.FC = () => {
             <IconButton
               size="small"
               onClick={() => handleDelete(travel.id)}
-              disabled={!canDelete}
+              disabled={isReadOnly || !canDelete}
               sx={{ color: canDelete ? '#f44336' : '#ccc' }}
             >
               <DeleteIcon fontSize="small" />
@@ -256,7 +264,7 @@ const TravelsList: React.FC = () => {
             title="No travel segments yet"
             subtitle="Create your first travel segment to start tracking technician movements"
             actionLabel="New Travel"
-            onAction={() => handleOpenDialog()}
+            onAction={isReadOnly ? warn : () => handleOpenDialog()}
           />
         ) : (
           <Card>
@@ -291,10 +299,20 @@ const TravelsList: React.FC = () => {
           color="primary"
           aria-label="add travel"
           onClick={() => handleOpenDialog()}
+          disabled={isReadOnly}
           sx={{ 
             position: 'fixed', 
             bottom: 32, 
-            right: 32
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&.Mui-disabled': {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
+              opacity: 0.5,
+            },
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
           }}
         >
           <AddIcon />

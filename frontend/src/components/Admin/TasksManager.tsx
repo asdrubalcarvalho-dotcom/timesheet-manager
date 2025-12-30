@@ -35,6 +35,7 @@ import ConfirmationDialog from '../Common/ConfirmationDialog';
 import EmptyState from '../Common/EmptyState';
 import api, { taskLocationsApi } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface Task {
   id: number;
@@ -84,6 +85,7 @@ const normalizeApiResponse = <T,>(payload: any): T[] => {
 
 const TasksManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,6 +168,9 @@ const TasksManager: React.FC = () => {
   };
 
   const handleOpenDialog = (task?: Task) => {
+    if (!ensureWritable()) {
+      return;
+    }
     if (task) {
       setEditingTask(task);
       setFormData({
@@ -205,6 +210,9 @@ const TasksManager: React.FC = () => {
   
   // Location management handlers
   const handleManageLocations = async (task: Task) => {
+    if (!ensureWritable()) {
+      return;
+    }
     try {
       // Load current locations for this task
       const response = await taskLocationsApi.get(task.id);
@@ -221,6 +229,9 @@ const TasksManager: React.FC = () => {
   
   const handleSaveLocations = async () => {
     if (!locationDialog.task) return;
+    if (!ensureWritable()) {
+      return;
+    }
     
     try {
       setLoading(true);
@@ -255,6 +266,10 @@ const TasksManager: React.FC = () => {
       e.preventDefault();
     }
 
+    if (!ensureWritable()) {
+      return;
+    }
+
     try {
       const payload = {
         name: formData.name,
@@ -286,6 +301,9 @@ const TasksManager: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (!ensureWritable()) {
+      return;
+    }
     const task = tasks.find(t => t.id === id);
     setConfirmDialog({
       open: true,
@@ -297,6 +315,9 @@ const TasksManager: React.FC = () => {
         task_type: task?.task_type
       },
       action: async () => {
+        if (!ensureWritable()) {
+          return;
+        }
         try {
           await api.delete(`/api/tasks/${id}`);
           showSuccess('Task deleted successfully');
@@ -382,11 +403,15 @@ const TasksManager: React.FC = () => {
             size="small"
             color={count > 0 ? 'primary' : 'default'}
             variant={count > 0 ? 'filled' : 'outlined'}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleManageLocations(params.row);
-            }}
-            sx={{ cursor: 'pointer' }}
+            onClick={
+              isReadOnly
+                ? undefined
+                : (e) => {
+                    e.stopPropagation();
+                    handleManageLocations(params.row);
+                  }
+            }
+            sx={{ cursor: isReadOnly ? 'default' : 'pointer' }}
           />
         );
       }
@@ -424,6 +449,7 @@ const TasksManager: React.FC = () => {
         <Box>
           <IconButton
             size="small"
+            disabled={isReadOnly}
             onClick={(e) => {
               e.stopPropagation();
               handleManageLocations(params.row as Task);
@@ -435,6 +461,7 @@ const TasksManager: React.FC = () => {
           </IconButton>
           <IconButton
             size="small"
+            disabled={isReadOnly}
             onClick={(e) => {
               e.stopPropagation();
               handleOpenDialog(params.row as Task);
@@ -445,6 +472,7 @@ const TasksManager: React.FC = () => {
           </IconButton>
           <IconButton
             size="small"
+            disabled={isReadOnly}
             onClick={(e) => {
               e.stopPropagation();
               handleDelete(params.row.id);
@@ -466,7 +494,12 @@ const TasksManager: React.FC = () => {
           title="No tasks yet"
           subtitle="Create your first task to start tracking project activities"
           actionLabel="New Task"
-          onAction={() => handleOpenDialog()}
+          onAction={() => {
+            if (!ensureWritable()) {
+              return;
+            }
+            handleOpenDialog();
+          }}
         />
       ) : (
         <Box sx={{ width: '100%', overflowX: 'auto' }}>
@@ -504,10 +537,20 @@ const TasksManager: React.FC = () => {
       <Fab
           color="primary"
           onClick={() => handleOpenDialog()}
+          disabled={isReadOnly}
           sx={{
             position: 'fixed',
             bottom: 32,
-            right: 32
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&.Mui-disabled': {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
+              opacity: 0.5,
+            },
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
           }}
         >
           <AddIcon />
@@ -622,6 +665,7 @@ const TasksManager: React.FC = () => {
             form="task-form"
             variant="contained"
             color="primary"
+            disabled={isReadOnly}
           >
             {editingTask ? 'Update' : 'Create'}
           </Button>
@@ -652,6 +696,7 @@ const TasksManager: React.FC = () => {
                   id="location-select"
                   multiple
                   value={selectedLocationIds}
+                  disabled={isReadOnly}
                   onChange={(e) => {
                     const value = e.target.value;
                     setSelectedLocationIds(
@@ -691,6 +736,7 @@ const TasksManager: React.FC = () => {
                 setSelectedLocationIds([]);
               }}
               color="warning"
+              disabled={isReadOnly}
             >
               Clear All
             </Button>
@@ -699,7 +745,7 @@ const TasksManager: React.FC = () => {
             onClick={handleSaveLocations}
             variant="contained"
             color="primary"
-            disabled={allLocations.length === 0}
+            disabled={allLocations.length === 0 || isReadOnly}
           >
             Save
           </Button>

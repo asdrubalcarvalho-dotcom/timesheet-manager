@@ -69,6 +69,12 @@ export interface BillingSummary {
 
   // Cancellation availability
   can_cancel_downgrade: boolean;
+
+  // Subscription lifecycle state independent from plan
+  subscription_state?: 'active' | 'trial' | 'expired' | 'past_due' | 'cancelled';
+
+  // Read-only mode flag (true when subscription_state !== 'active')
+  read_only?: boolean;
 }
 
 /**

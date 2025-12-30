@@ -334,8 +334,6 @@ const BillingPage: React.FC = () => {
     
     try {
       await requestDowngrade(targetDowngradePlan);
-      // Show success message for scheduled downgrade
-      showInfo('Downgrade scheduled for next billing cycle.');
     } catch (err: any) {
       showError(err?.message || "Failed to schedule downgrade.");
     } finally {
@@ -572,7 +570,7 @@ const BillingPage: React.FC = () => {
           })()}
 
           {/* Pending Downgrade Banner */}
-          {billingSummary.pending_downgrade && !billingSummary.is_trial && (
+          {billingSummary.pending_downgrade && !billingSummary.is_trial && billingSummary.subscription_state !== 'expired' && (
             <Box mb={3}>
               <Alert
                 severity="info"
@@ -782,7 +780,16 @@ const BillingPage: React.FC = () => {
               </Typography>
               <Grid container spacing={2}>
                 {(['starter', 'team', 'enterprise'] as const).map((planName) => {
-                  const isCurrentPlan = planName === currentPlan;
+                  // IMPORTANT: When subscription is not active (e.g. expired/read-only after trial),
+                  // the UI must NOT lock the tenant into the backend's persisted plan.
+                  // Allow selecting ANY plan (including the same plan label) via checkout.
+                  const subscriptionState = billingSummary?.subscription_state;
+                  const isExpiredTenant = subscriptionState === 'expired';
+                  const isNonActiveState =
+                    billingSummary?.read_only === true ||
+                    (subscriptionState != null && !['active', 'trial'].includes(subscriptionState));
+
+                  const isCurrentPlan = !isNonActiveState && planName === currentPlan;
                   
                   // Determine if this is a downgrade (current plan is higher tier)
                   // For Trial, treat Team/Enterprise as UPGRADE (higher tier than trial in terms of features, even though both are level 3)
@@ -791,26 +798,73 @@ const BillingPage: React.FC = () => {
                   const currentLevel = planHierarchy[currentPlan as keyof typeof planHierarchy];
                   const targetLevel = planHierarchy[planName];
                   const isDowngrade = targetLevel < currentLevel;
-                  
-                  // SPECIAL CASE: Trial → Team is actually a downgrade in tier (3→2) BUT it's an UPGRADE in terms of payment
-                  // So we need to handle it via the downgrade dialog, which will then call the correct handler
-                  // INTENTIONAL: Trial-to-lower-tier actions require confirmation and may trigger either free exit or paid checkout.
-                  const isTrialToLowerTier = billingSummary?.is_trial && (planName === 'starter' || planName === 'team');
+
+                  // TRIAL OVERRIDES tier comparisons:
+                  // From a trial state, ANY plan selection must use checkout/start (immediate trial exit/payment).
+                  const isTrialTenant =
+                    billingSummary?.subscription_state === 'trial' ||
+                    billingSummary?.is_trial === true ||
+                    currentPlan === 'trial_enterprise';
+
+                  // Pending downgrade guard (paid tenants): block all plan changes.
+                  const shouldBlockPlanChanges = !isTrialTenant && !isExpiredTenant && Boolean(billingSummary?.pending_downgrade);
                   
                   // Check if there's a pending downgrade to this plan
                   const hasPendingDowngrade = billingSummary?.pending_downgrade?.target_plan === planName;
                   
-                  // Only allow downgrade to starter or team (not enterprise)
-                  const canActuallyDowngrade = (isDowngrade || isTrialToLowerTier) && (planName === 'starter' || planName === 'team');
+                  // Downgrades MUST NOT go through checkout.
+                  // Stripe checkout is upgrade-oriented and can attempt to create a €0.00 payment for downgrades.
+                  // Use the existing schedule-downgrade flow for lower-tier selections, even if the tenant is currently read-only.
+                  // Starter path (restore previous behavior):
+                  // - Trial → Starter uses the existing downgrade handler (backend applies immediate trial conversion).
+                  // - Paid → Starter/Team uses schedule-downgrade (deferred) and must not open checkout.
+                  const isTrialToStarter = isTrialTenant && planName === 'starter' && currentPlan !== 'starter';
+
+                  const isPaidDowngrade =
+                    !isTrialTenant &&
+                    !isExpiredTenant &&
+                    isDowngrade &&
+                    (planName === 'starter' || planName === 'team');
+
+                  // EXPIRED REACTIVATION:
+                  // - Expired tenants should not schedule downgrades (no next renewal).
+                  // - Starter activation is handled via schedule-downgrade but applies immediately on backend.
+                  const isExpiredToStarter = isExpiredTenant && planName === 'starter';
+
+                  const canShowDowngradeButton =
+                    !shouldBlockPlanChanges &&
+                    (isTrialToStarter || isPaidDowngrade || isExpiredToStarter);
                   
                   return (
                     <Grid item xs={12} md={4} key={planName}>
                       <PlanCard
                         plan={planName}
                         isCurrentPlan={isCurrentPlan}
-                        onUpgrade={isCurrentPlan ? () => {} : () => openCheckoutForPlan(planName)}
-                        onDowngrade={canActuallyDowngrade ? () => handleDowngrade(planName as 'starter' | 'team') : undefined}
-                        canDowngrade={canActuallyDowngrade}
+                        onUpgrade={() => {
+                          if (shouldBlockPlanChanges) {
+                            showInfo('A plan change is already scheduled. Please contact support to modify it.');
+                            return;
+                          }
+                          openCheckoutForPlan(planName);
+                        }}
+                        onDowngrade={
+                          canShowDowngradeButton
+                            ? () => {
+                                // Starter supports max 2 active users.
+                                // Avoid calling schedule-downgrade when it would be rejected by backend;
+                                // show the same message the backend returns.
+                                if (planName === 'starter' && (billingSummary?.user_count ?? 0) > 2) {
+                                  showError(
+                                    `Cannot convert to Starter plan. You have ${billingSummary?.user_count} active users, but Starter supports only 2. Please reduce users first or select another plan.`
+                                  );
+                                  return;
+                                }
+
+                                handleDowngrade(planName as 'starter' | 'team');
+                              }
+                            : undefined
+                        }
+                        canDowngrade={canShowDowngradeButton}
                         hasPendingDowngrade={hasPendingDowngrade}
                         downgradeEffectiveDate={hasPendingDowngrade ? billingSummary?.pending_downgrade?.effective_at : null}
                       />

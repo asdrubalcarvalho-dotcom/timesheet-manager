@@ -497,106 +497,108 @@ class TimesheetController extends Controller
 
     /**
      * Reject a timesheet (manager only)
-        $this->authorize('create', Timesheet::class);
+     */
     public function reject(Request $request, Timesheet $timesheet): JsonResponse
-        $validated = $request->validated();
-        $user = $request->user();
-        $project = Project::with('memberRecords')->findOrFail($validated['project_id']);
-        
-        if (!$project->isUserMember($user)) {
-            return response()->json(['error' => 'You are not assigned to this project.'], 403);
-        }
-
-
-        $authTechnician = Technician::where('user_id', $user->id)->first()
-            ?? Technician::where('email', $user->email)->first();
     {
-        if (!$timesheet->canBeClosed()) {
+        $this->authorize('reject', $timesheet);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $timesheet->reject($validated['reason']);
+        $timesheet->load(['technician', 'project', 'task', 'location']);
+
+        return response()->json($timesheet);
     }
-            ? Carbon::parse($request->input('date_from'))
-        $dateTo = $request->input('date_to')
-            ->whereBetween('date', [$dateFrom->toDateString(), $dateTo->toDateString()]);
-        if (!$authTechnician) {
-            return response()->json(['error' => 'Technician profile not found'], 404);
-        }
-                $query->where('status', $status);
-        $requestedTechnicianId = (int) ($validated['technician_id'] ?? 0);
-        $isProjectManager = $project->isUserProjectManager($user);
-            }
-        if ($requestedTechnicianId === 0) {
-            $validated['technician_id'] = $authTechnician->id;
-        } elseif ($requestedTechnicianId !== (int) $authTechnician->id) {
-            if (!$isProjectManager) {
-                return response()->json([
-                    'error' => 'Only project managers can create records for other technicians.'
-                ], 403);
-            }
-        }
-            $technicianFromRequest = Technician::find($requestedTechnicianId);
-            if (!$technicianFromRequest) {
-                return response()->json(['error' => 'Worker not found'], 404);
-            }
 
-            if ($technicianFromRequest->user && !$project->memberRecords()->where('user_id', $technicianFromRequest->user->id)->exists()) {
-                return response()->json(['error' => 'This worker is not a member of the selected project.'], 422);
-            }
+    /**
+     * GET /api/timesheets/manager-view
+     * Manager approvals view: pending timesheets that the user can approve.
+     */
+    public function managerView(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $status = $request->input('status', 'submitted');
+
+        $query = Timesheet::with([
+            'technician',
+            'project.memberRecords',
+            'task',
+            'location',
+        ])->where('status', $status);
+
+        if ($request->filled('date_from')) {
+            $dateFrom = Carbon::parse($request->input('date_from'));
+            $query->where('date', '>=', $dateFrom->toDateString());
+        }
+
+        if ($request->filled('date_to')) {
+            $dateTo = Carbon::parse($request->input('date_to'));
+            $query->where('date', '<=', $dateTo->toDateString());
+        }
+
         if ($request->filled('technician_ids')) {
-            $validated['technician_id'] = $technicianFromRequest->id;
-        }
             $query->whereIn('technician_id', $request->input('technician_ids'));
-        if (!isset($validated['status'])) {
-            $validated['status'] = 'draft';
-        }
         }
 
-        if (!$user->hasRole('Admin')) {
-            $managedProjectIds = $user->getManagedProjectIds();
-            if (empty($managedProjectIds)) {
-                return response()->json([
-                    'data' => [],
-                    'summary' => [
-                        'total' => 0,
-                        'flagged_count' => 0,
-                        'over_cap_count' => 0,
-                        'overlap_count' => 0,
-                        'pending_count' => 0,
-                        'average_ai_score' => null,
-                    ]
-                ]);
-            }
-            $query->whereIn('project_id', $managedProjectIds);
+        // Canonical manager scope: only managed projects; never system-role based.
+        $managedProjectIds = $user->getManagedProjectIds();
+        if (empty($managedProjectIds)) {
+            return response()->json([
+                'data' => [],
+                'summary' => [
+                    'total' => 0,
+                    'flagged_count' => 0,
+                    'over_cap_count' => 0,
+                    'overlap_count' => 0,
+                    'pending_count' => 0,
+                    'average_ai_score' => null,
+                ]
+            ]);
         }
+
+        $query->whereIn('project_id', $managedProjectIds);
+
+        // Prevent self-approval lists (policy will also guard actions)
+        $query->whereHas('technician', function ($q) use ($user) {
+            $q->where('user_id', '!=', $user->id);
+        });
 
         $timesheets = $query->orderBy('date')->get();
+
+        // Ensure we never return rows that the policy would forbid approving.
+        $timesheets = $timesheets->filter(function (Timesheet $timesheet) use ($user) {
+            return $user->can('approve', $timesheet);
+        })->values();
 
         $rows = $timesheets->map(function (Timesheet $timesheet) use ($user) {
             $validation = $this->validationService->summarize($timesheet, $user);
             $snapshot = $validation->snapshot;
             $date = $timesheet->date ? Carbon::parse($timesheet->date) : null;
 
-            // Get technician's project roles
             $technicianProjectRole = null;
             $technicianExpenseRole = null;
-            
+
             if ($timesheet->technician && $timesheet->technician->user && $timesheet->project) {
                 $membership = $timesheet->project->memberRecords()
                     ->where('user_id', $timesheet->technician->user_id)
                     ->first();
-                    
+
                 if ($membership) {
                     $technicianProjectRole = $membership->project_role;
                     $technicianExpenseRole = $membership->expense_role;
                 }
             }
 
-            // Section 14.1 - Get travel data for this technician/date/project
             $travelsSummary = null;
             if ($timesheet->technician_id && $date) {
                 $travels = \App\Models\TravelSegment::where('technician_id', $timesheet->technician_id)
                     ->where('travel_date', $date->toDateString())
                     ->where('project_id', $timesheet->project_id)
                     ->get();
-                
+
                 if ($travels->isNotEmpty()) {
                     $totalDurationMinutes = $travels->sum('duration_minutes') ?? 0;
                     $travelsSummary = [
@@ -608,29 +610,28 @@ class TimesheetController extends Controller
                 }
             }
 
-            // Section 14.3 - Consistency flags (basic checks)
             $flags = [];
             $hoursWorked = (float) $timesheet->hours_worked;
-            
-            // Check: Travel segments but zero timesheet hours
+
             if ($travelsSummary && $travelsSummary['count'] > 0 && $hoursWorked == 0) {
                 $flags[] = 'travels_without_work';
             }
-            
-            // Check: Travel duration very high compared to work hours (>2x)
+
             if ($travelsSummary && $hoursWorked > 0) {
                 $travelHours = $travelsSummary['duration_minutes'] / 60;
                 if ($travelHours > ($hoursWorked * 2)) {
                     $flags[] = 'excessive_travel_time';
                 }
             }
-            
-            // Check: Expenses without timesheet hours (query expenses for this tech/date/project)
-            $expensesCount = \App\Models\Expense::where('technician_id', $timesheet->technician_id)
-                ->where('date', $date->toDateString())
-                ->where('project_id', $timesheet->project_id)
-                ->count();
-            
+
+            $expensesCount = 0;
+            if ($timesheet->technician_id && $date) {
+                $expensesCount = \App\Models\Expense::where('technician_id', $timesheet->technician_id)
+                    ->where('date', $date->toDateString())
+                    ->where('project_id', $timesheet->project_id)
+                    ->count();
+            }
+
             if ($expensesCount > 0 && $hoursWorked == 0) {
                 $flags[] = 'expenses_without_work';
             }
@@ -665,8 +666,8 @@ class TimesheetController extends Controller
                 ] : null,
                 'technician_project_role' => $technicianProjectRole,
                 'technician_expense_role' => $technicianExpenseRole,
-                'travels' => $travelsSummary, // NEW: Travel data integration
-                'consistency_flags' => $flags, // NEW: Section 14.3 - Consistency flags
+                'travels' => $travelsSummary,
+                'consistency_flags' => $flags,
                 'ai_flagged' => $snapshot->aiFlagged,
                 'ai_score' => $snapshot->aiScore,
                 'ai_feedback' => $snapshot->aiFeedback,

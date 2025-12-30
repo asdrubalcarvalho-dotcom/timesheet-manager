@@ -1314,8 +1314,24 @@ class BillingController extends Controller
             // Ensure tenant has Stripe customer ID
             if (!$tenant->stripe_customer_id) {
                 // Create Stripe customer if not exists
-                $gateway = $this->gatewayFactory->make();
-                $tenant->stripe_customer_id = $gateway->ensureStripeCustomer($tenant);
+                $gateway = $this->gatewayFactory->driver('stripe');
+
+                if (!($gateway instanceof \App\Services\Payments\StripeGateway)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Stripe gateway not available',
+                    ], 500);
+                }
+
+                $customerResult = $gateway->ensureStripeCustomer($tenant);
+                if (!($customerResult['success'] ?? false) || empty($customerResult['customer_id'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $customerResult['error'] ?? 'Failed to create Stripe customer',
+                    ], 500);
+                }
+
+                $tenant->stripe_customer_id = $customerResult['customer_id'];
                 $tenant->save();
 
                 \Log::info('Created Stripe customer for portal', [
@@ -1330,16 +1346,16 @@ class BillingController extends Controller
             // Try to detect tenant slug from header (fallback to tenant model)
             $tenantSlug = $request->header('X-Tenant') ?? $tenant->slug;
 
-            // Build the tenant domain properly
-            $baseDomain = config('app.frontend_base_domain', 'vendaslive.com');
-
-            // Example: demo-perk.vendaslive.com
-            $tenantDomain = "{$tenantSlug}.{$baseDomain}";
+            // Return URL can be configured; supports {tenant} placeholder
+            $returnUrl = config('billing.portal.return_url');
+            if (is_string($returnUrl) && str_contains($returnUrl, '{tenant}')) {
+                $returnUrl = str_replace('{tenant}', $tenantSlug, $returnUrl);
+            }
 
             // Create portal session with correct return URL
             $session = \Stripe\BillingPortal\Session::create([
                 'customer'   => $tenant->stripe_customer_id,
-                'return_url' => "https://{$tenantDomain}/billing",
+                'return_url' => $returnUrl,
             ]);
 
             \Log::info('Stripe portal session created', [

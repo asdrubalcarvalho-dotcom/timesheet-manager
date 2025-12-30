@@ -35,6 +35,7 @@ import ConfirmationDialog from '../Common/ConfirmationDialog';
 import EmptyState from '../Common/EmptyState';
 import api from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 
 interface Project {
   id: number;
@@ -72,6 +73,7 @@ const formatDateForInput = (value?: string | null) => {
 
 const ProjectsManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-projects');
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -133,6 +135,9 @@ const ProjectsManager: React.FC = () => {
   };
 
   const handleOpenDialog = (project?: Project) => {
+    if (!ensureWritable()) {
+      return;
+    }
     if (project) {
       setEditingProject(project);
       setEditTab('details');
@@ -195,6 +200,9 @@ const ProjectsManager: React.FC = () => {
   }, [openDialog, editTab, editingProject?.id]);
 
   const openCreateTask = () => {
+    if (!ensureWritable()) {
+      return;
+    }
     if (!editingProject) return;
     setEditingTask(null);
     setTaskFormError(null);
@@ -209,6 +217,9 @@ const ProjectsManager: React.FC = () => {
   };
 
   const openEditTask = (task: ProjectTask) => {
+    if (!ensureWritable()) {
+      return;
+    }
     setEditingTask(task);
     setTaskFormError(null);
     setTaskForm({
@@ -229,6 +240,9 @@ const ProjectsManager: React.FC = () => {
 
   const saveTask = async () => {
     if (!editingProject) return;
+    if (!ensureWritable()) {
+      return;
+    }
 
     const name = taskForm.name.trim();
     const startDate = taskForm.start_date;
@@ -283,6 +297,9 @@ const ProjectsManager: React.FC = () => {
   };
 
   const confirmDeleteTask = (task: ProjectTask) => {
+    if (!ensureWritable()) {
+      return;
+    }
     setConfirmDialog({
       open: true,
       title: 'Delete Task',
@@ -293,6 +310,9 @@ const ProjectsManager: React.FC = () => {
         end_date: task.end_date,
       },
       action: async () => {
+        if (!ensureWritable()) {
+          return;
+        }
         try {
           await api.delete(`/api/tasks/${task.id}`);
           showSuccess('Task deleted successfully');
@@ -310,6 +330,10 @@ const ProjectsManager: React.FC = () => {
   const handleSave = async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault(); // Prevent default form submission
+    }
+
+    if (!ensureWritable()) {
+      return;
     }
 
     try {
@@ -336,6 +360,9 @@ const ProjectsManager: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (!ensureWritable()) {
+      return;
+    }
     const project = projects.find(p => p.id === id);
     setConfirmDialog({
       open: true,
@@ -347,6 +374,9 @@ const ProjectsManager: React.FC = () => {
         status: project?.status
       },
       action: async () => {
+        if (!ensureWritable()) {
+          return;
+        }
         try {
           await api.delete(`/api/projects/${id}`);
           showSuccess('Project deleted successfully');
@@ -360,6 +390,9 @@ const ProjectsManager: React.FC = () => {
   };
 
   const handleOpenMembersDialog = (project: Project) => {
+    if (!ensureWritable()) {
+      return;
+    }
     setMemberDialogProject(project);
   };
 
@@ -430,6 +463,7 @@ const ProjectsManager: React.FC = () => {
           <IconButton
             size="small"
             onClick={() => handleOpenMembersDialog(params.row as Project)}
+            disabled={isReadOnly}
             sx={{ color: '#009688' }}
           >
             <GroupIcon fontSize="small" />
@@ -437,6 +471,7 @@ const ProjectsManager: React.FC = () => {
           <IconButton
             size="small"
             onClick={() => handleOpenDialog(params.row as Project)}
+            disabled={isReadOnly}
             sx={{ color: '#667eea' }}
           >
             <EditIcon fontSize="small" />
@@ -444,6 +479,7 @@ const ProjectsManager: React.FC = () => {
           <IconButton
             size="small"
             onClick={() => handleDelete(params.row.id)}
+            disabled={isReadOnly}
             sx={{ color: '#f44336' }}
           >
             <DeleteIcon fontSize="small" />
@@ -461,7 +497,12 @@ const ProjectsManager: React.FC = () => {
           title="No projects yet"
           subtitle="Create your first project to start organizing your team's work"
           actionLabel="New Project"
-          onAction={() => handleOpenDialog()}
+          onAction={() => {
+            if (!ensureWritable()) {
+              return;
+            }
+            handleOpenDialog();
+          }}
         />
       ) : (
         <Box sx={{ height: 600, width: '100%' }}>
@@ -496,10 +537,20 @@ const ProjectsManager: React.FC = () => {
         <Fab
           color="primary"
           onClick={() => handleOpenDialog()}
+          disabled={isReadOnly}
           sx={{
             position: 'fixed',
             bottom: 32,
-            right: 32
+            right: 32,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&.Mui-disabled': {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: '#fff',
+              opacity: 0.5,
+            },
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5568d3 0%, #65408b 100%)'
+            }
           }}
         >
           <AddIcon />
@@ -598,7 +649,7 @@ const ProjectsManager: React.FC = () => {
                   <Box sx={{ fontWeight: 600 }}>{editingProject.name}</Box>
                   <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>Manage tasks for this project</Box>
                 </Box>
-                <Button variant="contained" onClick={openCreateTask}>Add Task</Button>
+                <Button variant="contained" onClick={openCreateTask} disabled={isReadOnly}>Add Task</Button>
               </Box>
 
               <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
@@ -633,10 +684,10 @@ const ProjectsManager: React.FC = () => {
                           <TableCell>{t.end_date ? dayjs(t.end_date).format('DD/MM/YYYY') : '-'}</TableCell>
                           <TableCell align="right">{t.progress != null ? `${t.progress}%` : '0%'}</TableCell>
                           <TableCell align="right">
-                            <IconButton size="small" onClick={() => openEditTask(t)} sx={{ color: '#667eea' }}>
+                            <IconButton size="small" onClick={() => openEditTask(t)} disabled={isReadOnly} sx={{ color: '#667eea' }}>
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => confirmDeleteTask(t)} sx={{ color: '#f44336' }}>
+                            <IconButton size="small" onClick={() => confirmDeleteTask(t)} disabled={isReadOnly} sx={{ color: '#f44336' }}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </TableCell>
@@ -656,7 +707,7 @@ const ProjectsManager: React.FC = () => {
             form="project-form"
             variant="contained"
             color="primary"
-            disabled={Boolean(editingProject && editTab === 'tasks')}
+            disabled={Boolean(editingProject && editTab === 'tasks') || isReadOnly}
           >
             {editingProject ? 'Update' : 'Create'}
           </Button>
@@ -718,7 +769,7 @@ const ProjectsManager: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeTaskDialog}>Cancel</Button>
-          <Button variant="contained" onClick={saveTask}>Save</Button>
+          <Button variant="contained" onClick={saveTask} disabled={isReadOnly}>Save</Button>
         </DialogActions>
       </Dialog>
 
