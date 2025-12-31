@@ -315,8 +315,15 @@ class TenantController extends Controller
             ]);
         }
 
-        // Check if slug already exists
+        // Check if slug already exists (tenants OR active pending signups)
         $exists = Tenant::where('slug', $slug)->exists();
+        if (!$exists) {
+            $exists = PendingTenantSignup::where('slug', $slug)
+                ->where(function ($query) {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })
+                ->exists();
+        }
 
         return response()->json([
             'available' => !$exists,
@@ -433,6 +440,8 @@ class TenantController extends Controller
             ], 422);
         }
 
+        $pendingSignup = null;
+
         try {
             // Clean up any expired pending signups for this email
             PendingTenantSignup::where('admin_email', $request->admin_email)
@@ -486,6 +495,19 @@ class TenantController extends Controller
             return response()->json($response, 200);
 
         } catch (\Exception $e) {
+            // If email sending fails after we created the pending row, ensure it doesn't block retries.
+            try {
+                if ($pendingSignup) {
+                    $pendingSignup->delete();
+                }
+            } catch (\Exception $cleanupError) {
+                \Log::warning('Failed to cleanup pending tenant signup after error', [
+                    'slug' => $request->slug ?? 'unknown',
+                    'email' => $request->admin_email ?? 'unknown',
+                    'error' => $cleanupError->getMessage(),
+                ]);
+            }
+
             \Log::error('Pending tenant signup failed', [
                 'slug'  => $request->slug ?? 'unknown',
                 'error' => $e->getMessage(),
