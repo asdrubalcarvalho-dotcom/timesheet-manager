@@ -5,9 +5,47 @@ declare(strict_types=1);
 namespace App\Services\Reports\Exports;
 
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class CsvExporter
 {
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     */
+    public function stream(array $rows, string $filename): StreamedResponse
+    {
+        $flatRows = array_map([$this, 'flattenRow'], $rows);
+
+        $headers = [];
+        foreach ($flatRows as $row) {
+            $headers = array_values(array_unique(array_merge($headers, array_keys($row))));
+        }
+
+        return new StreamedResponse(function () use ($flatRows, $headers): void {
+            $handle = fopen('php://output', 'w');
+            if ($handle === false) {
+                throw new \RuntimeException('Failed to open CSV output stream.');
+            }
+
+            fputcsv($handle, $headers);
+
+            foreach ($flatRows as $row) {
+                $line = [];
+                foreach ($headers as $header) {
+                    $line[] = $row[$header] ?? '';
+                }
+                fputcsv($handle, $line);
+            }
+
+            fclose($handle);
+        }, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            'Pragma' => 'no-cache',
+        ]);
+    }
+
     /**
      * @param array<int,array<string,mixed>> $rows
      * @return string relative storage path

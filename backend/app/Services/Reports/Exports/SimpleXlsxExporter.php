@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Reports\Exports;
 
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Minimal XLSX writer (single sheet) with no external dependencies.
@@ -12,6 +13,28 @@ use Illuminate\Support\Facades\Storage;
  */
 final class SimpleXlsxExporter
 {
+    /**
+     * @param array<int,array<string,mixed>> $rows
+     */
+    public function stream(array $rows, string $filename): StreamedResponse
+    {
+        $flatRows = array_map([$this, 'flattenRow'], $rows);
+
+        $headers = [];
+        foreach ($flatRows as $row) {
+            $headers = array_values(array_unique(array_merge($headers, array_keys($row))));
+        }
+
+        return new StreamedResponse(function () use ($headers, $flatRows): void {
+            echo $this->buildXlsx($headers, $flatRows);
+        }, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            'Pragma' => 'no-cache',
+        ]);
+    }
+
     /**
      * @param array<int,array<string,mixed>> $rows
      * @return string relative storage path

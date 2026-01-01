@@ -9,11 +9,11 @@ use App\Models\User;
 use App\Services\Reports\Exports\CsvExporter;
 use App\Services\Reports\Exports\SimpleXlsxExporter;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class TimesheetReports
 {
@@ -24,6 +24,12 @@ final class TimesheetReports
         'timesheets_summary' => [
             'required_permission' => 'view-timesheets',
             'allowed_group_by' => ['user', 'project', 'date'],
+            'allowed_filters' => ['from', 'to', 'status'],
+        ],
+        // Step 1: Timesheets by User / Period
+        'timesheets_by_user_period' => [
+            'required_permission' => 'view-timesheets',
+            'allowed_group_by' => ['user'],
             'allowed_filters' => ['from', 'to', 'status'],
         ],
         'timesheets_approval_status' => [
@@ -37,8 +43,6 @@ final class TimesheetReports
             'allowed_filters' => ['from', 'to'],
         ],
     ];
-
-    private const EXPORT_TTL_MINUTES = 10;
 
     public function __construct(
         private readonly CsvExporter $csv,
@@ -70,6 +74,12 @@ final class TimesheetReports
 
         $rows = match ($report) {
             'timesheets_summary' => $this->runTimesheetsSummary($query, $groupBy),
+            'timesheets_by_user_period' => $this->runUserReport(
+                (string) ($filters['from'] ?? ''),
+                (string) ($filters['to'] ?? ''),
+                $filters,
+                $user,
+            ),
             'timesheets_approval_status' => $this->runTimesheetsApprovalStatus($query, $groupBy),
             'timesheets_calendar' => $this->runTimesheetsCalendar($query),
             default => throw ValidationException::withMessages(['report' => 'Invalid report template.']),
@@ -84,64 +94,205 @@ final class TimesheetReports
     }
 
     /**
-     * Build and persist an export file; return a signed download URL.
+     * Export timesheets as a streamed file.
      *
-     * @return array{download_url:string,expires_at:string,report:string,format:string}
+     * Required by /api/reports/timesheets/export.
      */
-    public function export(User $user, string $report, array $filters, string $groupBy, string $format): array
+    public function export(array $filters, string $format, User $user): StreamedResponse
     {
-        $payload = $this->run($user, $report, $filters, $groupBy);
-        $rows = $payload['data'];
+        $rows = $this->exportRows($filters, $user);
 
-        $exportId = (string) Str::uuid();
-        $tenantId = tenant('id') ?? 'unknown';
+        $timestamp = now()->format('Ymd_His');
+        $exportId = substr((string) Str::uuid(), 0, 8);
 
-        $relativePath = match ($format) {
-            'csv' => $this->csv->store($rows, $exportId),
-            'xlsx' => $this->xlsx->store($rows, $exportId),
+        return match ($format) {
+            'csv' => $this->csv->stream($rows, "timesheets_{$timestamp}_{$exportId}.csv"),
+            'xlsx' => $this->xlsx->stream($rows, "timesheets_{$timestamp}_{$exportId}.xlsx"),
             default => throw ValidationException::withMessages(['format' => 'Invalid export format.']),
         };
-
-        $cacheKey = $this->downloadCacheKey($tenantId, $exportId);
-        Cache::put($cacheKey, [
-            'path' => $relativePath,
-            'user_id' => $user->id,
-            'tenant_id' => $tenantId,
-        ], now()->addMinutes(self::EXPORT_TTL_MINUTES));
-
-        $expiresAt = now()->addMinutes(self::EXPORT_TTL_MINUTES);
-        $downloadUrl = URL::temporarySignedRoute(
-            'reports.download',
-            $expiresAt,
-            ['id' => $exportId]
-        );
-
-        return [
-            'report' => $report,
-            'format' => $format,
-            'download_url' => $downloadUrl,
-            'expires_at' => $expiresAt->toIso8601String(),
-        ];
     }
 
-    public function resolveDownload(string $exportId): ?array
+    /**
+     * Timesheets Summary (pivot) grouped by period + dimensions.
+     *
+     * @param array{from:string,to:string,group_by:array<int,string>,period:string} $filters
+     * @return Collection<int,array<string,mixed>>
+     */
+    public function summary(array $filters, User $actor): Collection
     {
-        $tenantId = tenant('id') ?? 'unknown';
-        $cacheKey = $this->downloadCacheKey($tenantId, $exportId);
-        $data = Cache::get($cacheKey);
+        if (!$actor->hasPermissionTo('view-timesheets')) {
+            return collect();
+        }
 
-        return is_array($data) ? $data : null;
+        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+
+        $periodExpr = match ($filters['period']) {
+            'day' => "DATE_FORMAT(timesheets.date, '%Y-%m-%d')",
+            // ISO week-year + ISO week number
+            'week' => "DATE_FORMAT(timesheets.date, '%x-W%v')",
+            'month' => "DATE_FORMAT(timesheets.date, '%Y-%m')",
+            default => throw ValidationException::withMessages(['period' => 'Invalid period.']),
+        };
+
+        $groupBy = array_values(array_unique(array_map('strval', $filters['group_by'])));
+        $groupBy = array_values(array_intersect($groupBy, ['user', 'project']));
+
+        if (count($groupBy) === 0) {
+            throw ValidationException::withMessages(['group_by' => 'group_by must include at least one of: user, project']);
+        }
+
+        $query = Timesheet::query()
+            ->join('technicians as tech', 'tech.id', '=', 'timesheets.technician_id')
+            ->leftJoin('users as u', 'u.id', '=', 'tech.user_id')
+            ->join('projects as p', 'p.id', '=', 'timesheets.project_id')
+            ->where('timesheets.date', '>=', (string) $filters['from'])
+            ->where('timesheets.date', '<=', (string) $filters['to']);
+
+        if (!$isElevated) {
+            $query->where(function ($where) use ($actor) {
+                $where->where('tech.user_id', '=', $actor->id)
+                    ->orWhere('tech.email', '=', $actor->email);
+            });
+        }
+
+        $query->selectRaw("{$periodExpr} as period");
+        $groupColumns = ['period'];
+
+        if (in_array('user', $groupBy, true)) {
+            $query->addSelect([
+                'tech.user_id as user_id',
+            ]);
+            $query->selectRaw('COALESCE(u.name, tech.name) as user_name');
+            $groupColumns[] = 'tech.user_id';
+            $groupColumns[] = DB::raw('COALESCE(u.name, tech.name)');
+        }
+
+        if (in_array('project', $groupBy, true)) {
+            $query->addSelect([
+                'timesheets.project_id as project_id',
+                'p.name as project_name',
+            ]);
+            $groupColumns[] = 'timesheets.project_id';
+            $groupColumns[] = 'p.name';
+        }
+
+        $query
+            ->selectRaw('SUM(timesheets.hours_worked * 60) as total_minutes')
+            ->selectRaw("SUM(CASE WHEN timesheets.status = 'approved' THEN timesheets.hours_worked * 60 ELSE 0 END) as approved_minutes")
+            ->selectRaw("SUM(CASE WHEN timesheets.status = 'submitted' THEN timesheets.hours_worked * 60 ELSE 0 END) as pending_minutes")
+            ->selectRaw("SUM(CASE WHEN timesheets.status = 'rejected' THEN timesheets.hours_worked * 60 ELSE 0 END) as rejected_minutes")
+            ->selectRaw('COUNT(*) as total_entries')
+            ->groupBy($groupColumns)
+            ->orderBy('period');
+
+        if (in_array('user', $groupBy, true)) {
+            $query->orderBy(DB::raw('COALESCE(u.name, tech.name)'));
+        }
+
+        if (in_array('project', $groupBy, true)) {
+            $query->orderBy('p.name');
+        }
+
+        return $query
+            ->get()
+            ->map(function ($row) use ($groupBy) {
+                $out = [
+                    'period' => (string) $row->period,
+                    'total_minutes' => (int) round((float) $row->total_minutes),
+                    'approved_minutes' => (int) round((float) $row->approved_minutes),
+                    'pending_minutes' => (int) round((float) $row->pending_minutes),
+                    'rejected_minutes' => (int) round((float) $row->rejected_minutes),
+                    // No explicit closed/draft breakdown requested
+                    'total_entries' => (int) $row->total_entries,
+                ];
+
+                if (in_array('user', $groupBy, true)) {
+                    $out['user_id'] = $row->user_id !== null ? (int) $row->user_id : null;
+                    $out['user_name'] = (string) ($row->user_name ?? '');
+                }
+
+                if (in_array('project', $groupBy, true)) {
+                    $out['project_id'] = (int) $row->project_id;
+                    $out['project_name'] = (string) ($row->project_name ?? '');
+                }
+
+                return $out;
+            });
     }
 
-    public function forgetDownload(string $exportId): void
+    /**
+     * @param array<string,mixed> $filters
+     * @return array<int,array<string,mixed>>
+     */
+    private function exportRows(array $filters, User $actor): array
     {
-        $tenantId = tenant('id') ?? 'unknown';
-        Cache::forget($this->downloadCacheKey($tenantId, $exportId));
-    }
+        if (!$actor->hasPermissionTo('view-timesheets')) {
+            return [];
+        }
 
-    private function downloadCacheKey(string $tenantId, string $exportId): string
-    {
-        return "reports:download:{$tenantId}:{$exportId}";
+        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+
+        $query = Timesheet::query()
+            ->join('technicians as tech', 'tech.id', '=', 'timesheets.technician_id')
+            ->join('projects as p', 'p.id', '=', 'timesheets.project_id');
+
+        if (!$isElevated) {
+            $query->where(function ($where) use ($actor) {
+                $where->where('tech.user_id', '=', $actor->id)
+                    ->orWhere('tech.email', '=', $actor->email);
+            });
+        }
+
+        if (isset($filters['from']) && $filters['from'] !== null && $filters['from'] !== '') {
+            $query->where('timesheets.date', '>=', (string) $filters['from']);
+        }
+
+        if (isset($filters['to']) && $filters['to'] !== null && $filters['to'] !== '') {
+            $query->where('timesheets.date', '<=', (string) $filters['to']);
+        }
+
+        if (isset($filters['project_id']) && $filters['project_id'] !== null && $filters['project_id'] !== '') {
+            $query->where('timesheets.project_id', '=', (int) $filters['project_id']);
+        }
+
+        if ($isElevated && isset($filters['user_id']) && $filters['user_id'] !== null && $filters['user_id'] !== '') {
+            $query->where('tech.user_id', '=', (int) $filters['user_id']);
+        }
+
+        $data = $query
+            ->select([
+                'timesheets.id as timesheet_id',
+                'timesheets.date as date',
+                'timesheets.hours_worked as hours_worked',
+                'timesheets.status as status',
+                'timesheets.description as description',
+                'timesheets.project_id as project_id',
+                'p.name as project_name',
+                'timesheets.technician_id as technician_id',
+                'tech.user_id as user_id',
+                'tech.name as technician_name',
+                'tech.email as technician_email',
+            ])
+            ->orderBy('timesheets.date')
+            ->orderBy('p.name')
+            ->orderBy('tech.name')
+            ->get();
+
+        return $data
+            ->map(fn ($row) => [
+                'timesheet_id' => (int) $row->timesheet_id,
+                'date' => (string) $row->date,
+                'hours_worked' => (float) $row->hours_worked,
+                'status' => (string) $row->status,
+                'description' => (string) ($row->description ?? ''),
+                'project_id' => (int) $row->project_id,
+                'project_name' => (string) ($row->project_name ?? ''),
+                'technician_id' => (int) $row->technician_id,
+                'user_id' => $row->user_id !== null ? (int) $row->user_id : null,
+                'technician_name' => (string) ($row->technician_name ?? ''),
+                'technician_email' => (string) ($row->technician_email ?? ''),
+            ])
+            ->all();
     }
 
     private function assertTemplateAndInputs(string $report, array $filters, string $groupBy): void
@@ -166,6 +317,23 @@ final class TimesheetReports
         // Status constraints (template-specific)
         if (array_key_exists('status', $filters)) {
             $this->normalizeAndValidateStatus($report, (string) $filters['status']);
+        }
+
+        if ($report === 'timesheets_by_user_period') {
+            $from = (string) ($filters['from'] ?? '');
+            $to = (string) ($filters['to'] ?? '');
+
+            if ($from === '' || $to === '') {
+                throw ValidationException::withMessages([
+                    'filters.from' => 'from is required for this report.',
+                    'filters.to' => 'to is required for this report.',
+                ]);
+            }
+
+            // Basic ordering check; detailed format validation happens in FormRequest.
+            if ($from > $to) {
+                throw ValidationException::withMessages(['filters' => 'Invalid period: from must be <= to.']);
+            }
         }
     }
 
@@ -254,6 +422,64 @@ final class TimesheetReports
 
             $query->where('timesheets.status', '=', $status);
         }
+    }
+
+    /**
+     * Step 1: Timesheets by User / Period.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function runUserReport(string $from, string $to, array $filters, User $actor): array
+    {
+        $query = $this->scopedTimesheetsQuery($actor);
+        $this->applyFilters($query, 'timesheets_summary', array_merge($filters, ['from' => $from, 'to' => $to]));
+
+        $rows = $query
+            ->join('technicians as tech', 'tech.id', '=', 'timesheets.technician_id')
+            ->join('projects as p', 'p.id', '=', 'timesheets.project_id')
+            ->selectRaw('timesheets.technician_id as technician_id')
+            ->selectRaw('tech.user_id as user_id')
+            ->selectRaw('tech.name as technician_name')
+            ->selectRaw('tech.email as technician_email')
+            ->selectRaw('timesheets.project_id as project_id')
+            ->selectRaw('p.name as project_name')
+            ->selectRaw('SUM(timesheets.hours_worked) as total_hours')
+            ->groupBy('timesheets.technician_id', 'tech.user_id', 'tech.name', 'tech.email', 'timesheets.project_id', 'p.name')
+            ->orderBy('tech.name')
+            ->orderBy('p.name')
+            ->get();
+
+        $byTechnician = [];
+
+        foreach ($rows as $row) {
+            $technicianId = (int) $row->technician_id;
+            $projectHours = (float) $row->total_hours;
+
+            if (!array_key_exists($technicianId, $byTechnician)) {
+                $byTechnician[$technicianId] = [
+                    'user' => [
+                        'technician_id' => $technicianId,
+                        'user_id' => $row->user_id !== null ? (int) $row->user_id : null,
+                        'name' => (string) ($row->technician_name ?? ''),
+                        'email' => (string) ($row->technician_email ?? ''),
+                    ],
+                    'total_hours' => 0.0,
+                    'projects' => [],
+                ];
+            }
+
+            $byTechnician[$technicianId]['projects'][] = [
+                'project' => [
+                    'id' => (int) $row->project_id,
+                    'name' => (string) ($row->project_name ?? ''),
+                ],
+                'total_hours' => $projectHours,
+            ];
+
+            $byTechnician[$technicianId]['total_hours'] += $projectHours;
+        }
+
+        return array_values($byTechnician);
     }
 
     /** @return array<int,array<string,mixed>> */

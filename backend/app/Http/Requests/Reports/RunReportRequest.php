@@ -28,8 +28,8 @@ final class RunReportRequest extends FormRequest
         return [
             'report' => ['required', 'string', Rule::in($allowedReports)],
             'filters' => ['sometimes', 'array'],
-            'filters.from' => ['sometimes', 'date_format:Y-m-d'],
-            'filters.to' => ['sometimes', 'date_format:Y-m-d'],
+            'filters.from' => ['nullable', 'required_if:report,timesheets_by_user_period', 'date_format:Y-m-d'],
+            'filters.to' => ['nullable', 'required_if:report,timesheets_by_user_period', 'date_format:Y-m-d'],
             'filters.status' => ['sometimes', 'string'],
             'group_by' => ['required', 'string', Rule::in($allowedGroupBy)],
         ];

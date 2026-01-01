@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\TenantDataController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TravelSegmentController;
+use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\PublicContactController;
 use App\Http\Controllers\CountryController;
@@ -134,6 +135,14 @@ Route::middleware(['tenant.initialize'])->group(function () {
 
         // Protected routes (require authentication) with general rate limiting
         Route::middleware('throttle:api')->group(function () {
+            // Reports (Timesheets export only)
+            Route::post('reports/timesheets/export', [ReportsController::class, 'exportTimesheets'])
+                ->middleware(['permission:view-timesheets', 'throttle:read']);
+
+            // Reports (Timesheets summary pivot)
+            Route::post('reports/timesheets/summary', [ReportsController::class, 'timesheetSummary'])
+                ->middleware(['permission:view-timesheets', 'throttle:read']);
+
     // Access management routes for admin UI
     Route::prefix('access')->group(function () {
         Route::get('users', [\App\Http\Controllers\AccessManagerController::class, 'listUsers'])->middleware('throttle:read');

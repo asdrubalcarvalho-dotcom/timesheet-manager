@@ -6,12 +6,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Reports\ExportReportRequest;
-use App\Http\Requests\Reports\RunReportRequest;
+use App\Http\Requests\Reports\TimesheetSummaryRequest;
 use App\Models\Timesheet;
 use App\Services\Reports\TimesheetReports;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class ReportsController extends Controller
 {
@@ -20,62 +19,40 @@ final class ReportsController extends Controller
     ) {
     }
 
-    public function run(RunReportRequest $request): JsonResponse
+    public function exportTimesheets(ExportReportRequest $request): StreamedResponse
     {
         $this->authorize('viewAny', Timesheet::class);
 
         $validated = $request->validated();
 
-        $result = $this->reports->run(
-            $request->user(),
-            (string) $validated['report'],
+        return $this->reports->export(
             (array) ($validated['filters'] ?? []),
-            (string) $validated['group_by'],
-        );
-
-        return response()->json($result);
-    }
-
-    public function export(ExportReportRequest $request): JsonResponse
-    {
-        $this->authorize('viewAny', Timesheet::class);
-
-        $validated = $request->validated();
-
-        $result = $this->reports->export(
-            $request->user(),
-            (string) $validated['report'],
-            (array) ($validated['filters'] ?? []),
-            (string) $validated['group_by'],
             (string) $validated['format'],
+            $request->user(),
         );
-
-        return response()->json($result);
     }
 
-    public function download(Request $request, string $id)
+    public function timesheetSummary(TimesheetSummaryRequest $request): JsonResponse
     {
         $this->authorize('viewAny', Timesheet::class);
 
-        $record = $this->reports->resolveDownload($id);
-        if (!$record) {
-            return response()->json(['message' => 'Export not found or expired.'], 404);
-        }
+        $validated = $request->validated();
 
-        if (($record['user_id'] ?? null) !== $request->user()->id) {
-            return response()->json(['message' => 'Forbidden.'], 403);
-        }
+        $filters = [
+            'from' => (string) $validated['from'],
+            'to' => (string) $validated['to'],
+            'group_by' => (array) $validated['group_by'],
+            'period' => (string) $validated['period'],
+        ];
 
-        $path = (string) ($record['path'] ?? '');
-        if ($path === '' || !Storage::disk('local')->exists($path)) {
-            return response()->json(['message' => 'Export file missing.'], 404);
-        }
-
-        $this->reports->forgetDownload($id);
-
-        $fullPath = Storage::disk('local')->path($path);
-        $filename = basename($path);
-
-        return response()->download($fullPath, $filename)->deleteFileAfterSend(true);
+        return response()->json([
+            'meta' => [
+                'from' => $filters['from'],
+                'to' => $filters['to'],
+                'group_by' => $filters['group_by'],
+                'period' => $filters['period'],
+            ],
+            'rows' => $this->reports->summary($filters, $request->user())->values(),
+        ]);
     }
 }
