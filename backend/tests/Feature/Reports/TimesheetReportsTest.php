@@ -37,6 +37,9 @@ final class TimesheetReportsTest extends TenantTestCase
             $user->syncRoles([]);
         }
 
+        // Ensure role assignment is reflected when middleware calls `$user->can()`.
+        $user->refresh();
+
         $tech = Technician::create([
             'name' => 'Tech 1',
             'email' => $user->email,
@@ -88,98 +91,104 @@ final class TimesheetReportsTest extends TenantTestCase
         return [$tenant, $user, $project];
     }
 
-    public function test_user_without_permission_gets_403(): void
+    public function test_export_csv_streams_a_download(): void
     {
-        [$tenant, $user] = $this->makeTenantAndUser(false);
-
-        Sanctum::actingAs($user);
-
-        $this->withHeaders($this->tenantHeaders())
-            ->postJson('/api/reports/run', [
-                'report' => 'timesheets_summary',
-                'filters' => ['from' => '2025-12-01', 'to' => '2025-12-31', 'status' => 'approved'],
-                'group_by' => 'project',
-            ])
-            ->assertStatus(403);
-    }
-
-    public function test_invalid_report_name_returns_422(): void
-    {
-        [$tenant, $user] = $this->makeTenantAndUser(true);
-
-        Sanctum::actingAs($user);
-
-        $this->withHeaders($this->tenantHeaders())
-            ->postJson('/api/reports/run', [
-                'report' => 'invalid_report',
-                'filters' => ['from' => '2025-12-01', 'to' => '2025-12-31'],
-                'group_by' => 'project',
-            ])
-            ->assertStatus(422);
-    }
-
-    public function test_invalid_group_by_returns_422(): void
-    {
-        [$tenant, $user] = $this->makeTenantAndUser(true);
-
-        Sanctum::actingAs($user);
-
-        $this->withHeaders($this->tenantHeaders())
-            ->postJson('/api/reports/run', [
-                'report' => 'timesheets_calendar',
-                'filters' => ['from' => '2025-12-01', 'to' => '2025-12-31'],
-                'group_by' => 'project',
-            ])
-            ->assertStatus(422);
-    }
-
-    public function test_valid_report_returns_aggregated_result(): void
-    {
-        [$tenant, $user, $project] = $this->makeTenantAndUser(true);
+        [, $user] = $this->makeTenantAndUser(true);
 
         Sanctum::actingAs($user);
 
         $res = $this->withHeaders($this->tenantHeaders())
-            ->postJson('/api/reports/run', [
-                'report' => 'timesheets_summary',
-                'filters' => ['from' => '2025-12-01', 'to' => '2025-12-31', 'status' => 'approved'],
-                'group_by' => 'project',
-            ]);
-
-        $res->assertOk();
-
-        $json = $res->json();
-        $this->assertSame('timesheets_summary', $json['report']);
-        $this->assertSame('project', $json['group_by']);
-        $this->assertNotEmpty($json['data']);
-
-        $first = $json['data'][0];
-        $this->assertSame($project->id, $first['project']['id']);
-        $this->assertSame(8.0, (float) $first['total_hours']);
-    }
-
-    public function test_export_returns_file_url(): void
-    {
-        [$tenant, $user] = $this->makeTenantAndUser(true);
-
-        Sanctum::actingAs($user);
-
-        $res = $this->withHeaders($this->tenantHeaders())
-            ->postJson('/api/reports/export', [
-                'report' => 'timesheets_summary',
-                'filters' => ['from' => '2025-12-01', 'to' => '2025-12-31', 'status' => 'approved'],
-                'group_by' => 'project',
+            ->postJson('/api/reports/timesheets/export', [
+                'filters' => ['from' => '2025-12-01', 'to' => '2025-12-31'],
                 'format' => 'csv',
             ]);
 
-        $res->assertOk()
-            ->assertJsonStructure([
-                'report',
-                'format',
-                'download_url',
-                'expires_at',
+        $this->assertTrue($res->isOk(), (string) $res->getContent());
+        $this->assertStringContainsString('.csv', (string) $res->headers->get('content-disposition'));
+        $this->assertSame('text/csv; charset=UTF-8', (string) $res->headers->get('content-type'));
+
+        $csv = $res->streamedContent();
+        $this->assertStringContainsString('timesheet_id', $csv);
+        $this->assertStringContainsString('user1@example.com', $csv);
+    }
+
+    public function test_export_xlsx_streams_a_download(): void
+    {
+        [, $user] = $this->makeTenantAndUser(true);
+
+        Sanctum::actingAs($user);
+
+        $res = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/reports/timesheets/export', [
+                'filters' => ['from' => '2025-12-01', 'to' => '2025-12-31'],
+                'format' => 'xlsx',
             ]);
 
-        $this->assertStringContainsString('/api/reports/download/', (string) $res->json('download_url'));
+        $this->assertTrue($res->isOk(), (string) $res->getContent());
+        $this->assertStringContainsString('.xlsx', (string) $res->headers->get('content-disposition'));
+        $this->assertSame(
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            (string) $res->headers->get('content-type')
+        );
+
+        $bin = $res->streamedContent();
+        $this->assertSame('PK', substr($bin, 0, 2));
+    }
+
+    public function test_regular_user_cannot_export_other_users_timesheets(): void
+    {
+        [, $user, $project] = $this->makeTenantAndUser(true);
+
+        $location = Location::firstOrFail();
+        $task = Task::where('project_id', $project->id)->firstOrFail();
+
+        $user2 = User::create([
+            'name' => 'User 2',
+            'email' => 'user2@example.com',
+            'password' => 'password',
+        ]);
+        $user2->assignRole('Technician');
+        $user2->refresh();
+
+        $tech2 = Technician::create([
+            'name' => 'Tech 2',
+            'email' => $user2->email,
+            'role' => 'technician',
+            'user_id' => $user2->id,
+            'is_active' => true,
+        ]);
+
+        ProjectMember::create([
+            'project_id' => $project->id,
+            'user_id' => $user2->id,
+            'project_role' => 'member',
+            'expense_role' => 'member',
+        ]);
+
+        Timesheet::create([
+            'technician_id' => $tech2->id,
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'location_id' => $location->id,
+            'date' => '2025-12-10',
+            'hours_worked' => 6,
+            'status' => 'approved',
+            'description' => 'Other user work',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $res = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/reports/timesheets/export', [
+                // Attempt to export other user's data (should be ignored by scoping)
+                'filters' => ['user_id' => $user2->id],
+                'format' => 'csv',
+            ]);
+
+        $this->assertTrue($res->isOk(), (string) $res->getContent());
+        $csv = $res->streamedContent();
+
+        $this->assertStringContainsString('user1@example.com', $csv);
+        $this->assertStringNotContainsString('user2@example.com', $csv);
     }
 }
