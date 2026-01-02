@@ -221,6 +221,386 @@ final class TimesheetReports
     }
 
     /**
+     * Timesheets Pivot (sparse grid): row dimension × column dimension within a date range.
+     *
+     * @param array{
+     *   period:string,
+     *   range:array{from:string,to:string},
+     *   dimensions:array{rows:array<int,string>,columns:array<int,string>},
+     *   metrics?:array<int,string>,
+     *   include?:array{row_totals?:bool,column_totals?:bool,grand_total?:bool},
+     *   filters?:array<string,mixed>,
+     *   sort?:array{rows?:string,columns?:string}
+     * } $payload
+     *
+     * @return array<string,mixed>
+     */
+    public function pivot(array $payload, User $actor): array
+    {
+        if (!$actor->hasPermissionTo('view-timesheets')) {
+            return [
+                'meta' => [
+                    'period' => (string) ($payload['period'] ?? ''),
+                    'range' => (array) ($payload['range'] ?? []),
+                    'timezone' => (string) (config('app.timezone') ?: 'UTC'),
+                    'scoped' => 'self',
+                    'dimensions' => (array) ($payload['dimensions'] ?? []),
+                    'metrics' => (array) ($payload['metrics'] ?? ['hours']),
+                ],
+                'rows' => [],
+                'columns' => [],
+                'cells' => [],
+                'totals' => [
+                    'rows' => [],
+                    'columns' => [],
+                    'grand' => ['hours' => 0.0],
+                ],
+            ];
+        }
+
+        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+
+        $period = (string) $payload['period'];
+        if (!in_array($period, ['day', 'week', 'month'], true)) {
+            throw ValidationException::withMessages(['period' => 'Invalid period.']);
+        }
+
+        $range = (array) $payload['range'];
+        $from = (string) ($range['from'] ?? '');
+        $to = (string) ($range['to'] ?? '');
+
+        $dimensions = (array) $payload['dimensions'];
+        $rowDims = array_values((array) ($dimensions['rows'] ?? []));
+        $colDims = array_values((array) ($dimensions['columns'] ?? []));
+
+        $rowDim = (string) ($rowDims[0] ?? '');
+        $colDim = (string) ($colDims[0] ?? '');
+
+        $allowedDims = ['user', 'project'];
+        if (!in_array($rowDim, $allowedDims, true)) {
+            throw ValidationException::withMessages(['dimensions.rows' => 'Invalid row dimension.']);
+        }
+        if (!in_array($colDim, $allowedDims, true)) {
+            throw ValidationException::withMessages(['dimensions.columns' => 'Invalid column dimension.']);
+        }
+        if ($rowDim === $colDim) {
+            throw ValidationException::withMessages(['dimensions' => 'rows and columns must be different dimensions']);
+        }
+
+        $metrics = array_values((array) ($payload['metrics'] ?? ['hours']));
+        if (count($metrics) === 0) {
+            $metrics = ['hours'];
+        }
+        $metrics = array_values(array_intersect(array_map('strval', $metrics), ['hours']));
+        if (count($metrics) === 0) {
+            $metrics = ['hours'];
+        }
+
+        $include = (array) ($payload['include'] ?? []);
+        $includeRowTotals = array_key_exists('row_totals', $include) ? (bool) $include['row_totals'] : true;
+        $includeColumnTotals = array_key_exists('column_totals', $include) ? (bool) $include['column_totals'] : true;
+        $includeGrandTotal = array_key_exists('grand_total', $include) ? (bool) $include['grand_total'] : true;
+
+        $filters = (array) ($payload['filters'] ?? []);
+
+        $query = Timesheet::query()
+            ->join('technicians as tech', 'tech.id', '=', 'timesheets.technician_id')
+            ->leftJoin('users as u', 'u.id', '=', 'tech.user_id')
+            ->join('projects as p', 'p.id', '=', 'timesheets.project_id')
+            ->where('timesheets.date', '>=', $from)
+            ->where('timesheets.date', '<=', $to);
+
+        if (!$isElevated) {
+            $query->where(function ($where) use ($actor) {
+                $where->where('tech.user_id', '=', $actor->id)
+                    ->orWhere('tech.email', '=', $actor->email);
+            });
+        }
+
+        if (isset($filters['project_id']) && $filters['project_id'] !== null && $filters['project_id'] !== '') {
+            $query->where('timesheets.project_id', '=', (int) $filters['project_id']);
+        }
+
+        if ($isElevated && isset($filters['user_id']) && $filters['user_id'] !== null && $filters['user_id'] !== '') {
+            $query->where('tech.user_id', '=', (int) $filters['user_id']);
+        }
+
+        if (isset($filters['task_id']) && $filters['task_id'] !== null && $filters['task_id'] !== '') {
+            $query->where('timesheets.task_id', '=', (int) $filters['task_id']);
+        }
+
+        if (isset($filters['location_id']) && $filters['location_id'] !== null && $filters['location_id'] !== '') {
+            $query->where('timesheets.location_id', '=', (int) $filters['location_id']);
+        }
+
+        if (isset($filters['status']) && $filters['status'] !== null && $filters['status'] !== '') {
+            $status = (string) $filters['status'];
+            if ($status === 'pending') {
+                $status = 'submitted';
+            }
+            $query->where('timesheets.status', '=', $status);
+        }
+
+        $rowIdExpr = $rowDim === 'user' ? 'tech.user_id' : 'timesheets.project_id';
+        $rowLabelExpr = $rowDim === 'user' ? 'COALESCE(u.name, tech.name)' : 'p.name';
+        $colIdExpr = $colDim === 'user' ? 'tech.user_id' : 'timesheets.project_id';
+        $colLabelExpr = $colDim === 'user' ? 'COALESCE(u.name, tech.name)' : 'p.name';
+
+        $query
+            ->selectRaw("{$rowIdExpr} as row_id")
+            ->selectRaw("{$rowLabelExpr} as row_label")
+            ->selectRaw("{$colIdExpr} as column_id")
+            ->selectRaw("{$colLabelExpr} as column_label")
+            ->selectRaw('SUM(timesheets.hours_worked) as hours')
+            ->groupBy([
+                DB::raw($rowIdExpr),
+                DB::raw($rowLabelExpr),
+                DB::raw($colIdExpr),
+                DB::raw($colLabelExpr),
+            ])
+            ->havingRaw('SUM(timesheets.hours_worked) > 0');
+
+        $rawCells = $query->get();
+
+        /** @var array<string,string> $rowsMap */
+        $rowsMap = [];
+        /** @var array<string,string> $colsMap */
+        $colsMap = [];
+        /** @var array<int,array{row_id:string,column_id:string,hours:float}> $cells */
+        $cells = [];
+
+        /** @var array<string,float> $rowTotals */
+        $rowTotals = [];
+        /** @var array<string,float> $colTotals */
+        $colTotals = [];
+        $grandTotal = 0.0;
+
+        foreach ($rawCells as $cell) {
+            $rowId = (string) $cell->row_id;
+            $colId = (string) $cell->column_id;
+            $hours = round((float) $cell->hours, 2);
+
+            $rowsMap[$rowId] = (string) ($cell->row_label ?? '');
+            $colsMap[$colId] = (string) ($cell->column_label ?? '');
+
+            $cells[] = [
+                'row_id' => $rowId,
+                'column_id' => $colId,
+                'hours' => $hours,
+            ];
+
+            $rowTotals[$rowId] = round(($rowTotals[$rowId] ?? 0.0) + $hours, 2);
+            $colTotals[$colId] = round(($colTotals[$colId] ?? 0.0) + $hours, 2);
+            $grandTotal = round($grandTotal + $hours, 2);
+        }
+
+        $sort = (array) ($payload['sort'] ?? []);
+        $rowsSort = (string) ($sort['rows'] ?? 'name');
+        $colsSort = (string) ($sort['columns'] ?? 'name');
+
+        $rows = collect($rowsMap)
+            ->map(fn (string $label, string $id) => [
+                'id' => $id,
+                'label' => $label,
+                '_total' => (float) ($rowTotals[$id] ?? 0.0),
+            ]);
+
+        $columns = collect($colsMap)
+            ->map(fn (string $label, string $id) => [
+                'id' => $id,
+                'label' => $label,
+                '_total' => (float) ($colTotals[$id] ?? 0.0),
+            ]);
+
+        $rows = match ($rowsSort) {
+            'total_desc' => $rows->sortByDesc('_total')->values(),
+            'total_asc' => $rows->sortBy('_total')->values(),
+            default => $rows->sortBy('label')->values(),
+        };
+
+        $columns = match ($colsSort) {
+            'total_desc' => $columns->sortByDesc('_total')->values(),
+            'total_asc' => $columns->sortBy('_total')->values(),
+            default => $columns->sortBy('label')->values(),
+        };
+
+        $rowsOut = $rows->map(fn (array $r) => ['id' => (string) $r['id'], 'label' => (string) $r['label']])->all();
+        $colsOut = $columns->map(fn (array $c) => ['id' => (string) $c['id'], 'label' => (string) $c['label']])->all();
+
+        $totalsRowsOut = [];
+        if ($includeRowTotals) {
+            $totalsRowsOut = $rows
+                ->map(fn (array $r) => [
+                    'row_id' => (string) $r['id'],
+                    'hours' => round((float) $r['_total'], 2),
+                ])
+                ->values()
+                ->all();
+        }
+
+        $totalsColsOut = [];
+        if ($includeColumnTotals) {
+            $totalsColsOut = $columns
+                ->map(fn (array $c) => [
+                    'column_id' => (string) $c['id'],
+                    'hours' => round((float) $c['_total'], 2),
+                ])
+                ->values()
+                ->all();
+        }
+
+        $grandOut = $includeGrandTotal ? ['hours' => $grandTotal] : null;
+
+        return [
+            'meta' => [
+                'period' => $period,
+                'range' => ['from' => $from, 'to' => $to],
+                'timezone' => (string) (config('app.timezone') ?: 'UTC'),
+                'scoped' => $isElevated ? 'all' : 'self',
+                'dimensions' => [
+                    'rows' => [$rowDim],
+                    'columns' => [$colDim],
+                ],
+                'metrics' => $metrics,
+            ],
+            'rows' => $rowsOut,
+            'columns' => $colsOut,
+            'cells' => $cells,
+            'totals' => [
+                'rows' => $totalsRowsOut,
+                'columns' => $totalsColsOut,
+                'grand' => $grandOut,
+            ],
+        ];
+    }
+
+    /**
+     * Stream a pivot export (rectangular matrix) using existing exporters.
+     *
+     * Accepts the same payload as pivot(), and a required format.
+     * Missing row×column combinations are filled with 0.
+     */
+    public function pivotExport(array $payload, string $format, User $actor): StreamedResponse
+    {
+        $pivot = $this->pivot($payload, $actor);
+
+        $meta = (array) ($pivot['meta'] ?? []);
+        $range = (array) ($meta['range'] ?? []);
+        $from = (string) ($range['from'] ?? '');
+        $to = (string) ($range['to'] ?? '');
+
+        $dims = (array) ($meta['dimensions'] ?? []);
+        $rowDim = (string) ((array) ($dims['rows'] ?? []))[0] ?? '';
+        $colDim = (string) ((array) ($dims['columns'] ?? []))[0] ?? '';
+
+        $include = (array) ($payload['include'] ?? []);
+        $includeRowTotals = array_key_exists('row_totals', $include) ? (bool) $include['row_totals'] : true;
+        $includeColumnTotals = array_key_exists('column_totals', $include) ? (bool) $include['column_totals'] : true;
+        $includeGrandTotal = array_key_exists('grand_total', $include) ? (bool) $include['grand_total'] : true;
+
+        $rowHeader = match ($rowDim) {
+            'user' => 'User',
+            'project' => 'Project',
+            default => 'Row',
+        };
+
+        // Use labels exactly as provided by pivot output.
+        $rows = array_values((array) ($pivot['rows'] ?? []));
+        $columns = array_values((array) ($pivot['columns'] ?? []));
+        $cells = array_values((array) ($pivot['cells'] ?? []));
+
+        /** @var array<string,string> $rowLabels */
+        $rowLabels = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $rowLabels[(string) ($r['id'] ?? '')] = (string) ($r['label'] ?? '');
+        }
+
+        /** @var array<string,string> $colLabels */
+        $colLabels = [];
+        foreach ($columns as $c) {
+            if (!is_array($c)) {
+                continue;
+            }
+            $colLabels[(string) ($c['id'] ?? '')] = (string) ($c['label'] ?? '');
+        }
+
+        /** @var array<string,array<string,float>> $matrix */
+        $matrix = [];
+        /** @var array<string,float> $rowTotals */
+        $rowTotals = [];
+        /** @var array<string,float> $colTotals */
+        $colTotals = [];
+        $grandTotal = 0.0;
+
+        foreach ($cells as $cell) {
+            if (!is_array($cell)) {
+                continue;
+            }
+            $rId = (string) ($cell['row_id'] ?? '');
+            $cId = (string) ($cell['column_id'] ?? '');
+            $hours = round((float) ($cell['hours'] ?? 0), 2);
+
+            $matrix[$rId][$cId] = $hours;
+            $rowTotals[$rId] = round(($rowTotals[$rId] ?? 0.0) + $hours, 2);
+            $colTotals[$cId] = round(($colTotals[$cId] ?? 0.0) + $hours, 2);
+            $grandTotal = round($grandTotal + $hours, 2);
+        }
+
+        $headers = [$rowHeader, ...array_values($colLabels)];
+        if ($includeRowTotals) {
+            $headers[] = 'Row Total';
+        }
+
+        /** @var array<int,array<string,mixed>> $exportRows */
+        $exportRows = [];
+
+        foreach ($rowLabels as $rowId => $label) {
+            $row = [
+                $rowHeader => $label,
+            ];
+
+            foreach ($colLabels as $colId => $colLabel) {
+                $row[$colLabel] = (float) ($matrix[$rowId][$colId] ?? 0.0);
+            }
+
+            if ($includeRowTotals) {
+                $row['Row Total'] = (float) ($rowTotals[$rowId] ?? 0.0);
+            }
+
+            $exportRows[] = $row;
+        }
+
+        if ($includeColumnTotals) {
+            $totalsRow = [
+                $rowHeader => 'Column Total',
+            ];
+
+            foreach ($colLabels as $colId => $colLabel) {
+                $totalsRow[$colLabel] = (float) ($colTotals[$colId] ?? 0.0);
+            }
+
+            if ($includeRowTotals) {
+                $totalsRow['Row Total'] = $includeGrandTotal ? $grandTotal : (float) array_sum($colTotals);
+            }
+
+            $exportRows[] = $totalsRow;
+        }
+
+        $filename = "timesheets_pivot_{$from}_{$to}.{$format}";
+
+        $response = match ($format) {
+            'csv' => $this->csv->stream($exportRows, $filename),
+            'xlsx' => $this->xlsx->stream($exportRows, $filename),
+            default => throw ValidationException::withMessages(['format' => 'Invalid export format.']),
+        };
+
+        return $response;
+    }
+
+    /**
      * @param array<string,mixed> $filters
      * @return array<int,array<string,mixed>>
      */

@@ -143,6 +143,22 @@ Route::middleware(['tenant.initialize'])->group(function () {
             Route::post('reports/timesheets/summary', [ReportsController::class, 'timesheetSummary'])
                 ->middleware(['permission:view-timesheets', 'throttle:read']);
 
+            // Reports (Timesheets pivot grid)
+            Route::post('reports/timesheets/pivot', [ReportsController::class, 'timesheetPivot'])
+                ->middleware(['permission:view-timesheets', 'throttle:read']);
+
+            // Reports (Timesheets pivot export)
+            Route::post('reports/timesheets/pivot/export', [ReportsController::class, 'timesheetsPivotExport'])
+                ->middleware(['permission:view-timesheets', 'throttle:read']);
+
+            // Reports (Expenses export)
+            Route::post('reports/expenses/export', [ReportsController::class, 'exportExpenses'])
+                ->middleware(['permission:view-expenses', 'throttle:read']);
+
+            // Reports (Expenses summary pivot)
+            Route::post('reports/expenses/summary', [ReportsController::class, 'expenseSummary'])
+                ->middleware(['permission:view-expenses', 'throttle:read']);
+
     // Access management routes for admin UI
     Route::prefix('access')->group(function () {
         Route::get('users', [\App\Http\Controllers\AccessManagerController::class, 'listUsers'])->middleware('throttle:read');
