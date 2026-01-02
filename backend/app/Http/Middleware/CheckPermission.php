@@ -26,8 +26,39 @@ class CheckPermission
 
         $user = auth()->user();
 
-        // Verificar se o usuário tem a permissão necessária
-        if (!$user->can($permission)) {
+        // Suporta expressões no mesmo formato do Spatie:
+        // - 'perm_a|perm_b' => OR
+        // - 'perm_a,perm_b' => AND
+        // - 'perm_a,perm_b|perm_c' => (perm_a AND perm_b) OR perm_c
+        $hasPermission = false;
+
+        foreach (explode('|', $permission) as $orGroup) {
+            $orGroup = trim($orGroup);
+            if ($orGroup === '') {
+                continue;
+            }
+
+            $andPermissions = array_values(array_filter(array_map('trim', explode(',', $orGroup))));
+            if ($andPermissions === []) {
+                continue;
+            }
+
+            $groupOk = true;
+            foreach ($andPermissions as $singlePermission) {
+                if (!$user->can($singlePermission)) {
+                    $groupOk = false;
+                    break;
+                }
+            }
+
+            if ($groupOk) {
+                $hasPermission = true;
+                break;
+            }
+        }
+
+        // Verificar se o usuário tem a(s) permissão(ões) necessária(s)
+        if (!$hasPermission) {
             return response()->json([
                 'error' => 'Forbidden.',
                 'message' => 'Você não tem permissão para realizar esta ação.',

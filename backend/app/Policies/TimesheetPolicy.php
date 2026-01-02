@@ -164,8 +164,13 @@ class TimesheetPolicy
      * REGRA: Managers PODEM aprovar os próprios timesheets.
      *        Managers NÃO podem aprovar timesheets de OUTROS managers do mesmo projeto.
      */
-    public function approve(User $user, Timesheet $timesheet): bool
+    public function approve(User $user, ?Timesheet $timesheet = null): bool
     {
+        // Class-level check (e.g. authorize('approve', Timesheet::class))
+        if ($timesheet === null) {
+            return $user->hasPermissionTo('approve-timesheets');
+        }
+
         // Verificar permissão básica
         if (!$user->hasPermissionTo('approve-timesheets') || $timesheet->status !== 'submitted') {
             return false;

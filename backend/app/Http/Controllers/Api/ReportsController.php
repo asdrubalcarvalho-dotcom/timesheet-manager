@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Reports\ApprovalHeatmapRequest;
 use App\Http\Requests\Reports\ExpenseExportRequest;
 use App\Http\Requests\Reports\ExpenseSummaryRequest;
 use App\Http\Requests\Reports\ExportReportRequest;
@@ -12,6 +13,7 @@ use App\Http\Requests\Reports\TimesheetPivotRequest;
 use App\Http\Requests\Reports\TimesheetSummaryRequest;
 use App\Models\Expense;
 use App\Models\Timesheet;
+use App\Services\Reports\ApprovalReports;
 use App\Services\Reports\ExpenseReports;
 use App\Services\Reports\TimesheetReports;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +25,38 @@ final class ReportsController extends Controller
     public function __construct(
         private readonly TimesheetReports $reports,
         private readonly ExpenseReports $expenseReports,
+        private readonly ApprovalReports $approvalReports,
     ) {
+    }
+
+    public function approvalHeatmap(ApprovalHeatmapRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $user = $request->user();
+        $wantsTimesheets = (bool) ($validated['include']['timesheets'] ?? false);
+        $wantsExpenses = (bool) ($validated['include']['expenses'] ?? false);
+
+        $canApproveTimesheets = $wantsTimesheets && $user?->hasPermissionTo('approve-timesheets') === true;
+        $canApproveExpenses = $wantsExpenses && $user?->hasPermissionTo('approve-expenses') === true;
+
+        // Spec: explicit authorization checks for approvals.
+        // Users may only have one of the permissions, so authorize each resource type independently.
+        if ($canApproveTimesheets) {
+            $this->authorize('approve', Timesheet::class);
+        }
+
+        if ($canApproveExpenses) {
+            $this->authorize('approve', Expense::class);
+        }
+
+        if (!$canApproveTimesheets && !$canApproveExpenses) {
+            abort(403, 'Forbidden');
+        }
+
+        return response()->json(
+            $this->approvalReports->heatmap($validated, $request->user()),
+        );
     }
 
     public function exportTimesheets(ExportReportRequest $request): StreamedResponse

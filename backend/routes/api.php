@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TravelSegmentController;
 use App\Http\Controllers\Api\ReportsController;
+use App\Http\Controllers\Api\AiApprovalsController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\PublicContactController;
 use App\Http\Controllers\CountryController;
@@ -158,6 +159,14 @@ Route::middleware(['tenant.initialize'])->group(function () {
             // Reports (Expenses summary pivot)
             Route::post('reports/expenses/summary', [ReportsController::class, 'expenseSummary'])
                 ->middleware(['permission:view-expenses', 'throttle:read']);
+
+            // Reports (Approvals heatmap)
+            Route::post('reports/approvals/heatmap', [ReportsController::class, 'approvalHeatmap'])
+                ->middleware(['permission:approve-timesheets|approve-expenses', 'throttle:read']);
+
+            // AI (Approvals interpretation)
+            Route::post('ai/approvals/query', [AiApprovalsController::class, 'query'])
+                ->middleware(['permission:approve-timesheets|approve-expenses', 'throttle:read']);
 
     // Access management routes for admin UI
     Route::prefix('access')->group(function () {
