@@ -126,35 +126,42 @@ final class ExpenseSummaryReportTest extends TenantTestCase
 
         $rows = $res->json('rows');
         $this->assertIsArray($rows);
-        $this->assertCount(3, $rows);
+        // Phase 2: user1 sees BOTH user1 and user2 (both are members of same project)
+        $this->assertCount(4, $rows); // 3 for user1 + 1 for user2
 
-        foreach ($rows as $row) {
-            $this->assertSame($user1->id, $row['user_id']);
-        }
+        $byPeriod = collect($rows)->groupBy('period');
 
-        $byPeriod = collect($rows)->keyBy('period');
+        // 2025-12-01: Both user1 (10.0) and user2 (999.0)
+        $this->assertCount(2, $byPeriod['2025-12-01']);
+        $dec01 = collect($byPeriod['2025-12-01'])->keyBy('user_id');
+        $this->assertEquals(10.0, $dec01[$user1->id]['total_amount']);
+        $this->assertSame(1, $dec01[$user1->id]['total_entries']);
+        $this->assertEquals(999.0, $dec01[$user2->id]['total_amount']);
+        $this->assertSame(1, $dec01[$user2->id]['total_entries']);
 
-        $this->assertEquals(10.0, $byPeriod['2025-12-01']['total_amount']);
-        $this->assertSame(1, $byPeriod['2025-12-01']['total_entries']);
+        // 2025-12-02: Only user1
+        $this->assertCount(1, $byPeriod['2025-12-02']);
+        $this->assertEquals(20.0, $byPeriod['2025-12-02'][0]['total_amount']);
+        $this->assertSame(1, $byPeriod['2025-12-02'][0]['total_entries']);
 
-        $this->assertEquals(20.0, $byPeriod['2025-12-02']['total_amount']);
-        $this->assertSame(1, $byPeriod['2025-12-02']['total_entries']);
-
-        $this->assertEquals(30.0, $byPeriod['2025-12-03']['total_amount']);
-        $this->assertSame(1, $byPeriod['2025-12-03']['total_entries']);
+        // 2025-12-03: Only user1
+        $this->assertCount(1, $byPeriod['2025-12-03']);
+        $this->assertEquals(30.0, $byPeriod['2025-12-03'][0]['total_amount']);
+        $this->assertSame(1, $byPeriod['2025-12-03'][0]['total_entries']);
     }
 
-    public function test_summary_for_elevated_user_sees_all_users(): void
+    public function test_summary_for_owner_sees_all_users(): void
     {
         $this->seed(RolesAndPermissionsSeeder::class);
 
-        $manager = User::create([
-            'name' => 'Manager',
-            'email' => 'manager@example.com',
+        // Phase 2: Owner gets tenant-wide READ
+        $owner = User::create([
+            'name' => 'Owner',
+            'email' => 'owner@example.com',
             'password' => 'password',
         ]);
-        $manager->assignRole('Manager');
-        $manager->refresh();
+        $owner->assignRole('Owner');
+        $owner->refresh();
 
         $project = Project::create([
             'name' => 'Project A',
@@ -228,7 +235,7 @@ final class ExpenseSummaryReportTest extends TenantTestCase
             'description' => 'U2',
         ]);
 
-        Sanctum::actingAs($manager);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/expenses/summary', [

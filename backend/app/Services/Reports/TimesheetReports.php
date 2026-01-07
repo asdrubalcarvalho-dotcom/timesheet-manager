@@ -124,7 +124,8 @@ final class TimesheetReports
             return collect();
         }
 
-        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+        // PHASE 2 — Canonical project membership scoping
+        $isOwner = $actor->hasRole('Owner');
 
         $periodExpr = match ($filters['period']) {
             'day' => "DATE_FORMAT(timesheets.date, '%Y-%m-%d')",
@@ -148,11 +149,16 @@ final class TimesheetReports
             ->where('timesheets.date', '>=', (string) $filters['from'])
             ->where('timesheets.date', '<=', (string) $filters['to']);
 
-        if (!$isElevated) {
-            $query->where(function ($where) use ($actor) {
-                $where->where('tech.user_id', '=', $actor->id)
-                    ->orWhere('tech.email', '=', $actor->email);
-            });
+        if (!$isOwner) {
+            $technicianId = $actor->technician?->id;
+            if (!$technicianId) {
+                return collect();
+            }
+            $memberProjectIds = $actor->projects()->pluck('projects.id')->toArray();
+            if (empty($memberProjectIds)) {
+                return collect();
+            }
+            $query->whereIn('timesheets.project_id', $memberProjectIds);
         }
 
         $query->selectRaw("{$periodExpr} as period");
@@ -258,9 +264,9 @@ final class TimesheetReports
             ];
         }
 
-        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
-        // Reports only: Owner/Admin/Manager => tenant-wide. Technician => self (technician_id).
-        $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
+        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
+        $isOwner = $actor->hasRole('Owner');
 
         $period = (string) $payload['period'];
         if (!in_array($period, ['day', 'week', 'month'], true)) {
@@ -312,13 +318,19 @@ final class TimesheetReports
             ->where('timesheets.date', '>=', $from)
             ->where('timesheets.date', '<=', $to);
 
-        if (!$isElevated) {
+        if (!$isOwner) {
             $technicianId = $actor->technician?->id;
             if (!$technicianId) {
                 // No technician profile => no data (safe default).
                 $query->whereRaw('1 = 0');
             } else {
-                $query->where('timesheets.technician_id', '=', (int) $technicianId);
+                // Only timesheets for projects where user is a member (via project_members)
+                $memberProjectIds = $actor->projects()->pluck('projects.id')->toArray();
+                if (empty($memberProjectIds)) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->whereIn('timesheets.project_id', $memberProjectIds);
+                }
             }
         }
 
@@ -326,7 +338,7 @@ final class TimesheetReports
             $query->where('timesheets.project_id', '=', (int) $filters['project_id']);
         }
 
-        if ($isElevated && isset($filters['user_id']) && $filters['user_id'] !== null && $filters['user_id'] !== '') {
+        if ($isOwner && isset($filters['user_id']) && $filters['user_id'] !== null && $filters['user_id'] !== '') {
             $query->where('tech.user_id', '=', (int) $filters['user_id']);
         }
 
@@ -461,7 +473,7 @@ final class TimesheetReports
                 'period' => $period,
                 'range' => ['from' => $from, 'to' => $to],
                 'timezone' => (string) (config('app.timezone') ?: 'UTC'),
-                'scoped' => $isElevated ? 'all' : 'self',
+                'scoped' => $isOwner ? 'all' : 'membership',
                 'dimensions' => [
                     'rows' => [$rowDim],
                     'columns' => [$colDim],
@@ -615,17 +627,23 @@ final class TimesheetReports
             return [];
         }
 
-        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+        // PHASE 2 — Canonical project membership scoping
+        $isOwner = $actor->hasRole('Owner');
 
         $query = Timesheet::query()
             ->join('technicians as tech', 'tech.id', '=', 'timesheets.technician_id')
             ->join('projects as p', 'p.id', '=', 'timesheets.project_id');
 
-        if (!$isElevated) {
-            $query->where(function ($where) use ($actor) {
-                $where->where('tech.user_id', '=', $actor->id)
-                    ->orWhere('tech.email', '=', $actor->email);
-            });
+        if (!$isOwner) {
+            $technicianId = $actor->technician?->id;
+            if (!$technicianId) {
+                return [];
+            }
+            $memberProjectIds = $actor->projects()->pluck('projects.id')->toArray();
+            if (empty($memberProjectIds)) {
+                return [];
+            }
+            $query->whereIn('timesheets.project_id', $memberProjectIds);
         }
 
         if (isset($filters['from']) && $filters['from'] !== null && $filters['from'] !== '') {
@@ -640,7 +658,7 @@ final class TimesheetReports
             $query->where('timesheets.project_id', '=', (int) $filters['project_id']);
         }
 
-        if ($isElevated && isset($filters['user_id']) && $filters['user_id'] !== null && $filters['user_id'] !== '') {
+        if ($isOwner && isset($filters['user_id']) && $filters['user_id'] !== null && $filters['user_id'] !== '') {
             $query->where('tech.user_id', '=', (int) $filters['user_id']);
         }
 

@@ -84,13 +84,14 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         $model->saveQuietly();
     }
 
-    public function test_admin_sees_heatmap_data(): void
+    public function test_owner_sees_heatmap_data(): void
     {
         $this->seedTenant();
 
-        [$admin] = $this->makeUserWithDeps('Admin', 'admin@example.com', 'Admin');
-        $admin->givePermissionTo('approve-timesheets');
-        $admin->givePermissionTo('approve-expenses');
+        // Phase 2: Owner gets tenant-wide READ for approvals
+        [$owner] = $this->makeUserWithDeps('Owner', 'owner@example.com', 'Owner');
+        $owner->givePermissionTo('approve-timesheets');
+        $owner->givePermissionTo('approve-expenses');
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         [$u1, $t1, $p1, $task, $loc] = $this->makeUserWithDeps('User 1', 'u1@example.com', 'Technician');
@@ -132,7 +133,7 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         ]);
         $this->setCreatedAt($exPending, '2026-01-02', '12:00:00');
 
-        Sanctum::actingAs($admin);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/approvals/heatmap', [
@@ -153,20 +154,18 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         $this->assertSame(2, $day['total_pending']);
     }
 
-    public function test_manager_sees_heatmap_data_tenant_wide_in_phase1_reports(): void
+    public function test_owner_sees_heatmap_data_tenant_wide(): void
     {
         $this->seedTenant();
 
-        // TEMP Phase 1 (ACCESS_RULES.md §3.4): Manager (system role) sees tenant-wide approvals in reports.
-        [$manager, , $project, $task, $loc] = $this->makeUserWithDeps(
-            'Manager',
-            'manager@example.com',
-            'Manager',
-            'manager',
-            'manager'
+        // Phase 2: Owner gets tenant-wide READ for approvals
+        [$owner, , $project, $task, $loc] = $this->makeUserWithDeps(
+            'Owner',
+            'owner@example.com',
+            'Owner'
         );
-        $manager->givePermissionTo('approve-timesheets');
-        $manager->givePermissionTo('approve-expenses');
+        $owner->givePermissionTo('approve-timesheets');
+        $owner->givePermissionTo('approve-expenses');
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         [$u1, $t1] = $this->makeUserWithDeps('User 1', 'u1@example.com', 'Technician');
@@ -209,7 +208,7 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         ]);
         $this->setCreatedAt($tsOtherPending, '2026-01-04');
 
-        Sanctum::actingAs($manager);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/approvals/heatmap', [
@@ -248,9 +247,9 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
     {
         $this->seedTenant();
 
-        [$admin] = $this->makeUserWithDeps('Admin', 'admin2@example.com', 'Admin');
-        $admin->givePermissionTo('approve-timesheets');
-        $admin->givePermissionTo('approve-expenses');
+        [$owner] = $this->makeUserWithDeps('Owner', 'owner2@example.com', 'Owner');
+        $owner->givePermissionTo('approve-timesheets');
+        $owner->givePermissionTo('approve-expenses');
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         [$u1, $t1, $p1, $task, $loc] = $this->makeUserWithDeps('User 1', 'u2@example.com', 'Technician');
 
@@ -277,7 +276,7 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         ]);
         $this->setCreatedAt($exPending, '2026-01-05');
 
-        Sanctum::actingAs($admin);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/approvals/heatmap', [
@@ -301,9 +300,9 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
     {
         $this->seedTenant();
 
-        [$admin] = $this->makeUserWithDeps('Admin', 'admin3@example.com', 'Admin');
-        $admin->givePermissionTo('approve-timesheets');
-        $admin->givePermissionTo('approve-expenses');
+        [$owner] = $this->makeUserWithDeps('Owner', 'owner3@example.com', 'Owner');
+        $owner->givePermissionTo('approve-timesheets');
+        $owner->givePermissionTo('approve-expenses');
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         [$u1, $t1, $p1] = $this->makeUserWithDeps('User 1', 'u3@example.com', 'Technician');
 
@@ -330,7 +329,7 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         ]);
         $this->setCreatedAt($exPending, '2026-01-07');
 
-        Sanctum::actingAs($admin);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/approvals/heatmap', [
@@ -354,12 +353,12 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
     {
         $this->seedTenant();
 
-        [$admin] = $this->makeUserWithDeps('Admin', 'admin4@example.com', 'Admin');
-        $admin->givePermissionTo('approve-timesheets');
-        $admin->givePermissionTo('approve-expenses');
+        [$owner] = $this->makeUserWithDeps('Owner', 'owner4@example.com', 'Owner');
+        $owner->givePermissionTo('approve-timesheets');
+        $owner->givePermissionTo('approve-expenses');
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        Sanctum::actingAs($admin);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/approvals/heatmap', [

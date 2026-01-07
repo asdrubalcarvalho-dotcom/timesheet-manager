@@ -78,7 +78,7 @@ final class TimesheetPivotExportReportTest extends TenantTestCase
     {
         $this->seedTenant();
 
-        [$manager] = $this->makeUserWithTimesheetDeps('Manager', 'manager@example.com', 'Manager');
+        [$owner] = $this->makeUserWithTimesheetDeps('Owner', 'owner@example.com', 'Owner');
         [$user, $tech, $project, $task, $location] = $this->makeUserWithTimesheetDeps(
             'User 1',
             'user1@example.com',
@@ -96,7 +96,7 @@ final class TimesheetPivotExportReportTest extends TenantTestCase
             'description' => 'Work',
         ]);
 
-        Sanctum::actingAs($manager);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/timesheets/pivot/export', [
@@ -171,7 +171,7 @@ final class TimesheetPivotExportReportTest extends TenantTestCase
         $this->assertSame('PK', substr($bin, 0, 2));
     }
 
-    public function test_pivot_export_scoping_is_enforced_for_regular_user(): void
+    public function test_pivot_export_membership_scoping_for_regular_user(): void
     {
         $this->seedTenant();
 
@@ -181,6 +181,14 @@ final class TimesheetPivotExportReportTest extends TenantTestCase
             'Technician'
         );
         [$user2, $tech2] = $this->makeUserWithTimesheetDeps('User 2', 'user2@example.com', 'Technician');
+
+        // Phase 2: Add user2 to same project so user1 sees both
+        ProjectMember::create([
+            'project_id' => $project->id,
+            'user_id' => $user2->id,
+            'project_role' => 'member',
+            'expense_role' => 'member',
+        ]);
 
         Timesheet::create([
             'technician_id' => $tech1->id,
@@ -220,11 +228,11 @@ final class TimesheetPivotExportReportTest extends TenantTestCase
 
         $csv = $res->streamedContent();
 
-        // user2 label must not appear in export.
+        // Phase 2: membership-based scoping => user1 sees BOTH user1 and user2 (both members)
         $this->assertStringContainsString('User 1', $csv);
-        $this->assertStringNotContainsString('User 2', $csv);
+        $this->assertStringContainsString('User 2', $csv);
 
-        // Totals reflect only user1 (8h).
-        $this->assertMatchesRegularExpression('/\b8(\.0+)?\b/', $csv);
+        // Totals reflect both users (8 + 6 = 14h).
+        $this->assertMatchesRegularExpression('/\b14(\.0+)?\b/', $csv);
     }
 }

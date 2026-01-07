@@ -135,7 +135,7 @@ final class TimesheetReportsTest extends TenantTestCase
         $this->assertSame('PK', substr($bin, 0, 2));
     }
 
-    public function test_regular_user_cannot_export_other_users_timesheets(): void
+    public function test_regular_user_sees_all_members_in_project(): void
     {
         [, $user, $project] = $this->makeTenantAndUser(true);
 
@@ -180,7 +180,7 @@ final class TimesheetReportsTest extends TenantTestCase
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/timesheets/export', [
-                // Attempt to export other user's data (should be ignored by scoping)
+                // Phase 2: user1 is member of project, so sees ALL members' timesheets in that project
                 'filters' => ['user_id' => $user2->id],
                 'format' => 'csv',
             ]);
@@ -188,7 +188,8 @@ final class TimesheetReportsTest extends TenantTestCase
         $this->assertTrue($res->isOk(), (string) $res->getContent());
         $csv = $res->streamedContent();
 
+        // Phase 2: membership-based scoping => sees both user1 and user2 (both are members)
         $this->assertStringContainsString('user1@example.com', $csv);
-        $this->assertStringNotContainsString('user2@example.com', $csv);
+        $this->assertStringContainsString('user2@example.com', $csv);
     }
 }

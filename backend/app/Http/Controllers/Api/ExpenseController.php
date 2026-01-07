@@ -89,11 +89,10 @@ class ExpenseController extends Controller
         $query = Expense::with(['technician', 'project']);
 
         if ($isReportQuery) {
-            // Phase 1 rules:
-            // - Owner/Admin/Manager => tenant-wide
-            // - Technician => self (technician_id == authenticated technician)
-            // - Project roles ignored
-            if (!$user->hasAnyRole(['Owner', 'Admin', 'Manager'])) {
+            // PHASE 2: Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+            // - Owner: tenant-wide
+            // - Others: restrict to expenses whose project_id is in user's project memberships
+            if (!$user->hasRole('Owner')) {
                 $technician = $user->technician
                     ?? Technician::where('user_id', $user->id)->first()
                     ?? Technician::where('email', $user->email)->first();
@@ -101,7 +100,12 @@ class ExpenseController extends Controller
                 if (!$technician) {
                     $query->whereRaw('1 = 0');
                 } else {
-                    $query->where('technician_id', '=', (int) $technician->id);
+                    $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
+                    if (empty($memberProjectIds)) {
+                        $query->whereRaw('1 = 0');
+                    } else {
+                        $query->whereIn('project_id', $memberProjectIds);
+                    }
                 }
             }
         } else {

@@ -21,11 +21,22 @@ final class ApprovalReports
      */
     public function heatmap(array $payload, User $actor): array
     {
-        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
-        // Reports only: Owner/Admin/Manager => tenant-wide approvals.
-        $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
-        if (!$isElevated) {
-            throw new AuthorizationException('Forbidden');
+        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
+        $isOwner = $actor->hasRole('Owner');
+        if (!$isOwner) {
+            $technicianId = $actor->technician?->id;
+            if (!$technicianId) {
+                throw new AuthorizationException('Forbidden');
+            }
+            $memberProjectIds = $actor->projects()->pluck('projects.id')->toArray();
+            if (empty($memberProjectIds)) {
+                throw new AuthorizationException('Forbidden');
+            }
+            // Store for use in scoping below
+            $this->memberProjectIds = $memberProjectIds;
+        } else {
+            $this->memberProjectIds = null;
         }
 
         $from = (string) $payload['range']['from'];
@@ -138,16 +149,19 @@ final class ApprovalReports
     /**
      * @param \Illuminate\Database\Eloquent\Builder<Timesheet> $query
      */
+    private ?array $memberProjectIds = null;
+
     private function applyTimesheetApprovalScoping($query, User $actor): void
     {
-        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
-        // Reports only: Owner/Admin/Manager => tenant-wide.
-        if ($actor->hasAnyRole(['Owner', 'Admin', 'Manager'])) {
+        // PHASE 2 — Canonical project membership scoping
+        if ($actor->hasRole('Owner')) {
             return;
         }
-
-        // Non-elevated users should not get approval heatmaps.
-        $query->whereRaw('1 = 0');
+        if (is_array($this->memberProjectIds) && !empty($this->memberProjectIds)) {
+            $query->whereIn('project_id', $this->memberProjectIds);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
     }
 
     /**
@@ -201,13 +215,15 @@ final class ApprovalReports
      */
     private function applyExpenseApprovalScoping($query, User $actor): void
     {
-        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
-        // Reports only: Owner/Admin/Manager => tenant-wide.
-        if ($actor->hasAnyRole(['Owner', 'Admin', 'Manager'])) {
+        // PHASE 2 — Canonical project membership scoping
+        if ($actor->hasRole('Owner')) {
             return;
         }
-
-        $query->whereRaw('1 = 0');
+        if (is_array($this->memberProjectIds) && !empty($this->memberProjectIds)) {
+            $query->whereIn('project_id', $this->memberProjectIds);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
     }
 
     /**

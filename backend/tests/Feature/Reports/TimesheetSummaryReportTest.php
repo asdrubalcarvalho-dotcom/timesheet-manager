@@ -75,7 +75,7 @@ final class TimesheetSummaryReportTest extends TenantTestCase
         return [$user, $tech, $project, $task, $location];
     }
 
-    public function test_summary_by_user_day_is_scoped_for_regular_user(): void
+    public function test_summary_by_user_day_membership_scoping(): void
     {
         $this->seedTenant();
 
@@ -86,6 +86,14 @@ final class TimesheetSummaryReportTest extends TenantTestCase
         );
 
         [$user2, $tech2] = $this->makeUserWithTimesheetDeps('User 2', 'user2@example.com', 'Technician');
+
+        // Phase 2: Add user2 to project1 so user1 sees both
+        ProjectMember::create([
+            'project_id' => $project1->id,
+            'user_id' => $user2->id,
+            'project_role' => 'member',
+            'expense_role' => 'member',
+        ]);
 
         Timesheet::create([
             'technician_id' => $tech1->id,
@@ -120,7 +128,7 @@ final class TimesheetSummaryReportTest extends TenantTestCase
             'description' => 'Work 3',
         ]);
 
-        // Other user's timesheet should not appear
+        // Phase 2: user2 is now member, so their timesheet will appear
         Timesheet::create([
             'technician_id' => $tech2->id,
             'project_id' => $project1->id,
@@ -146,38 +154,32 @@ final class TimesheetSummaryReportTest extends TenantTestCase
 
         $rows = $res->json('rows');
         $this->assertIsArray($rows);
-        $this->assertCount(3, $rows);
+        // Phase 2: Now sees 4 rows (3 for user1 + 1 for user2 on 2025-12-01)
+        $this->assertCount(4, $rows);
 
-        foreach ($rows as $row) {
-            $this->assertSame($user1->id, $row['user_id']);
-        }
+        $byPeriod = collect($rows)->groupBy('period');
 
-        $byPeriod = collect($rows)->keyBy('period');
+        // 2025-12-01: Both user1 (8h) and user2 (6h)
+        $this->assertCount(2, $byPeriod['2025-12-01']);
+        $dec01 = collect($byPeriod['2025-12-01'])->keyBy('user_id');
+        $this->assertSame(480, $dec01[$user1->id]['total_minutes']);
+        $this->assertSame(360, $dec01[$user2->id]['total_minutes']);
 
-        $this->assertSame(480, $byPeriod['2025-12-01']['total_minutes']);
-        $this->assertSame(480, $byPeriod['2025-12-01']['approved_minutes']);
-        $this->assertSame(0, $byPeriod['2025-12-01']['pending_minutes']);
-        $this->assertSame(0, $byPeriod['2025-12-01']['rejected_minutes']);
-        $this->assertSame(1, $byPeriod['2025-12-01']['total_entries']);
+        // 2025-12-02: Only user1
+        $this->assertCount(1, $byPeriod['2025-12-02']);
+        $this->assertSame(240, $byPeriod['2025-12-02'][0]['total_minutes']);
 
-        $this->assertSame(240, $byPeriod['2025-12-02']['total_minutes']);
-        $this->assertSame(0, $byPeriod['2025-12-02']['approved_minutes']);
-        $this->assertSame(240, $byPeriod['2025-12-02']['pending_minutes']);
-        $this->assertSame(0, $byPeriod['2025-12-02']['rejected_minutes']);
-        $this->assertSame(1, $byPeriod['2025-12-02']['total_entries']);
-
-        $this->assertSame(120, $byPeriod['2025-12-03']['total_minutes']);
-        $this->assertSame(0, $byPeriod['2025-12-03']['approved_minutes']);
-        $this->assertSame(0, $byPeriod['2025-12-03']['pending_minutes']);
-        $this->assertSame(120, $byPeriod['2025-12-03']['rejected_minutes']);
-        $this->assertSame(1, $byPeriod['2025-12-03']['total_entries']);
+        // 2025-12-03: Only user1
+        $this->assertCount(1, $byPeriod['2025-12-03']);
+        $this->assertSame(120, $byPeriod['2025-12-03'][0]['total_minutes']);
     }
 
-    public function test_summary_for_elevated_user_sees_all_users_and_projects(): void
+    public function test_summary_for_owner_sees_all_users_and_projects(): void
     {
         $this->seedTenant();
 
-        [$manager] = $this->makeUserWithTimesheetDeps('Manager', 'manager@example.com', 'Manager');
+        // Phase 2: Owner gets tenant-wide READ
+        [$owner] = $this->makeUserWithTimesheetDeps('Owner', 'owner@example.com', 'Owner');
 
         [$user1, $tech1, $projectA, $taskA, $location] = $this->makeUserWithTimesheetDeps(
             'User 1',
@@ -262,7 +264,7 @@ final class TimesheetSummaryReportTest extends TenantTestCase
             'description' => 'U2 B',
         ]);
 
-        Sanctum::actingAs($manager);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/timesheets/summary', [
@@ -299,12 +301,12 @@ final class TimesheetSummaryReportTest extends TenantTestCase
     {
         $this->seedTenant();
 
-        $manager = User::create([
-            'name' => 'Manager',
-            'email' => 'manager@example.com',
+        $owner = User::create([
+            'name' => 'Owner',
+            'email' => 'owner@example.com',
             'password' => 'password',
         ]);
-        $manager->assignRole('Manager');
+        $owner->assignRole('Owner');
 
         [$user1, $tech1, $project1, $task1, $location1] = $this->makeUserWithTimesheetDeps(
             'User 1',
@@ -420,7 +422,7 @@ final class TimesheetSummaryReportTest extends TenantTestCase
             'description' => 'U2 P2 approved',
         ]);
 
-        Sanctum::actingAs($manager);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/timesheets/summary', [

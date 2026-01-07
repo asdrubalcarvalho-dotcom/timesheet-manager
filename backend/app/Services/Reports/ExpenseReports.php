@@ -34,9 +34,9 @@ final class ExpenseReports
             return collect();
         }
 
-        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
-        // Reports only: Owner/Admin/Manager => tenant-wide. Technician => self (technician_id).
-        $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
+        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
+        $isOwner = $actor->hasRole('Owner');
 
         $periodExpr = match ((string) $filters['period']) {
             'day' => "DATE_FORMAT(expenses.date, '%Y-%m-%d')",
@@ -61,12 +61,13 @@ final class ExpenseReports
             ->where('expenses.date', '>=', (string) $filters['from'])
             ->where('expenses.date', '<=', (string) $filters['to']);
 
-        if (!$isElevated) {
-            $technicianId = $actor->technician?->id;
-            if (!$technicianId) {
-                $query->whereRaw('1 = 0');
+        if (!$isOwner) {
+            // Phase 2: Filter to projects where user is a member
+            $memberProjectIds = $actor->projects()->pluck('projects.id')->toArray();
+            if (count($memberProjectIds) === 0) {
+                $query->whereRaw('1 = 0'); // No member projects => empty result
             } else {
-                $query->where('expenses.technician_id', '=', (int) $technicianId);
+                $query->whereIn('expenses.project_id', $memberProjectIds);
             }
         }
 
@@ -179,16 +180,16 @@ final class ExpenseReports
             return [];
         }
 
-        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
-        // Reports only: Owner/Admin/Manager => tenant-wide. Technician => self (technician_id).
-        $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
+        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
+        $isOwner = $actor->hasRole('Owner');
 
         $query = Expense::query()
             ->join('technicians as tech', 'tech.id', '=', 'expenses.technician_id')
             ->leftJoin('users as u', 'u.id', '=', 'tech.user_id')
             ->join('projects as p', 'p.id', '=', 'expenses.project_id');
 
-        $this->applyScopingAndUserFilter($query, $filters, $actor, $isElevated);
+        $this->applyScopingAndUserFilter($query, $filters, $actor, $isOwner);
         $this->applyFilters($query, $filters);
 
         if (isset($filters['from']) && $filters['from'] !== null && $filters['from'] !== '') {
@@ -243,16 +244,20 @@ final class ExpenseReports
      * @param \Illuminate\Database\Eloquent\Builder<Expense> $query
      * @param array<string,mixed> $filters
      */
-    private function applyScopingAndUserFilter($query, array $filters, User $actor, bool $isElevated): void
+    private function applyScopingAndUserFilter($query, array $filters, User $actor, bool $isOwner): void
     {
-        if (! $isElevated) {
+        if (!$isOwner) {
             $technicianId = $actor->technician?->id;
             if (!$technicianId) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->where('expenses.technician_id', '=', (int) $technicianId);
+                $memberProjectIds = $actor->projects()->pluck('projects.id')->toArray();
+                if (empty($memberProjectIds)) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->whereIn('expenses.project_id', $memberProjectIds);
+                }
             }
-
             return;
         }
 

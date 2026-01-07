@@ -74,11 +74,12 @@ final class TimesheetPivotReportTest extends TenantTestCase
         return [$user, $tech, $project, $task, $location];
     }
 
-    public function test_pivot_for_elevated_user_sees_all_users_and_projects(): void
+    public function test_pivot_for_owner_sees_all_users_and_projects(): void
     {
         $this->seedTenant();
 
-        [$manager] = $this->makeUserWithTimesheetDeps('Manager', 'manager@example.com', 'Manager');
+        // Phase 2: Owner gets tenant-wide READ
+        [$owner] = $this->makeUserWithTimesheetDeps('Owner', 'owner@example.com', 'Owner');
 
         [$user1, $tech1, $projectA, $taskA, $location] = $this->makeUserWithTimesheetDeps(
             'User 1',
@@ -150,7 +151,7 @@ final class TimesheetPivotReportTest extends TenantTestCase
             'description' => 'U2 B',
         ]);
 
-        Sanctum::actingAs($manager);
+        Sanctum::actingAs($owner);
 
         $res = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/reports/timesheets/pivot', [
@@ -182,18 +183,31 @@ final class TimesheetPivotReportTest extends TenantTestCase
         $this->assertEquals(7.5, $rowTotals[(string) $user2->id]['hours']);
     }
 
-    public function test_pivot_is_scoped_for_regular_user_and_ignores_other_user_filter(): void
+    public function test_pivot_scoped_to_member_projects_only(): void
     {
         $this->seedTenant();
 
+        // Phase 2: Non-Owner sees only member projects (all technicians in those projects)
         [$user1, $tech1, $projectA, $taskA, $location] = $this->makeUserWithTimesheetDeps(
             'User 1',
             'user1@example.com',
             'Technician'
         );
 
-        [$user2, $tech2] = $this->makeUserWithTimesheetDeps('User 2', 'user2@example.com', 'Technician');
+        [$user2, $tech2, $projectB, $taskB] = $this->makeUserWithTimesheetDeps('User 2', 'user2@example.com', 'Technician');
 
+        // user1 is member of Project A only (via makeUserWithTimesheetDeps)
+        // user2 is member of Project B only (via makeUserWithTimesheetDeps)
+
+        // Add user2 to Project A as well
+        ProjectMember::create([
+            'project_id' => $projectA->id,
+            'user_id' => $user2->id,
+            'project_role' => 'member',
+            'expense_role' => 'member',
+        ]);
+
+        // user1 timesheet in Project A
         Timesheet::create([
             'technician_id' => $tech1->id,
             'project_id' => $projectA->id,
@@ -205,6 +219,7 @@ final class TimesheetPivotReportTest extends TenantTestCase
             'description' => 'U1',
         ]);
 
+        // user2 timesheet in Project A
         Timesheet::create([
             'technician_id' => $tech2->id,
             'project_id' => $projectA->id,
@@ -213,9 +228,22 @@ final class TimesheetPivotReportTest extends TenantTestCase
             'date' => '2025-12-01',
             'hours_worked' => 6,
             'status' => 'approved',
-            'description' => 'U2',
+            'description' => 'U2 in A',
         ]);
 
+        // user2 timesheet in Project B
+        Timesheet::create([
+            'technician_id' => $tech2->id,
+            'project_id' => $projectB->id,
+            'task_id' => $taskB->id,
+            'location_id' => $location->id,
+            'date' => '2025-12-02',
+            'hours_worked' => 3,
+            'status' => 'approved',
+            'description' => 'U2 in B',
+        ]);
+
+        // Acting as user1 (member of Project A only)
         Sanctum::actingAs($user1);
 
         $res = $this->withHeaders($this->tenantHeaders())
@@ -223,18 +251,23 @@ final class TimesheetPivotReportTest extends TenantTestCase
                 'period' => 'month',
                 'range' => ['from' => '2025-12-01', 'to' => '2025-12-31'],
                 'dimensions' => ['rows' => ['user'], 'columns' => ['project']],
-                'filters' => ['user_id' => $user2->id],
+                'filters' => ['user_id' => $user2->id], // Filter param ignored for non-Owner
             ]);
 
         $res->assertOk();
-        $this->assertSame('self', $res->json('meta.scoped'));
+        
+        // Phase 2: Non-Owner = membership-based
+        $this->assertSame('membership', $res->json('meta.scoped'));
 
         $rows = $res->json('rows');
-        $this->assertCount(1, $rows);
-        $this->assertSame((string) $user1->id, $rows[0]['id']);
+        $columns = $res->json('columns');
+        
+        // user1 sees BOTH user1 and user2 timesheets in Project A (all technicians in member projects)
+        $this->assertCount(2, $rows); // user1 and user2
+        $this->assertCount(1, $columns); // Only Project A
 
         $grand = $res->json('totals.grand.hours');
-        $this->assertEquals(8.0, $grand);
+        $this->assertEquals(14.0, $grand); // 8 + 6 = 14 (Project A only, no Project B)
     }
 
     public function test_pivot_rejects_invalid_dimensions(): void
