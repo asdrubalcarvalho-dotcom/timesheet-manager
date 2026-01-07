@@ -153,11 +153,11 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         $this->assertSame(2, $day['total_pending']);
     }
 
-    public function test_manager_sees_heatmap_data_scoped_to_managed_projects(): void
+    public function test_manager_sees_heatmap_data_tenant_wide_in_phase1_reports(): void
     {
         $this->seedTenant();
 
-        // Manager must be project/expense manager for the project to see it.
+        // TEMP Phase 1 (ACCESS_RULES.md §3.4): Manager (system role) sees tenant-wide approvals in reports.
         [$manager, , $project, $task, $loc] = $this->makeUserWithDeps(
             'Manager',
             'manager@example.com',
@@ -171,12 +171,17 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
 
         [$u1, $t1] = $this->makeUserWithDeps('User 1', 'u1@example.com', 'Technician');
 
-        // Ensure User 1 belongs to manager's project.
-        ProjectMember::create([
-            'project_id' => $project->id,
-            'user_id' => $u1->id,
-            'project_role' => 'member',
-            'expense_role' => 'member',
+        // Create a second project that the manager is NOT a member/manager of.
+        $otherProject = Project::create([
+            'name' => 'Other Project',
+            'description' => 'B',
+            'status' => 'active',
+        ]);
+        $otherTask = Task::create([
+            'project_id' => $otherProject->id,
+            'name' => 'Other Task',
+            'task_type' => 'maintenance',
+            'is_active' => true,
         ]);
 
         $tsPending = Timesheet::create([
@@ -191,6 +196,19 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         ]);
         $this->setCreatedAt($tsPending, '2026-01-03');
 
+        $tsOtherPending = Timesheet::create([
+            'technician_id' => $t1->id,
+            'project_id' => $otherProject->id,
+            'task_id' => $otherTask->id,
+            'location_id' => $loc->id,
+            // Avoid unique constraint on (technician_id, project_id, date).
+            'date' => '2026-01-04',
+            'hours_worked' => 1,
+            'status' => 'submitted',
+            'description' => 'pending other',
+        ]);
+        $this->setCreatedAt($tsOtherPending, '2026-01-04');
+
         Sanctum::actingAs($manager);
 
         $res = $this->withHeaders($this->tenantHeaders())
@@ -203,6 +221,10 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         $day = $res->json('days.2026-01-03');
         $this->assertSame(1, $day['timesheets']['pending']);
         $this->assertSame(1, $day['total_pending']);
+
+        $day2 = $res->json('days.2026-01-04');
+        $this->assertIsArray($day2);
+        $this->assertSame(1, $day2['timesheets']['pending']);
     }
 
     public function test_regular_user_gets_403(): void

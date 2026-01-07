@@ -189,7 +189,7 @@ const ExpensesAnalysisReport: React.FC = () => {
       setError(null);
 
       try {
-        const response = await fetchWithAuth(`${API_URL}/api/expenses`);
+        const response = await fetchWithAuth(`${API_URL}/api/expenses?report=1`);
         if (!mounted) return;
 
         if (!response.ok) {

@@ -34,7 +34,9 @@ final class ExpenseReports
             return collect();
         }
 
-        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
+        // Reports only: Owner/Admin/Manager => tenant-wide. Technician => self (technician_id).
+        $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
 
         $periodExpr = match ((string) $filters['period']) {
             'day' => "DATE_FORMAT(expenses.date, '%Y-%m-%d')",
@@ -60,10 +62,12 @@ final class ExpenseReports
             ->where('expenses.date', '<=', (string) $filters['to']);
 
         if (!$isElevated) {
-            $query->where(function ($where) use ($actor) {
-                $where->where('tech.user_id', '=', $actor->id)
-                    ->orWhere('tech.email', '=', $actor->email);
-            });
+            $technicianId = $actor->technician?->id;
+            if (!$technicianId) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('expenses.technician_id', '=', (int) $technicianId);
+            }
         }
 
         $query->selectRaw("{$periodExpr} as period");
@@ -175,7 +179,9 @@ final class ExpenseReports
             return [];
         }
 
-        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
+        // Reports only: Owner/Admin/Manager => tenant-wide. Technician => self (technician_id).
+        $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
 
         $query = Expense::query()
             ->join('technicians as tech', 'tech.id', '=', 'expenses.technician_id')
@@ -240,10 +246,12 @@ final class ExpenseReports
     private function applyScopingAndUserFilter($query, array $filters, User $actor, bool $isElevated): void
     {
         if (! $isElevated) {
-            $query->where(function ($where) use ($actor) {
-                $where->where('tech.user_id', '=', $actor->id)
-                    ->orWhere('tech.email', '=', $actor->email);
-            });
+            $technicianId = $actor->technician?->id;
+            if (!$technicianId) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('expenses.technician_id', '=', (int) $technicianId);
+            }
 
             return;
         }

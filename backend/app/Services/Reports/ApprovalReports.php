@@ -21,6 +21,8 @@ final class ApprovalReports
      */
     public function heatmap(array $payload, User $actor): array
     {
+        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
+        // Reports only: Owner/Admin/Manager => tenant-wide approvals.
         $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
         if (!$isElevated) {
             throw new AuthorizationException('Forbidden');
@@ -138,17 +140,13 @@ final class ApprovalReports
      */
     private function applyTimesheetApprovalScoping($query, User $actor): void
     {
-        if ($actor->hasAnyRole(['Owner', 'Admin'])) {
+        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
+        // Reports only: Owner/Admin/Manager => tenant-wide.
+        if ($actor->hasAnyRole(['Owner', 'Admin', 'Manager'])) {
             return;
         }
 
-        // Managers should only see approvals for their managed projects.
-        $managedProjectIds = $actor->getManagedProjectIds();
-        if (!empty($managedProjectIds)) {
-            $query->whereIn('project_id', $managedProjectIds);
-            return;
-        }
-
+        // Non-elevated users should not get approval heatmaps.
         $query->whereRaw('1 = 0');
     }
 
@@ -203,13 +201,9 @@ final class ApprovalReports
      */
     private function applyExpenseApprovalScoping($query, User $actor): void
     {
-        if ($actor->hasAnyRole(['Owner', 'Admin'])) {
-            return;
-        }
-
-        $managedProjectIds = $actor->getExpenseManagedProjectIds();
-        if (!empty($managedProjectIds)) {
-            $query->whereIn('project_id', $managedProjectIds);
+        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
+        // Reports only: Owner/Admin/Manager => tenant-wide.
+        if ($actor->hasAnyRole(['Owner', 'Admin', 'Manager'])) {
             return;
         }
 

@@ -258,7 +258,9 @@ final class TimesheetReports
             ];
         }
 
-        $isElevated = $actor->hasRole('Admin') || $actor->hasRole('Manager');
+        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
+        // Reports only: Owner/Admin/Manager => tenant-wide. Technician => self (technician_id).
+        $isElevated = $actor->hasAnyRole(['Owner', 'Admin', 'Manager']);
 
         $period = (string) $payload['period'];
         if (!in_array($period, ['day', 'week', 'month'], true)) {
@@ -311,10 +313,13 @@ final class TimesheetReports
             ->where('timesheets.date', '<=', $to);
 
         if (!$isElevated) {
-            $query->where(function ($where) use ($actor) {
-                $where->where('tech.user_id', '=', $actor->id)
-                    ->orWhere('tech.email', '=', $actor->email);
-            });
+            $technicianId = $actor->technician?->id;
+            if (!$technicianId) {
+                // No technician profile => no data (safe default).
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('timesheets.technician_id', '=', (int) $technicianId);
+            }
         }
 
         if (isset($filters['project_id']) && $filters['project_id'] !== null && $filters['project_id'] !== '') {

@@ -60,6 +60,10 @@ class ExpenseController extends Controller
         $user = $request->user();
         $isOwnerGlobalView = $user->hasRole('Owner');
 
+        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
+        // Applies ONLY to report-driven list queries. Canonical list behavior remains unchanged.
+        $isReportQuery = $request->boolean('report');
+
         // Optional subject context (used to scope projects when viewing another technician)
         $subjectTechnician = $request->filled('technician_id')
             ? Technician::find($request->technician_id)
@@ -84,32 +88,51 @@ class ExpenseController extends Controller
 
         $query = Expense::with(['technician', 'project']);
 
-        if ($isOwnerGlobalView) {
-            if ($subjectVisibleProjectIds !== null) {
-                $query->whereIn('project_id', $subjectVisibleProjectIds);
-            }
-        } else {
-            $technician = $user->technician
-                ?? Technician::where('user_id', $user->id)->first()
-                ?? Technician::where('email', $user->email)->first();
+        if ($isReportQuery) {
+            // Phase 1 rules:
+            // - Owner/Admin/Manager => tenant-wide
+            // - Technician => self (technician_id == authenticated technician)
+            // - Project roles ignored
+            if (!$user->hasAnyRole(['Owner', 'Admin', 'Manager'])) {
+                $technician = $user->technician
+                    ?? Technician::where('user_id', $user->id)->first()
+                    ?? Technician::where('email', $user->email)->first();
 
-            // ACCESS_RULES.md — Technician requirement (no Technician => empty list)
-            if (!$technician) {
-                $query->whereRaw('1 = 0');
-            } else {
-                // ACCESS_RULES.md — Canonical project visibility (member OR canonical manager)
-                $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
-                $managedProjectIds = $user->getExpenseManagedProjectIds();
-                $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
-
-                if ($subjectVisibleProjectIds !== null) {
-                    $visibleProjectIds = array_values(array_intersect($visibleProjectIds, $subjectVisibleProjectIds));
-                }
-
-                if (empty($visibleProjectIds)) {
+                if (!$technician) {
                     $query->whereRaw('1 = 0');
                 } else {
-                    $query->whereIn('project_id', $visibleProjectIds);
+                    $query->where('technician_id', '=', (int) $technician->id);
+                }
+            }
+        } else {
+            // Canonical (non-report) list behavior — unchanged.
+            if ($isOwnerGlobalView) {
+                if ($subjectVisibleProjectIds !== null) {
+                    $query->whereIn('project_id', $subjectVisibleProjectIds);
+                }
+            } else {
+                $technician = $user->technician
+                    ?? Technician::where('user_id', $user->id)->first()
+                    ?? Technician::where('email', $user->email)->first();
+
+                // ACCESS_RULES.md — Technician requirement (no Technician => empty list)
+                if (!$technician) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    // ACCESS_RULES.md — Canonical project visibility (member OR canonical manager)
+                    $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
+                    $managedProjectIds = $user->getExpenseManagedProjectIds();
+                    $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
+
+                    if ($subjectVisibleProjectIds !== null) {
+                        $visibleProjectIds = array_values(array_intersect($visibleProjectIds, $subjectVisibleProjectIds));
+                    }
+
+                    if (empty($visibleProjectIds)) {
+                        $query->whereRaw('1 = 0');
+                    } else {
+                        $query->whereIn('project_id', $visibleProjectIds);
+                    }
                 }
             }
         }
