@@ -159,10 +159,20 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const reportsTimesheetsItems = [
     {
       id: 'timesheets-pivot-report',
-      label: 'Pivot',
+      label: 'Analysis',
       icon: <PivotTableChartIcon />,
       path: 'timesheets-pivot-report',
       show: hasPermission('view-timesheets')
+    }
+  ];
+
+  const reportsExpensesItems = [
+    {
+      id: 'expenses-analysis-report',
+      label: 'Analysis',
+      icon: <PivotTableChartIcon />,
+      path: 'expenses-analysis-report',
+      show: hasPermission('view-expenses')
     }
   ];
 
@@ -177,6 +187,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   ];
 
   const visibleReportsTimesheetsItems = reportsTimesheetsItems.filter((item) => item.show);
+  const visibleReportsExpensesItems = reportsExpensesItems.filter((item) => item.show);
   const visibleReportsApprovalsItems = reportsApprovalsItems.filter((item) => item.show);
 
   const canSeeReportsSection =
@@ -187,9 +198,13 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
 
   const showReportsSection =
     canSeeReportsSection &&
-    (visibleReportsTimesheetsItems.length > 0 || visibleReportsApprovalsItems.length > 0);
+    (visibleReportsTimesheetsItems.length > 0 || visibleReportsExpensesItems.length > 0 || visibleReportsApprovalsItems.length > 0);
 
-  const visibleReportsCollapsedItems = [...visibleReportsTimesheetsItems, ...visibleReportsApprovalsItems];
+  const visibleReportsCollapsedItems = [
+    ...visibleReportsTimesheetsItems,
+    ...visibleReportsExpensesItems,
+    ...visibleReportsApprovalsItems,
+  ];
 
   const hasAnyPermission = (perms: string[]): boolean => perms.some((perm) => hasPermission(perm));
   const planningMenuPermissions = [
@@ -505,92 +520,124 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
               ) : (
                 <Collapse in={reportsOpen} timeout="auto" unmountOnExit>
                   {visibleReportsTimesheetsItems.length > 0 && (
-                    <ListItem sx={{ pt: 0.5, pb: 0 }}>
-                      <ListItemText
-                        primary="Timesheets"
-                        primaryTypographyProps={{
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          color: 'grey.500',
-                          letterSpacing: 0.5
-                        }}
-                      />
-                    </ListItem>
+                    <>
+                      <ListItem sx={{ pt: 0.5, pb: 0 }}>
+                        <ListItemText
+                          primary="Timesheets"
+                          primaryTypographyProps={{
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: 'grey.500',
+                            letterSpacing: 0.5
+                          }}
+                        />
+                      </ListItem>
+                      {visibleReportsTimesheetsItems.map((item) => (
+                        <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                          <ListItemButton
+                            onClick={() => handleItemClick(item.path)}
+                            selected={currentPage === item.path}
+                            sx={{
+                              mx: 2,
+                              borderRadius: 2,
+                              color: 'grey.400',
+                              '&.Mui-selected': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.2),
+                                color: 'primary.light',
+                                '& .MuiListItemIcon-root': { color: 'primary.light' }
+                              },
+                              '&:hover': {
+                                bgcolor: alpha(theme.palette.common.white, 0.05)
+                              }
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </>
                   )}
 
-                  {visibleReportsTimesheetsItems.map((item) => (
-                    <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
-                      <ListItemButton
-                        onClick={() => handleItemClick(item.path)}
-                        selected={currentPage === item.path}
-                        sx={{
-                          mx: 2,
-                          borderRadius: 2,
-                          color: 'grey.400',
-                          '&.Mui-selected': {
-                            bgcolor: alpha(theme.palette.primary.main, 0.2),
-                            color: 'primary.light',
-                            '& .MuiListItemIcon-root': { color: 'primary.light' }
-                          },
-                          '&:hover': {
-                            bgcolor: alpha(theme.palette.common.white, 0.05)
-                          }
-                        }}
-                      >
-                        <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                          {item.icon}
-                        </ListItemIcon>
+                  {visibleReportsExpensesItems.length > 0 && (
+                    <>
+                      <ListItem sx={{ pt: 1, pb: 0 }}>
                         <ListItemText
-                          primary={item.label}
-                          primaryTypographyProps={{ fontSize: '0.875rem' }}
+                          primary="Expenses"
+                          primaryTypographyProps={{
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: 'grey.500',
+                            letterSpacing: 0.5
+                          }}
                         />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
+                      </ListItem>
+                      {visibleReportsExpensesItems.map((item) => (
+                        <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                          <ListItemButton
+                            onClick={() => handleItemClick(item.path)}
+                            selected={currentPage === item.path}
+                            sx={{
+                              mx: 2,
+                              borderRadius: 2,
+                              color: 'grey.400',
+                              '&.Mui-selected': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.2),
+                                color: 'primary.light',
+                                '& .MuiListItemIcon-root': { color: 'primary.light' }
+                              },
+                              '&:hover': {
+                                bgcolor: alpha(theme.palette.common.white, 0.05)
+                              }
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </>
+                  )}
 
                   {visibleReportsApprovalsItems.length > 0 && (
-                    <ListItem sx={{ pt: 1, pb: 0 }}>
-                      <ListItemText
-                        primary="Approvals"
-                        primaryTypographyProps={{
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          color: 'grey.500',
-                          letterSpacing: 0.5
-                        }}
-                      />
-                    </ListItem>
-                  )}
-
-                  {visibleReportsApprovalsItems.map((item) => (
-                    <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
-                      <ListItemButton
-                        onClick={() => handleItemClick(item.path)}
-                        selected={currentPage === item.path}
-                        sx={{
-                          mx: 2,
-                          borderRadius: 2,
-                          color: 'grey.400',
-                          '&.Mui-selected': {
-                            bgcolor: alpha(theme.palette.primary.main, 0.2),
-                            color: 'primary.light',
-                            '& .MuiListItemIcon-root': { color: 'primary.light' }
-                          },
-                          '&:hover': {
-                            bgcolor: alpha(theme.palette.common.white, 0.05)
-                          }
-                        }}
-                      >
-                        <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                          {item.icon}
-                        </ListItemIcon>
+                    <>
+                      <ListItem sx={{ pt: 1, pb: 0 }}>
                         <ListItemText
-                          primary={item.label}
-                          primaryTypographyProps={{ fontSize: '0.875rem' }}
+                          primary="Approvals"
+                          primaryTypographyProps={{
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: 'grey.500',
+                            letterSpacing: 0.5
+                          }}
                         />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
+                      </ListItem>
+                      {visibleReportsApprovalsItems.map((item) => (
+                        <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                          <ListItemButton
+                            onClick={() => handleItemClick(item.path)}
+                            selected={currentPage === item.path}
+                            sx={{
+                              mx: 2,
+                              borderRadius: 2,
+                              color: 'grey.400',
+                              '&.Mui-selected': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.2),
+                                color: 'primary.light',
+                                '& .MuiListItemIcon-root': { color: 'primary.light' }
+                              },
+                              '&:hover': {
+                                bgcolor: alpha(theme.palette.common.white, 0.05)
+                              }
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </>
+                  )}
                 </Collapse>
               )}
             </>

@@ -3,8 +3,11 @@ import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
   CircularProgress,
   FormControl,
+  Grid,
   InputLabel,
   MenuItem,
   Select,
@@ -15,10 +18,16 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs from 'dayjs';
 import api from '../../services/api';
+import PageHeader from '../Common/PageHeader';
+import { useBilling } from '../../contexts/BillingContext';
+import { getTenantAiState } from '../Common/aiState';
+import ReportFiltersCard from '../Common/ReportFiltersCard';
+import ReportAISideTab from '../Common/ReportAISideTab';
 
 type Period = 'day' | 'week' | 'month';
 type Dimension = 'user' | 'project';
@@ -66,6 +75,125 @@ type PivotResponse = {
   };
 };
 
+type PivotResponseApi = {
+  meta: {
+    period: Period;
+    scoped: 'self' | 'all' | string;
+    range?: { from?: string; to?: string };
+    [key: string]: unknown;
+  };
+  rows: Array<{ id: string; label: string }>;
+  columns: Array<{ id: string; label: string }>;
+  cells: Record<string, number>;
+  totals?: {
+    rows?: Array<{ row_id: string; hours: number }>;
+    columns?: Array<{ column_id: string; hours: number }>;
+    grand?: { hours: number } | null;
+  };
+};
+
+const normalizePivotResponse = (apiData: PivotResponseApi): PivotResponse => {
+  const rowTotals: Record<string, number> = {};
+  const colTotals: Record<string, number> = {};
+
+  for (const r of apiData.totals?.rows ?? []) {
+    rowTotals[String(r.row_id)] = typeof r.hours === 'number' ? r.hours : 0;
+  }
+  for (const c of apiData.totals?.columns ?? []) {
+    colTotals[String(c.column_id)] = typeof c.hours === 'number' ? c.hours : 0;
+  }
+
+  return {
+    meta: apiData.meta,
+    rows: (apiData.rows ?? []).map((r) => ({ key: String(r.id), label: String(r.label) })),
+    columns: (apiData.columns ?? []).map((c) => ({ key: String(c.id), label: String(c.label) })),
+    cells: apiData.cells ?? {},
+    totals: {
+      rows: rowTotals,
+      columns: colTotals,
+      grand: typeof apiData.totals?.grand?.hours === 'number' ? apiData.totals.grand.hours : undefined,
+    },
+  };
+};
+
+const answerPivotQuestionDeterministically = (
+  question: string,
+  data: PivotResponse | null,
+  rowDimension: Dimension,
+  columnDimension: Dimension
+): string => {
+  const q = question.trim().toLowerCase();
+
+  if (!data) {
+    return 'Load the pivot report first (select a range and wait for results), then ask again.';
+  }
+
+  const rowLabelByKey = new Map(data.rows.map((r) => [r.key, r.label] as const));
+  const colLabelByKey = new Map(data.columns.map((c) => [c.key, c.label] as const));
+
+  const grand = typeof data.totals?.grand === 'number' ? data.totals.grand : null;
+  const scoped = data.meta?.scoped ? String(data.meta.scoped) : '—';
+  const topRowTotals = Object.entries(data.totals?.rows ?? {})
+    .map(([k, v]) => ({ key: k, label: rowLabelByKey.get(k) ?? k, hours: typeof v === 'number' ? v : 0 }))
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 3);
+  const topColTotals = Object.entries(data.totals?.columns ?? {})
+    .map(([k, v]) => ({ key: k, label: colLabelByKey.get(k) ?? k, hours: typeof v === 'number' ? v : 0 }))
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 3);
+
+  let peak: { rowKey: string; colKey: string; hours: number } | null = null;
+  for (const [k, v] of Object.entries(data.cells ?? {})) {
+    const hours = typeof v === 'number' ? v : 0;
+    if (hours <= 0) continue;
+    const [rowKey, colKey] = k.split(':');
+    if (!rowKey || !colKey) continue;
+    if (!peak || hours > peak.hours) {
+      peak = { rowKey, colKey, hours };
+    }
+  }
+
+  const baseSummaryLines = [
+    `Scope: ${scoped}. Dimensions: ${rowDimension} × ${columnDimension}.`,
+    grand !== null ? `Grand total hours: ${grand}.` : 'Grand total hours: —.',
+    peak
+      ? `Peak cell: ${rowLabelByKey.get(peak.rowKey) ?? peak.rowKey} × ${
+          colLabelByKey.get(peak.colKey) ?? peak.colKey
+        } = ${peak.hours}h.`
+      : 'Peak cell: —.',
+  ];
+
+  if (q.includes('grand') || q.includes('total')) {
+    return baseSummaryLines.join('\n');
+  }
+
+  if (q.includes('top') || q.includes('highest') || q.includes('most')) {
+    const rowsLabel = rowDimension === 'user' ? 'Users' : 'Projects';
+    const colsLabel = columnDimension === 'user' ? 'Users' : 'Projects';
+    const lines = [...baseSummaryLines];
+
+    if (topRowTotals.length > 0) {
+      lines.push(
+        `${rowsLabel} by total: ${topRowTotals
+          .map((r) => `${r.label} (${r.hours}h)`)
+          .join(', ')}.`
+      );
+    }
+    if (topColTotals.length > 0) {
+      lines.push(
+        `${colsLabel} by total: ${topColTotals
+          .map((c) => `${c.label} (${c.hours}h)`)
+          .join(', ')}.`
+      );
+    }
+
+    return lines.join('\n');
+  }
+
+  // Default: concise deterministic summary.
+  return baseSummaryLines.join('\n');
+};
+
 const todayAsYmd = (): string => {
   const d = new Date();
   const y = d.getFullYear();
@@ -107,11 +235,27 @@ const getFilenameFromContentDisposition = (headerValue: string | undefined): str
 };
 
 const TimesheetPivotReport: React.FC = () => {
-  const [period, setPeriod] = useState<Period>('week');
-  const [from, setFrom] = useState<string>(firstDayOfMonthAsYmd());
-  const [to, setTo] = useState<string>(todayAsYmd());
-  const [rowDimension, setRowDimension] = useState<Dimension>('user');
-  const [columnDimension, setColumnDimension] = useState<Dimension>('project');
+  const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
+  const aiState = getTenantAiState(billingSummary, tenantAiEnabled);
+
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+
+  const baselineFilters = useMemo(
+    () => ({
+      period: 'week' as Period,
+      from: firstDayOfMonthAsYmd(),
+      to: todayAsYmd(),
+      rowDimension: 'user' as Dimension,
+      columnDimension: 'project' as Dimension,
+    }),
+    []
+  );
+
+  const [period, setPeriod] = useState<Period>(baselineFilters.period);
+  const [from, setFrom] = useState<string>(baselineFilters.from);
+  const [to, setTo] = useState<string>(baselineFilters.to);
+  const [rowDimension, setRowDimension] = useState<Dimension>(baselineFilters.rowDimension);
+  const [columnDimension, setColumnDimension] = useState<Dimension>(baselineFilters.columnDimension);
 
   const [data, setData] = useState<PivotResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -155,9 +299,9 @@ const TimesheetPivotReport: React.FC = () => {
       setError(null);
 
       try {
-        const response = await api.post<PivotResponse>('/api/reports/timesheets/pivot', payload);
+        const response = await api.post<PivotResponseApi>('/api/reports/timesheets/pivot', payload);
         if (!mounted) return;
-        setData(response.data);
+        setData(normalizePivotResponse(response.data));
       } catch (e: any) {
         if (!mounted) return;
         const message =
@@ -223,101 +367,227 @@ const TimesheetPivotReport: React.FC = () => {
 
   const rowHeaderLabel = rowDimension === 'user' ? 'User' : 'Project';
 
+  const deterministicInsights = useMemo(() => {
+    const scoped = data?.meta?.scoped ? String(data.meta.scoped) : '—';
+    const grand = typeof data?.totals?.grand === 'number' ? data.totals.grand : null;
+    const dims = `${rowDimension} × ${columnDimension}`;
+
+    return {
+      scoped,
+      grand,
+      dims,
+    };
+  }, [data, rowDimension, columnDimension]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (period !== baselineFilters.period) count++;
+    if (from !== baselineFilters.from) count++;
+    if (to !== baselineFilters.to) count++;
+    if (rowDimension !== baselineFilters.rowDimension) count++;
+    if (columnDimension !== baselineFilters.columnDimension) count++;
+    return count;
+  }, [baselineFilters, period, from, to, rowDimension, columnDimension]);
+
+  const clearAllFilters = () => {
+    setPeriod(baselineFilters.period);
+    setFrom(baselineFilters.from);
+    setTo(baselineFilters.to);
+    setRowDimension(baselineFilters.rowDimension);
+    setColumnDimension(baselineFilters.columnDimension);
+  };
+
+  const handleAskAi = async (question: string): Promise<string> => {
+    return answerPivotQuestionDeterministically(question, data, rowDimension, columnDimension);
+  };
+
+  const fromPickerValue = useMemo(() => {
+    const parsed = dayjs(from);
+    return parsed.isValid() ? parsed : null;
+  }, [from]);
+
+  const toPickerValue = useMemo(() => {
+    const parsed = dayjs(to);
+    return parsed.isValid() ? parsed : null;
+  }, [to]);
+
+  const aiInsightsNode = useMemo(() => {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        Try: “grand total”, “top users/projects”, or “highest cell”.
+      </Typography>
+    );
+  }, []);
+
   return (
     <Box sx={{ p: 3 }}>
       <Stack spacing={2}>
-        <Typography variant="h5">Timesheet Pivot Report</Typography>
+        <PageHeader
+          title="Timesheets Analysis"
+          subtitle="Hours by user × project"
+        />
 
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel id="pivot-period-label">Period</InputLabel>
-            <Select
-              labelId="pivot-period-label"
-              label="Period"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as Period)}
-            >
-              <MenuItem value="day">day</MenuItem>
-              <MenuItem value="week">week</MenuItem>
-              <MenuItem value="month">month</MenuItem>
-            </Select>
-          </FormControl>
+        <ReportFiltersCard
+          expanded={filtersExpanded}
+          onToggleExpanded={() => setFiltersExpanded(!filtersExpanded)}
+          activeFiltersCount={activeFiltersCount}
+          onClearAll={clearAllFilters}
+          resultsLabel={data ? `${data.rows.length} rows` : undefined}
+        >
+          <Grid container spacing={1} alignItems="center">
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="pivot-period-label">Period</InputLabel>
+                <Select
+                  labelId="pivot-period-label"
+                  label="Period"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value as Period)}
+                >
+                  <MenuItem value="day">day</MenuItem>
+                  <MenuItem value="week">week</MenuItem>
+                  <MenuItem value="month">month</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
 
-          <TextField
+            <Grid item xs={12} md={3}>
+              <DatePicker
+                label="From"
+                value={fromPickerValue}
+                onChange={(val) => val && setFrom(val.format('YYYY-MM-DD'))}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={3}>
+              <DatePicker
+                label="To"
+                value={toPickerValue}
+                onChange={(val) => val && setTo(val.format('YYYY-MM-DD'))}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="pivot-rows-label">Rows</InputLabel>
+                <Select
+                  labelId="pivot-rows-label"
+                  label="Rows"
+                  value={rowDimension}
+                  onChange={(e) => {
+                    const next = e.target.value as Dimension;
+                    setRowDimension(next);
+                    if (next === columnDimension) {
+                      setColumnDimension(next === 'user' ? 'project' : 'user');
+                    }
+                  }}
+                >
+                  <MenuItem value="user">user</MenuItem>
+                  <MenuItem value="project">project</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="pivot-columns-label">Columns</InputLabel>
+                <Select
+                  labelId="pivot-columns-label"
+                  label="Columns"
+                  value={columnDimension}
+                  onChange={(e) => {
+                    const next = e.target.value as Dimension;
+                    setColumnDimension(next);
+                    if (next === rowDimension) {
+                      setRowDimension(next === 'user' ? 'project' : 'user');
+                    }
+                  }}
+                >
+                  <MenuItem value="user">user</MenuItem>
+                  <MenuItem value="project">project</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </ReportFiltersCard>
+
+        <Card sx={{ mb: 1, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+          <CardContent sx={{ py: 1.25 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={4}>
+                <Stack spacing={0.3}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                    SCOPE
+                  </Typography>
+                  <Typography variant="h6" fontWeight={700} color="white">
+                    {deterministicInsights.scoped}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
+                    {deterministicInsights.dims}
+                  </Typography>
+                </Stack>
+              </Grid>
+
+              <Grid item xs={12} md={8}>
+                <Grid container spacing={2}>
+                  <Grid item xs={6} sm={4}>
+                    <Stack spacing={0.3}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                        PERIOD
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="white">
+                        {period}
+                      </Typography>
+                    </Stack>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
+                    <Stack spacing={0.3}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                        RANGE
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="white">
+                        {from} → {to}
+                      </Typography>
+                    </Stack>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Stack spacing={0.3}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                        GRAND TOTAL
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="white">
+                        {deterministicInsights.grand !== null ? `${deterministicInsights.grand}h` : '—'}
+                      </Typography>
+                    </Stack>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          <Button
+            variant="outlined"
             size="small"
-            label="From"
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 160 }}
-          />
-
-          <TextField
+            sx={{ textTransform: 'none' }}
+            disabled={!canQuery || exporting !== null}
+            onClick={() => void handleExport('csv')}
+          >
+            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+          </Button>
+          <Button
+            variant="outlined"
             size="small"
-            label="To"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 160 }}
-          />
-
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="pivot-rows-label">Rows</InputLabel>
-            <Select
-              labelId="pivot-rows-label"
-              label="Rows"
-              value={rowDimension}
-              onChange={(e) => {
-                const next = e.target.value as Dimension;
-                setRowDimension(next);
-                if (next === columnDimension) {
-                  setColumnDimension(next === 'user' ? 'project' : 'user');
-                }
-              }}
-            >
-              <MenuItem value="user">user</MenuItem>
-              <MenuItem value="project">project</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="pivot-columns-label">Columns</InputLabel>
-            <Select
-              labelId="pivot-columns-label"
-              label="Columns"
-              value={columnDimension}
-              onChange={(e) => {
-                const next = e.target.value as Dimension;
-                setColumnDimension(next);
-                if (next === rowDimension) {
-                  setRowDimension(next === 'user' ? 'project' : 'user');
-                }
-              }}
-            >
-              <MenuItem value="user">user</MenuItem>
-              <MenuItem value="project">project</MenuItem>
-            </Select>
-          </FormControl>
-
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Button
-              variant="outlined"
-              disabled={!canQuery || exporting !== null}
-              onClick={() => void handleExport('csv')}
-            >
-              {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
-            </Button>
-            <Button
-              variant="outlined"
-              disabled={!canQuery || exporting !== null}
-              onClick={() => void handleExport('xlsx')}
-            >
-              {exporting === 'xlsx' ? 'Exporting…' : 'Export XLSX'}
-            </Button>
-          </Stack>
-        </Stack>
+            sx={{ textTransform: 'none' }}
+            disabled={!canQuery || exporting !== null}
+            onClick={() => void handleExport('xlsx')}
+          >
+            {exporting === 'xlsx' ? 'Exporting…' : 'Export XLSX'}
+          </Button>
+        </Box>
 
         {!canQuery && (
           <Alert severity="info">Select a valid date range and different row/column dimensions.</Alert>
@@ -404,6 +674,17 @@ const TimesheetPivotReport: React.FC = () => {
           </>
         )}
       </Stack>
+
+      <ReportAISideTab
+        aiState={aiState}
+        title="AI"
+        insights={aiInsightsNode}
+        onUpgrade={() => void openCheckoutForAddon('ai')}
+        onOpenSettings={() => {
+          window.location.href = '/billing';
+        }}
+        onAsk={handleAskAi}
+      />
     </Box>
   );
 };

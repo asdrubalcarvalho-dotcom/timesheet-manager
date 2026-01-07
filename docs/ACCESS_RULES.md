@@ -107,6 +107,58 @@ Non-member	No records
 
 ⸻
 
+3.4 Phase 1 — Transitional Report Visibility (TEMPORARY)
+
+This section defines an explicit, temporary exception used ONLY by legacy and in-flight Reports
+(Timesheets Pivot, Expenses Analysis, Approvals Heatmap) while full project-role scoping
+is being completed.
+
+This exception exists to:
+• Fix Owner visibility bugs
+• Align Reports behavior with user expectations
+• Avoid partial or inconsistent data exposure
+
+❗ This section does NOT replace the canonical rules above.
+❗ This section MUST be removed once Phase 2 (project-role-aware reports) is implemented.
+
+Phase 1 rules (effective immediately):
+
+• Owner
+  → READ ALL records across all projects (Timesheets, Expenses, Approvals)
+  → This matches section 3.1 and is REQUIRED (bug fix if missing)
+
+• Admin
+  → READ ALL records across all projects
+  → For Reports ONLY
+  → CRUD rules remain unchanged and project-scoped
+
+• Manager (system role)
+  → READ ALL records across all projects
+  → For Reports ONLY
+  → This is a temporary elevation to avoid empty reports
+
+• Technician
+  → READ ONLY own records ("self")
+  → Project roles are NOT evaluated in Phase 1
+
+Important clarifications:
+
+• System roles are used here ONLY as a temporary REPORTS visibility switch
+• Project roles (project_role, expense_role) are intentionally ignored in Phase 1
+• No additional backend endpoints may be added under this exception
+• No CRUD authority is granted by this section
+
+Acceptance criteria (Phase 1):
+
+• Owner must never see empty Reports if data exists in the tenant
+• Admin / Manager Reports must be populated tenant-wide
+• Technician Reports must never leak other users’ data
+
+Once Phase 2 is implemented:
+→ This entire section MUST be deleted
+→ Reports MUST follow sections 2 and 3 strictly
+⸻
+
 4. CRUD Authorization Rules (STRICT)
 
 CRUD authority is always project-role-based and domain-specific.

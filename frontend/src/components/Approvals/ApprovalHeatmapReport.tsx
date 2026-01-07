@@ -2,17 +2,26 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
+  Card,
+  CardContent,
   Checkbox,
   CircularProgress,
   FormControlLabel,
+  Grid,
   Stack,
-  TextField,
   Tooltip,
   Typography,
   alpha,
   useTheme,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs from 'dayjs';
 import api from '../../services/api';
+import PageHeader from '../Common/PageHeader';
+import { useBilling } from '../../contexts/BillingContext';
+import { getTenantAiState } from '../Common/aiState';
+import ReportFiltersCard from '../Common/ReportFiltersCard';
+import ReportAISideTab from '../Common/ReportAISideTab';
 
 type HeatmapRequestPayload = {
   range: {
@@ -102,10 +111,24 @@ const formatTooltipDay = (date: Date): string =>
 const ApprovalHeatmapReport: React.FC = () => {
   const theme = useTheme();
 
-  const [from, setFrom] = useState<string>(daysAgoAsYmd(30));
-  const [to, setTo] = useState<string>(todayAsYmd());
-  const [includeTimesheets, setIncludeTimesheets] = useState(true);
-  const [includeExpenses, setIncludeExpenses] = useState(true);
+  const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
+  const aiState = getTenantAiState(billingSummary, tenantAiEnabled);
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+
+  const baselineFilters = useMemo(
+    () => ({
+      from: daysAgoAsYmd(30),
+      to: todayAsYmd(),
+      includeTimesheets: true,
+      includeExpenses: true,
+    }),
+    []
+  );
+
+  const [from, setFrom] = useState<string>(baselineFilters.from);
+  const [to, setTo] = useState<string>(baselineFilters.to);
+  const [includeTimesheets, setIncludeTimesheets] = useState(baselineFilters.includeTimesheets);
+  const [includeExpenses, setIncludeExpenses] = useState(baselineFilters.includeExpenses);
 
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -204,54 +227,195 @@ const ApprovalHeatmapReport: React.FC = () => {
     return res;
   }, [calendarStart, toDate]);
 
+  const totals = useMemo(() => {
+    const days = data?.days ?? {};
+    let totalPending = 0;
+    let totalApprovedTimesheets = 0;
+    let totalApprovedExpenses = 0;
+
+    for (const v of Object.values(days)) {
+      totalPending += typeof v.total_pending === 'number' ? v.total_pending : 0;
+      totalApprovedTimesheets += typeof v.timesheets?.approved === 'number' ? v.timesheets.approved : 0;
+      totalApprovedExpenses += typeof v.expenses?.approved === 'number' ? v.expenses.approved : 0;
+    }
+
+    return {
+      scoped: data?.meta?.scoped ? String(data.meta.scoped) : '—',
+      totalPending,
+      totalApprovedTimesheets,
+      totalApprovedExpenses,
+    };
+  }, [data]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (from !== baselineFilters.from) count++;
+    if (to !== baselineFilters.to) count++;
+    if (includeTimesheets !== baselineFilters.includeTimesheets) count++;
+    if (includeExpenses !== baselineFilters.includeExpenses) count++;
+    return count;
+  }, [baselineFilters, from, to, includeTimesheets, includeExpenses]);
+
+  const clearAllFilters = () => {
+    setFrom(baselineFilters.from);
+    setTo(baselineFilters.to);
+    setIncludeTimesheets(baselineFilters.includeTimesheets);
+    setIncludeExpenses(baselineFilters.includeExpenses);
+  };
+
+  const fromPickerValue = useMemo(() => {
+    const parsed = dayjs(from);
+    return parsed.isValid() ? parsed : null;
+  }, [from]);
+
+  const toPickerValue = useMemo(() => {
+    const parsed = dayjs(to);
+    return parsed.isValid() ? parsed : null;
+  }, [to]);
+
+  const handleAskAi = async (question: string): Promise<string> => {
+    const response = await api.post<{ answer: string }>(
+      '/api/ai/approvals/query',
+      {
+        question,
+        context: {
+          range: { from, to },
+          types: [
+            ...(includeTimesheets ? (['timesheets'] as const) : []),
+            ...(includeExpenses ? (['expenses'] as const) : []),
+          ],
+        },
+      }
+    );
+
+    return String(response.data?.answer ?? '');
+  };
+
+  const aiInsightsNode = useMemo(() => {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        Try: “Where are approvals piling up?”, “Which days were worst?”, or “Compare timesheets vs expenses”.
+      </Typography>
+    );
+  }, []);
+
   return (
     <Box sx={{ p: 3 }}>
       <Stack spacing={2}>
-        <Typography variant="h5">Approval Heatmap</Typography>
+        <PageHeader
+          title="Approval Heatmap"
+          subtitle="Pending approvals by day"
+        />
 
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
-          <TextField
-            size="small"
-            label="From"
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 160 }}
-          />
-
-          <TextField
-            size="small"
-            label="To"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 160 }}
-          />
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeTimesheets}
-                onChange={(e) => setIncludeTimesheets(e.target.checked)}
-                size="small"
+        <ReportFiltersCard
+          expanded={filtersExpanded}
+          onToggleExpanded={() => setFiltersExpanded(!filtersExpanded)}
+          activeFiltersCount={activeFiltersCount}
+          onClearAll={clearAllFilters}
+        >
+          <Grid container spacing={1} alignItems="center">
+            <Grid item xs={12} md={3}>
+              <DatePicker
+                label="From"
+                value={fromPickerValue}
+                onChange={(val) => val && setFrom(val.format('YYYY-MM-DD'))}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
-            }
-            label="Timesheets"
-          />
+            </Grid>
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeExpenses}
-                onChange={(e) => setIncludeExpenses(e.target.checked)}
-                size="small"
+            <Grid item xs={12} md={3}>
+              <DatePicker
+                label="To"
+                value={toPickerValue}
+                onChange={(val) => val && setTo(val.format('YYYY-MM-DD'))}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
-            }
-            label="Expenses"
-          />
-        </Stack>
+            </Grid>
+
+            <Grid item xs={12} md={3}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeTimesheets}
+                    onChange={(e) => setIncludeTimesheets(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Timesheets"
+                sx={{ m: 0 }}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={3}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeExpenses}
+                    onChange={(e) => setIncludeExpenses(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Expenses"
+                sx={{ m: 0 }}
+              />
+            </Grid>
+          </Grid>
+        </ReportFiltersCard>
+
+        <Card sx={{ mb: 1, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+          <CardContent sx={{ py: 1.25 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={3}>
+                <Stack spacing={0.3}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                    SCOPE
+                  </Typography>
+                  <Typography variant="h6" fontWeight={700} color="white">
+                    {totals.scoped}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
+                    {from} → {to}
+                  </Typography>
+                </Stack>
+              </Grid>
+
+              <Grid item xs={12} md={9}>
+                <Grid container spacing={2}>
+                  <Grid item xs={6} sm={4}>
+                    <Stack spacing={0.3}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                        Pending
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="white">
+                        {totals.totalPending}
+                      </Typography>
+                    </Stack>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
+                    <Stack spacing={0.3}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                        Approved (timesheets)
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="white">
+                        {totals.totalApprovedTimesheets}
+                      </Typography>
+                    </Stack>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
+                    <Stack spacing={0.3}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
+                        Approved (expenses)
+                      </Typography>
+                      <Typography variant="h6" fontWeight={600} color="white">
+                        {totals.totalApprovedExpenses}
+                      </Typography>
+                    </Stack>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
 
         {!canQuery && (
           <Alert severity="info">
@@ -383,6 +547,17 @@ const ApprovalHeatmapReport: React.FC = () => {
           </Box>
         )}
       </Stack>
+
+      <ReportAISideTab
+        aiState={aiState}
+        title="AI"
+        insights={aiInsightsNode}
+        onUpgrade={() => void openCheckoutForAddon('ai')}
+        onOpenSettings={() => {
+          window.location.href = '/billing';
+        }}
+        onAsk={handleAskAi}
+      />
     </Box>
   );
 };

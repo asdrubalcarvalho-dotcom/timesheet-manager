@@ -43,6 +43,7 @@ const BillingPage = React.lazy(() => import('./components/Billing/BillingPage'))
 const PaymentMethodsPage = React.lazy(() => import('./pages/Billing/PaymentMethodsPage'));
 const TimesheetPivotReport = React.lazy(() => import('./components/Timesheets/TimesheetPivotReport'));
 const ApprovalHeatmapReport = React.lazy(() => import('./components/Approvals/ApprovalHeatmapReport'));
+const ExpensesAnalysisReport = React.lazy(() => import('./components/Reports/Expenses/ExpensesAnalysisReport'));
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -75,7 +76,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods';
+type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -83,6 +84,7 @@ const pageToPath: Record<Page, string> = {
   timesheets: '/timesheets',
   'timesheets-pivot-report': '/timesheets/reports/pivot',
   'approvals-heatmap-report': '/reports/approvals/heatmap',
+  'expenses-analysis-report': '/reports/expenses/analysis',
   expenses: '/expenses',
   approvals: '/approvals',
   dashboard: '/dashboard',
@@ -200,6 +202,8 @@ const AppContent: React.FC = () => {
         return <TimesheetPivotReport />;
       case 'approvals-heatmap-report':
         return <ApprovalHeatmapReport />;
+      case 'expenses-analysis-report':
+        return <ExpensesAnalysisReport />;
       case 'expenses':
         return <ExpenseManager />;
       case 'approvals':
