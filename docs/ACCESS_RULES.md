@@ -78,6 +78,8 @@ A system Owner:
 • Across all projects
 • Regardless of project membership
 
+This applies to Reports and all LIST (READ) endpoints unless explicitly documented otherwise.
+
 This exception applies to READ only.
 
 ❌ Owner status does NOT grant CRUD authority.
@@ -106,6 +108,17 @@ Non-member	No records
 
 
 ⸻
+
+
+3.4 Report Visibility Rules
+
+Reports follow canonical project membership scoping (sections 2 and 3):
+• Owner: global READ (all projects)
+• All other users: only records from projects where they are a member (project_members)
+• Project manager roles do NOT affect READ visibility
+• No system role (Admin/Manager) changes data visibility
+• CRUD rules unchanged (see section 4)
+• A user without Technician record sees empty results (except Owner)
 
 4. CRUD Authorization Rules (STRICT)
 
@@ -147,7 +160,7 @@ If the authenticated user is not a member of the target project:
 → ❌ 403 Forbidden
 → Message: “You are not assigned to this project.”
 
-This applies to ALL roles, including Owner.
+This applies to ALL roles, including Owner (CRUD only).
 
 ⸻
 

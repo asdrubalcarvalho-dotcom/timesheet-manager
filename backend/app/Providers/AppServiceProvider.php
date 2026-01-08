@@ -2,9 +2,20 @@
 
 namespace App\Providers;
 
+use App\Events\Billing\SubscriptionExpiredDowngraded;
+use App\Events\Billing\SubscriptionPaymentFailed;
+use App\Events\Billing\SubscriptionRecovered;
+use App\Events\Billing\SubscriptionRenewalReminderDue;
+use App\Events\UserInvited;
+use App\Listeners\Billing\SendSubscriptionExpiredDowngradedEmail;
+use App\Listeners\Billing\SendSubscriptionPaymentFailedEmail;
+use App\Listeners\Billing\SendSubscriptionRecoveredEmail;
+use App\Listeners\Billing\SendSubscriptionRenewalReminderEmail;
+use App\Listeners\SendUserInvitationEmail;
 use App\Models\PersonalAccessToken;
 use App\Services\TimesheetAIService;
 use App\Tenancy\Resolvers\TenantHeaderOrSlugResolver;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Pennant\Feature;
 use Laravel\Sanctum\Sanctum;
@@ -30,8 +41,42 @@ class AppServiceProvider extends ServiceProvider
         // that automatically uses the tenant connection when tenancy is initialized
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
 
+        // Register event listeners
+        $this->registerEventListeners();
+
         // Define Pennant feature flags for multi-tenant module access control
         $this->defineTenantFeatures();
+    }
+
+    /**
+     * Register event listeners.
+     */
+    protected function registerEventListeners(): void
+    {
+        Event::listen(
+            UserInvited::class,
+            SendUserInvitationEmail::class
+        );
+
+        Event::listen(
+            SubscriptionRenewalReminderDue::class,
+            SendSubscriptionRenewalReminderEmail::class
+        );
+
+        Event::listen(
+            SubscriptionPaymentFailed::class,
+            SendSubscriptionPaymentFailedEmail::class
+        );
+
+        Event::listen(
+            SubscriptionRecovered::class,
+            SendSubscriptionRecoveredEmail::class
+        );
+
+        Event::listen(
+            SubscriptionExpiredDowngraded::class,
+            SendSubscriptionExpiredDowngradedEmail::class
+        );
     }
 
     /**

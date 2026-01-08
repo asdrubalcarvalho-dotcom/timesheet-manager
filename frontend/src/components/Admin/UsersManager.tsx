@@ -155,7 +155,7 @@ const UsersManager: React.FC = () => {
     setEditingUser(null);
   };
 
-  const handleSave = async (e?: React.FormEvent) => {
+  const handleSave = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) {
       e.preventDefault();
     }
@@ -165,6 +165,17 @@ const UsersManager: React.FC = () => {
     }
 
     try {
+      // By default, keep existing behavior: create user AND send invite email.
+      // If the user clicks the secondary button, submitter will include data-send-invite="false".
+      let sendInvite = true;
+      if (e) {
+        const nativeEvent = e.nativeEvent as any;
+        const submitter = nativeEvent?.submitter as HTMLButtonElement | undefined;
+        if (submitter?.dataset?.sendInvite === 'false') {
+          sendInvite = false;
+        }
+      }
+
       const payload: any = {
         name: formData.name,
       };
@@ -196,6 +207,8 @@ const UsersManager: React.FC = () => {
         await api.put(`/api/technicians/${editingUser.id}`, payload);
         showSuccess('User updated successfully');
       } else {
+        // Use the same endpoint, but allow opting out of invite email.
+        payload.send_invite = sendInvite;
         await api.post('/api/technicians', payload);
         showSuccess('User created successfully');
       }
@@ -575,15 +588,39 @@ const UsersManager: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button
-            type="submit"
-            form="user-form"
-            variant="contained"
-            color="primary"
-            disabled={isReadOnly}
-          >
-            {editingUser ? 'Update' : 'Create'}
-          </Button>
+          {editingUser ? (
+            <Button
+              type="submit"
+              form="user-form"
+              variant="contained"
+              color="primary"
+              disabled={isReadOnly}
+            >
+              Update
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="submit"
+                form="user-form"
+                variant="outlined"
+                color="primary"
+                disabled={isReadOnly}
+                data-send-invite="false"
+              >
+                Create without email
+              </Button>
+              <Button
+                type="submit"
+                form="user-form"
+                variant="contained"
+                color="primary"
+                disabled={isReadOnly}
+              >
+                Create
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
 

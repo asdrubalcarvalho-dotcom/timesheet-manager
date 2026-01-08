@@ -3,8 +3,10 @@
 namespace App\Services\Billing;
 
 use Carbon\Carbon;
+use App\Events\Billing\SubscriptionExpiredDowngraded;
+use App\Events\Billing\SubscriptionPaymentFailed;
+use App\Events\Billing\SubscriptionRecovered;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Modules\Billing\Models\Subscription;
 use Modules\Billing\Models\Payment;
 use App\Services\Billing\PlanManager;
@@ -194,9 +196,14 @@ class BillingDunningService
                     'attempt' => $attemptNumber,
                     'amount' => $amount,
                 ]);
-                
-                // Send recovery success email
-                $this->sendRecoverySuccessEmail($tenant, $subscription);
+
+                $tenant->run(function () use ($tenant, $subscription, $amount) {
+                    event(new SubscriptionRecovered(
+                        tenant: $tenant,
+                        subscription: $subscription,
+                        amount: $amount,
+                    ));
+                });
                 
                 return ['success' => true, 'amount' => $amount];
             }
@@ -222,12 +229,18 @@ class BillingDunningService
                 'error' => $e->getMessage(),
                 'grace_period_until' => $subscription->grace_period_until,
             ]);
-            
-            // Send appropriate notification
-            if ($attemptNumber < self::MAX_RETRY_ATTEMPTS) {
-                $this->sendRetryWarningEmail($tenant, $subscription, $attemptNumber);
-            } else {
-                $this->sendFinalWarningEmail($tenant, $subscription);
+
+            // Phase 2 requirement: send Payment Failed email (once per failed renewal period).
+            // We trigger it on the first failed attempt that establishes grace period.
+            if ($attemptNumber === 1) {
+                $tenant->run(function () use ($tenant, $subscription, $amount, $e) {
+                    event(new SubscriptionPaymentFailed(
+                        tenant: $tenant,
+                        subscription: $subscription,
+                        amount: $amount,
+                        reason: $e->getMessage(),
+                    ));
+                });
             }
             
             return ['success' => false, 'error' => $e->getMessage()];
@@ -263,86 +276,12 @@ class BillingDunningService
                 'error' => $e->getMessage(),
             ]);
         }
-        
-        // Send cancellation email
-        $this->sendCancellationEmail($tenant, $subscription);
-    }
-    
-    /**
-     * Send recovery success email
-     */
-    protected function sendRecoverySuccessEmail(Tenant $tenant, Subscription $subscription): void
-    {
-        try {
-            // TODO: Implement email sending
-            Log::info('[BillingDunningService] Recovery success email queued', [
-                'tenant_id' => $tenant->id,
-                'email' => $tenant->email,
-            ]);
-        } catch (Exception $e) {
-            Log::error('[BillingDunningService] Failed to send recovery success email', [
-                'tenant_id' => $tenant->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-    
-    /**
-     * Send retry warning email
-     */
-    protected function sendRetryWarningEmail(Tenant $tenant, Subscription $subscription, int $attemptNumber): void
-    {
-        try {
-            // TODO: Implement email sending
-            Log::info('[BillingDunningService] Retry warning email queued', [
-                'tenant_id' => $tenant->id,
-                'email' => $tenant->email,
-                'attempt' => $attemptNumber,
-            ]);
-        } catch (Exception $e) {
-            Log::error('[BillingDunningService] Failed to send retry warning email', [
-                'tenant_id' => $tenant->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-    
-    /**
-     * Send final warning before cancellation
-     */
-    protected function sendFinalWarningEmail(Tenant $tenant, Subscription $subscription): void
-    {
-        try {
-            // TODO: Implement email sending
-            Log::info('[BillingDunningService] Final warning email queued', [
-                'tenant_id' => $tenant->id,
-                'email' => $tenant->email,
-                'grace_period_until' => $subscription->grace_period_until,
-            ]);
-        } catch (Exception $e) {
-            Log::error('[BillingDunningService] Failed to send final warning email', [
-                'tenant_id' => $tenant->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-    
-    /**
-     * Send cancellation email
-     */
-    protected function sendCancellationEmail(Tenant $tenant, Subscription $subscription): void
-    {
-        try {
-            // TODO: Implement email sending
-            Log::info('[BillingDunningService] Cancellation email queued', [
-                'tenant_id' => $tenant->id,
-                'email' => $tenant->email,
-            ]);
-        } catch (Exception $e) {
-            Log::error('[BillingDunningService] Failed to send cancellation email', [
-                'tenant_id' => $tenant->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
+
+        $tenant->run(function () use ($tenant, $subscription) {
+            event(new SubscriptionExpiredDowngraded(
+                tenant: $tenant,
+                subscription: $subscription,
+            ));
+        });
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Events\Billing\SubscriptionRenewalReminderDue;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Modules\Billing\Models\Subscription;
@@ -25,6 +26,11 @@ class BillingRenewalService
     {
         Log::info('[BillingRenewalService] Starting renewal run');
         $now = Carbon::now();
+
+        // Renewal reminders (T-7) for active, non-trial subscriptions.
+        // These are informational only and do not change billing state.
+        $this->queueRenewalReminders($now);
+
         $eligible = Subscription::where('status', 'active')
             ->where('is_trial', false)
             ->whereNotNull('billing_period_ends_at')
@@ -159,5 +165,43 @@ class BillingRenewalService
             'failed' => $failed,
         ]);
         return compact('total', 'succeeded', 'failed');
+    }
+
+    private function queueRenewalReminders(Carbon $now): void
+    {
+        try {
+            $start = $now->copy()->startOfDay()->addDay();
+            $end = $now->copy()->startOfDay()->addDays(7)->endOfDay();
+
+            $candidates = Subscription::where('status', 'active')
+                ->where('is_trial', false)
+                ->whereNotNull('billing_period_ends_at')
+                ->whereBetween('billing_period_ends_at', [$start, $end])
+                ->get();
+
+            foreach ($candidates as $subscription) {
+                $tenant = $subscription->tenant;
+                if (!$tenant) {
+                    continue;
+                }
+
+                $daysRemaining = $now->copy()->startOfDay()->diffInDays($subscription->billing_period_ends_at->copy()->startOfDay(), false);
+                if ($daysRemaining !== 7) {
+                    continue;
+                }
+
+                $tenant->run(function () use ($tenant, $subscription, $daysRemaining) {
+                    event(new SubscriptionRenewalReminderDue(
+                        tenant: $tenant,
+                        subscription: $subscription,
+                        daysRemaining: $daysRemaining,
+                    ));
+                });
+            }
+        } catch (Exception $e) {
+            Log::error('[BillingRenewalService] Failed queuing renewal reminders', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

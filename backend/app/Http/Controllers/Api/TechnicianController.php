@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\UserInvited;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\HandlesConstraintExceptions;
 use App\Models\Technician;
@@ -226,6 +227,8 @@ class TechnicianController extends Controller
             'password' => 'required|string|min:6',
         ]);
 
+        $sendInvite = $request->boolean('send_invite', true);
+
         // Create User for the Technician (REQUIRED for billing user count)
         $user = User::create([
             'name' => $validated['name'],
@@ -240,6 +243,13 @@ class TechnicianController extends Controller
         // Create Technician with user_id
         $validated['user_id'] = $user->id;
         $technician = Technician::create($validated);
+
+        // Dispatch UserInvited event for email notification, if requested
+        $tenant = tenancy()->tenant;
+        $inviter = Auth::user();
+        if ($sendInvite) {
+            event(new UserInvited($tenant, $user, $inviter));
+        }
 
         return response()->json([
             'success' => true,

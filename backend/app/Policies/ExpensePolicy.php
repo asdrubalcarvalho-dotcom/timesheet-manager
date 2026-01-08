@@ -143,8 +143,13 @@ class ExpensePolicy
      * REGRA: Expense Managers PODEM aprovar as próprias expenses.
      *        Managers NÃO podem aprovar expenses de OUTROS managers do mesmo projeto.
      */
-    public function approve(User $user, Expense $expense): bool
+    public function approve(User $user, ?Expense $expense = null): bool
     {
+        // Class-level check (e.g. authorize('approve', Expense::class))
+        if ($expense === null) {
+            return $user->hasPermissionTo('approve-expenses');
+        }
+
         // Verificar permissão básica
         if (!$user->hasPermissionTo('approve-expenses') || $expense->status !== 'submitted') {
             return false;

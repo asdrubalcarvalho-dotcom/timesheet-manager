@@ -171,6 +171,17 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     public function getInternal(string $key)
     {
         if ($key === 'db_name' && app()->environment('testing')) {
+            // In testing we must respect persisted tenant db_name, otherwise request middleware
+            // (e.g. SetSanctumTenantConnection) may point the tenant connection at central DB,
+            // and permission checks resolve against the wrong database (403s in HTTP tests).
+            // Prefer the persisted internal db_name if present.
+            // Some tests (and the runtime middleware stack) rely on a real per-tenant DB.
+            $dbName = parent::getInternal($key);
+            if (! empty($dbName)) {
+                return $dbName;
+            }
+
+            // Fallback for legacy tests that don't provision a per-tenant database.
             return config('database.connections.mysql.database');
         }
 

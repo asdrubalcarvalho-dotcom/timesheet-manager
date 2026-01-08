@@ -22,6 +22,8 @@ import {
   Close as CloseIcon,
   Dashboard as DashboardIcon,
   AccessTime as TimesheetIcon,
+  PivotTableChart as PivotTableChartIcon,
+  Assessment as ReportsIcon,
   Receipt as ExpenseIcon,
   Assignment as ApprovalIcon,
   Assignment as PlanningIcon,
@@ -62,6 +64,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(true);
   const [planningOpen, setPlanningOpen] = useState(true); // Planning starts open
   const [administrationOpen, setAdministrationOpen] = useState(true); // Start open for admins
   const [resetDataDialogOpen, setResetDataDialogOpen] = useState(false);
@@ -152,6 +155,56 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   ];
 
   const visibleManagementItems = managementItems.filter((item) => item.show);
+
+  const reportsTimesheetsItems = [
+    {
+      id: 'timesheets-pivot-report',
+      label: 'Analysis',
+      icon: <PivotTableChartIcon />,
+      path: 'timesheets-pivot-report',
+      show: hasPermission('view-timesheets')
+    }
+  ];
+
+  const reportsExpensesItems = [
+    {
+      id: 'expenses-analysis-report',
+      label: 'Analysis',
+      icon: <PivotTableChartIcon />,
+      path: 'expenses-analysis-report',
+      show: hasPermission('view-expenses')
+    }
+  ];
+
+  const reportsApprovalsItems = [
+    {
+      id: 'approvals-heatmap-report',
+      label: 'Heatmap',
+      icon: <ApprovalIcon />,
+      path: 'approvals-heatmap-report',
+      show: hasPermission('approve-timesheets') || hasPermission('approve-expenses')
+    }
+  ];
+
+  const visibleReportsTimesheetsItems = reportsTimesheetsItems.filter((item) => item.show);
+  const visibleReportsExpensesItems = reportsExpensesItems.filter((item) => item.show);
+  const visibleReportsApprovalsItems = reportsApprovalsItems.filter((item) => item.show);
+
+  const canSeeReportsSection =
+    hasPermission('view-timesheets') ||
+    hasPermission('view-expenses') ||
+    hasPermission('approve-timesheets') ||
+    hasPermission('approve-expenses');
+
+  const showReportsSection =
+    canSeeReportsSection &&
+    (visibleReportsTimesheetsItems.length > 0 || visibleReportsExpensesItems.length > 0 || visibleReportsApprovalsItems.length > 0);
+
+  const visibleReportsCollapsedItems = [
+    ...visibleReportsTimesheetsItems,
+    ...visibleReportsExpensesItems,
+    ...visibleReportsApprovalsItems,
+  ];
 
   const hasAnyPermission = (perms: string[]): boolean => perms.some((perm) => hasPermission(perm));
   const planningMenuPermissions = [
@@ -415,6 +468,180 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
               </ListItemButton>
             </ListItem>
           ))}
+
+          {/* Reports Section (permission-driven; parent depends on children) */}
+          {showReportsSection && (
+            <>
+              <Divider sx={{ my: 2, borderColor: alpha(theme.palette.common.white, 0.1) }} />
+
+              {!collapsed && (
+                <ListItem>
+                  <ListItemButton
+                    onClick={() => setReportsOpen(!reportsOpen)}
+                    sx={{ color: 'grey.400' }}
+                  >
+                    <ListItemIcon sx={{ color: 'inherit' }}>
+                      <ReportsIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Reports" />
+                    {reportsOpen ? <ExpandLess /> : <ExpandMore />}
+                  </ListItemButton>
+                </ListItem>
+              )}
+
+              {collapsed ? (
+                // Show only icons when collapsed
+                visibleReportsCollapsedItems.map((item) => (
+                  <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      onClick={() => handleItemClick(item.path)}
+                      selected={currentPage === item.path}
+                      sx={{
+                        mx: 1,
+                        borderRadius: 2,
+                        color: 'grey.300',
+                        justifyContent: 'center',
+                        '&.Mui-selected': {
+                          bgcolor: alpha(theme.palette.primary.main, 0.2),
+                          color: 'primary.light',
+                          '& .MuiListItemIcon-root': { color: 'primary.light' }
+                        },
+                        '&:hover': {
+                          bgcolor: alpha(theme.palette.common.white, 0.05)
+                        }
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                        {item.icon}
+                      </ListItemIcon>
+                    </ListItemButton>
+                  </ListItem>
+                ))
+              ) : (
+                <Collapse in={reportsOpen} timeout="auto" unmountOnExit>
+                  {visibleReportsTimesheetsItems.length > 0 && (
+                    <>
+                      <ListItem sx={{ pt: 0.5, pb: 0 }}>
+                        <ListItemText
+                          primary="Timesheets"
+                          primaryTypographyProps={{
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: 'grey.500',
+                            letterSpacing: 0.5
+                          }}
+                        />
+                      </ListItem>
+                      {visibleReportsTimesheetsItems.map((item) => (
+                        <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                          <ListItemButton
+                            onClick={() => handleItemClick(item.path)}
+                            selected={currentPage === item.path}
+                            sx={{
+                              mx: 2,
+                              borderRadius: 2,
+                              color: 'grey.400',
+                              '&.Mui-selected': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.2),
+                                color: 'primary.light',
+                                '& .MuiListItemIcon-root': { color: 'primary.light' }
+                              },
+                              '&:hover': {
+                                bgcolor: alpha(theme.palette.common.white, 0.05)
+                              }
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </>
+                  )}
+
+                  {visibleReportsExpensesItems.length > 0 && (
+                    <>
+                      <ListItem sx={{ pt: 1, pb: 0 }}>
+                        <ListItemText
+                          primary="Expenses"
+                          primaryTypographyProps={{
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: 'grey.500',
+                            letterSpacing: 0.5
+                          }}
+                        />
+                      </ListItem>
+                      {visibleReportsExpensesItems.map((item) => (
+                        <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                          <ListItemButton
+                            onClick={() => handleItemClick(item.path)}
+                            selected={currentPage === item.path}
+                            sx={{
+                              mx: 2,
+                              borderRadius: 2,
+                              color: 'grey.400',
+                              '&.Mui-selected': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.2),
+                                color: 'primary.light',
+                                '& .MuiListItemIcon-root': { color: 'primary.light' }
+                              },
+                              '&:hover': {
+                                bgcolor: alpha(theme.palette.common.white, 0.05)
+                              }
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </>
+                  )}
+
+                  {visibleReportsApprovalsItems.length > 0 && (
+                    <>
+                      <ListItem sx={{ pt: 1, pb: 0 }}>
+                        <ListItemText
+                          primary="Approvals"
+                          primaryTypographyProps={{
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: 'grey.500',
+                            letterSpacing: 0.5
+                          }}
+                        />
+                      </ListItem>
+                      {visibleReportsApprovalsItems.map((item) => (
+                        <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                          <ListItemButton
+                            onClick={() => handleItemClick(item.path)}
+                            selected={currentPage === item.path}
+                            sx={{
+                              mx: 2,
+                              borderRadius: 2,
+                              color: 'grey.400',
+                              '&.Mui-selected': {
+                                bgcolor: alpha(theme.palette.primary.main, 0.2),
+                                color: 'primary.light',
+                                '& .MuiListItemIcon-root': { color: 'primary.light' }
+                              },
+                              '&:hover': {
+                                bgcolor: alpha(theme.palette.common.white, 0.05)
+                              }
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </>
+                  )}
+                </Collapse>
+              )}
+            </>
+          )}
 
           {/* Planning Section (permission-driven; parent depends on children) */}
           {showPlanningSection && (
