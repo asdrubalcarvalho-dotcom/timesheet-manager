@@ -45,9 +45,13 @@ $tenant->run(function () {
     
     if ($jobCount > 0) {
         echo PHP_EOL . '🎉 SUCCESS! Email system is fully functional!' . PHP_EOL;
-        echo '   Queue worker will process this job automatically.' . PHP_EOL;
-        echo PHP_EOL . '📋 To check the email log:' . PHP_EOL;
-        echo '   docker-compose exec app tail -50 storage/logs/laravel.log' . PHP_EOL;
+        echo '   A tenant-scoped worker must process the job.' . PHP_EOL;
+        echo PHP_EOL . '📋 Next steps:' . PHP_EOL;
+        echo '   - Run the email feature tests (recommended):' . PHP_EOL;
+        echo '     docker-compose exec app php artisan test --filter=UserInvitationEmailTest --no-ansi' . PHP_EOL;
+        echo '   - Or process the tenant job manually (see docs/QUEUE_SYSTEM_QUICK_REFERENCE.md).' . PHP_EOL;
+        echo '   - If MAIL_MAILER=log, check:' . PHP_EOL;
+        echo '     docker-compose exec app tail -50 storage/logs/laravel.log' . PHP_EOL;
     } else {
         echo PHP_EOL . '⚠️  No job queued - check listener configuration' . PHP_EOL;
     }

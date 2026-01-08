@@ -61,9 +61,6 @@ See: `docs/QUEUE_SYSTEM_QUICK_REFERENCE.md`.
 ### Testing/validation
 
 - Feature test: `backend/tests/Feature/UserInvitationEmailTest.php`
-- Dev validation scripts:
-  - `backend/test_email_system.php`
-  - `backend/validate_email_system.php`
 
 ### Expected behavior
 
@@ -73,98 +70,64 @@ See: `docs/QUEUE_SYSTEM_QUICK_REFERENCE.md`.
 
 ---
 
-## Phase 2 — Billing / Subscription Emails (DESIGN ONLY — do not implement until approved)
+## Phase 3 — Billing / Subscription Lifecycle Emails (IMPLEMENTED)
 
-Phase 2 will add automated emails for subscription lifecycle. **No code should be written for Phase 2 unless this document is explicitly marked as approved for implementation.**
+This repo implements billing lifecycle emails per `docs/EMAIL_SYSTEM_PHASE3.md`.
 
-### Guiding principles
+### Components
 
-1. **Do not touch** the invitation system behavior.
-2. **Do not invent** new subscription logic. Reuse the existing billing/subscription state.
-3. **Do not** add new endpoints for emails.
-4. **Always** emit events and process via queued listeners.
-5. **Never** query or send across tenants. Everything runs inside `$tenant->run(...)`.
+- Events:
+  - `App\Events\Billing\SubscriptionRenewalUpcoming`
+  - `App\Events\Billing\SubscriptionPaymentFailed`
+  - `App\Events\Billing\SubscriptionRecovered`
+  - `App\Events\Billing\SubscriptionExpiredDowngraded`
+- Listeners (enqueue-only):
+  - `App\Listeners\Billing\SendSubscriptionRenewalReminderEmail`
+  - `App\Listeners\Billing\SendSubscriptionPaymentFailedEmail`
+  - `App\Listeners\Billing\SendSubscriptionRecoveredEmail`
+  - `App\Listeners\Billing\SendSubscriptionExpiredDowngradedEmail`
+- Mailables:
+  - `App\Mail\Billing\SubscriptionRenewalReminderMail`
+  - `App\Mail\Billing\SubscriptionPaymentFailedMail`
+  - `App\Mail\Billing\SubscriptionRecoveredMail`
+  - `App\Mail\Billing\SubscriptionExpiredDowngradedMail`
 
-### Email categories (candidate set)
+### Who receives Phase 3 emails
 
-These are the only Phase 2 categories we expect to need:
+- Tenant owner email (the billing contact in this project).
 
-- **Renewal reminders** (upcoming renewal)
-- **Payment failure / dunning** (payment failed, retry scheduled)
-- **Subscription expired / downgraded**
-- **Receipt / invoice notifications** (only if billing system already provides the data)
+### Idempotency (tenant DB)
 
-> If a new category is proposed, add it here first with acceptance criteria.
+To prevent duplicate sends, Phase 3 uses a tenant-scoped idempotency table:
 
-### Canonical event model (proposed)
+- Migration: `database/migrations/tenant/2026_01_08_000001_create_email_idempotency_keys_table.php`
+- Service: `App\Services\Email\EmailIdempotencyService`
 
-All Phase 2 emails should be generated from a small set of **billing lifecycle events**.
+Keys are derived from `subscription_id` and `billing_period_ends_at` (billing cycle). Examples:
 
-Proposed events (names can change, intent cannot):
+- Renewal reminder (T-7 only): `subscription:{id}:renewal:period_end:{billing_period_ends_at}`
+- Payment failed (attempt-gated): `subscription:{id}:payment_failed:period_end:{billing_period_ends_at}:attempt:{n}`
+- Expired/downgraded (once per cycle): `subscription:{id}:expired:period_end:{billing_period_ends_at}`
 
-- `SubscriptionRenewalUpcoming` (T-7 days, T-3 days, T-1 day)
-- `SubscriptionPaymentFailed` (attempt N)
-- `SubscriptionRecovered` (payment succeeded after failure)
-- `SubscriptionExpired` (access change)
-- `InvoiceIssued` (optional; only if invoices exist in current system)
+### Triggers (where events are emitted)
 
-Each event payload must include:
+- The periodic detection of billing conditions lives in billing services/commands.
+- Listeners must only enqueue mail (no cron/scheduling inside listeners).
 
-- `tenant_id` (or Tenant model)
-- `subscription_id` (or internal identifier)
-- `plan` / `status` snapshot
-- `occurred_at`
-- any identifiers needed to fetch details **within the same tenant**
+### Testing/validation
 
-### Who receives Phase 2 emails (rules)
+- Run tests in Docker (recommended):
 
-Default recipients (unless existing business rules already define otherwise):
+```bash
+docker-compose exec app php artisan test --filter=UserInvitationEmailTest --no-ansi
+docker-compose exec app php artisan test --filter=BillingPhase3EmailsTest --no-ansi
+```
 
-- Tenant **Owner**
-- Users with explicit **Billing/Admin** permission (if such a permission exists)
+### Known gotchas
 
-Hard rules:
-
-- Never email technicians/users who are not opted-in for billing notifications (if opt-in exists).
-- Never email all tenant users by default.
-
-### Scheduling rules (how emails get triggered)
-
-Phase 2 requires scheduled detection of billing conditions. Two safe options:
-
-**Option A — Scheduled command (recommended)**
-- A single scheduled command runs periodically (e.g., hourly or daily).
-- It iterates tenants and runs billing checks inside tenant context.
-- When it detects a condition, it emits one of the Phase 2 events.
-
-**Option B — Webhook-driven**
-- If the billing provider already triggers webhooks, webhooks write billing state.
-- A tenant-context handler emits the Phase 2 events.
-
-**Important**: avoid a “global queue worker” assumption. Processing must still be tenant-scoped.
-
-### Idempotency (must-have)
-
-Phase 2 emails must not spam users.
-
-For each email type, implement an idempotency key stored in tenant DB, e.g.:
-
-- `billing_notifications` table (tenant):
-  - `tenant_id`
-  - `type`
-  - `key` (e.g., `subscription:{id}:renewal:T-7`)
-  - `sent_at`
-
-If we already have an equivalent mechanism, reuse it.
-
-### Phase 2 acceptance checklist
-
-- [ ] No changes to invitation mail flow.
-- [ ] No new queue driver.
-- [ ] All events/listeners run in tenant context.
-- [ ] Idempotency prevents duplicates.
-- [ ] All emails have a deterministic template and test coverage.
-- [ ] `php artisan test` passes.
+- Tenant queue is **not** consumed by a “global” `queue:work` (central DB vs tenant DB).
+- If you run commands/tests on the host, you may hit filesystem permission issues on `storage/logs`; Docker is the supported path.
+- In dev with `MAIL_MAILER=log`, inspect `storage/logs/laravel.log` for rendered emails.
 
 ---
 

@@ -8,6 +8,8 @@ That means:
 - Running `php artisan queue:work ...` with no tenant context will read from the **central** DB (and will not consume tenant jobs).
 - In dev/test you must run the worker **explicitly inside the tenant context**.
 
+Related: `docs/EMAIL_SYSTEM.md`.
+
 ## Manual Job Processing (Testing Only)
 
 ### Process jobs for a specific tenant (recommended)
@@ -32,6 +34,15 @@ echo \Illuminate\\Support\\Facades\\Artisan::output();'
 Notes:
 - This is intentionally **per-tenant**. If you have multiple tenants, run one worker per tenant when testing.
 - The single-quoted `--execute='...'` avoids zsh history expansion issues.
+
+## Testing
+
+For deterministic validation, prefer running the feature tests:
+
+```bash
+docker-compose exec app php artisan test --filter=UserInvitationEmailTest --no-ansi
+docker-compose exec app php artisan test --filter=BillingPhase3EmailsTest --no-ansi
+```
 
 ## Queue Inspection
 
@@ -140,104 +151,6 @@ docker-compose exec -T app php artisan tinker
 > $tenant->run(fn() => Artisan::call('queue:flush'));
 > echo Artisan::output();
 ```
-
-## Production Setup
-
-### Supervisor Configuration (Alternative to Docker Service)
-
-If not using Docker queue worker, use Supervisor:
-
-**File**: `/etc/supervisor/conf.d/timesheet-worker.conf`
-```ini
-[program:timesheet-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/html/artisan queue:work --sleep=3 --tries=3 --max-time=3600
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-user=www-data
-numprocs=2
-redirect_stderr=true
-stdout_logfile=/var/www/html/storage/logs/worker.log
-stopwaitsecs=3600
-```
-
-**Start**:
-```bash
-supervisorctl reread
-supervisorctl update
-supervisorctl start timesheet-worker:*
-```
-
-## Queue Configuration (`.env`)
-
-```bash
-# Queue Driver
-QUEUE_CONNECTION=database
-
-# Queue Worker Settings (docker-compose.yml)
-# --sleep=3         Wait 3 seconds when queue is empty
-# --tries=3         Retry failed jobs 3 times
-# --max-time=3600   Worker restarts after 1 hour
-# --timeout=60      Kill job after 60 seconds
-```
-
-## Performance Tips
-
-### Monitor Queue Size
-```bash
-# This project uses a tenant-scoped database queue.
-# If you want monitoring in dev/test, run it per-tenant (inside tenant context).
-```
-
-### Scale Workers
-Because the queue is tenant-scoped, scaling workers is an operational decision.
-Run workers explicitly per-tenant (e.g. Supervisor/systemd entries per tenant DB), instead of a single global worker.
-
-### Dedicated Queue Names
-For priority jobs, use named queues:
-```php
-// In listener
-class SendUserInvitationEmail implements ShouldQueue
-{
-    public $queue = 'emails';
-}
-```
-
-Run worker:
-```bash
-php artisan queue:work --queue=high,emails,default
-```
-
-## Health Checks
-
-### Manual Health Check
-```bash
-# Test complete flow (tenant-scoped)
-docker-compose exec -T app php artisan tinker
-> $tenant = App\\Models\\Tenant::where('slug', 'demo')->first();
-> $tenant->run(function () {
->     $user = App\\Models\\User::create([
->         'name' => 'HealthCheck ' . time(),
->         'email' => 'healthcheck' . time() . '@example.com',
->         'password' => bcrypt('password123'),
->     ]);
->     $inviter = App\\Models\\User::first();
->     event(new App\\Events\\UserInvited(tenancy()->tenant, $user, $inviter));
->     echo "Queued invite for {$user->email}\n";
-> });
-
-# Then process one job using the per-tenant queue:work command (see above)
-```
-
-### Automated Monitoring
-Consider adding:
-- Laravel Horizon (Redis-based queue dashboard)
-- Queue monitoring alerts
-- Job failure notifications
-- Performance metrics (job throughput, wait times)
-
 ## Quick Commands Summary
 
 | Task | Command |

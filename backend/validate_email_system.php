@@ -66,5 +66,8 @@ $tenant->run(function() {
 });
 
 echo PHP_EOL . '🎉 Email system validation PASSED!' . PHP_EOL;
-echo '📬 Queue worker will process the job automatically' . PHP_EOL;
-echo '📋 Check logs: docker logs -f timesheet_queue_worker' . PHP_EOL;
+echo '📬 A tenant-scoped worker must process the queued job.' . PHP_EOL;
+echo '📋 Recommended: run the feature test:' . PHP_EOL;
+echo '   docker-compose exec app php artisan test --filter=UserInvitationEmailTest --no-ansi' . PHP_EOL;
+echo '📋 If MAIL_MAILER=log, check:' . PHP_EOL;
+echo '   docker-compose exec app tail -50 storage/logs/laravel.log' . PHP_EOL;

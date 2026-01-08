@@ -8,15 +8,15 @@ Phase 3 covers all email communications related to the billing lifecycle, includ
 ### 1. Upcoming Renewal Reminder
 - Trigger: Sent 7 days before the subscription’s billing period end date.
 - Recipient: Tenant owner email address.
-- Conditions: Subscription must be active and set to renew; billing_period_ends_at is within the next 7 days; no prior renewal reminder sent for the current billing cycle.
+- Conditions: Subscription must be active and set to renew; sent only when the billing period ends in exactly 7 days; no prior renewal reminder sent for the current billing cycle.
 - Idempotency rule: Only one renewal reminder email per subscription per billing cycle, identified by billing_period_ends_at.
 
 ### 2. Payment Failed
 - Trigger: Sent immediately after a payment failure event is recorded in the system.
 - Recipient: Tenant owner email address.
-- Conditions: Subscription is active but payment status is failed; payment failure timestamp is within the current billing cycle; no payment failure email sent for this failure event.
-- Retry logic: Emails are sent on first failure and retried up to 3 times at 24-hour intervals if payment remains failed.
-- Grace period rules: Payment failure emails are only sent within the configured grace period after the failed payment date.
+- Conditions: Subscription is active but payment status is failed; failure attempt is 1..3; no payment failure email sent for this attempt in the current billing cycle.
+- Grace period rules: Payment failure emails are only sent within the configured grace period. If the grace period has passed, do not send.
+- Idempotency rule: Keyed by billing_period_ends_at and attempt number.
 
 ### 3. Subscription Recovered
 - Trigger: Sent immediately after a successful payment following a failed payment event.
