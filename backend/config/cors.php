@@ -42,6 +42,7 @@ return [
         // Desenvolvimento
         'http://localhost:3000',
         'http://localhost:8082',
+        'http://demo.localhost:8082',        // Demo tenant
         'http://management.localhost:8082',  // SuperAdmin dashboard
         env('FRONTEND_URL', 'http://localhost:3000'),
 

@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Events\UserInvited;
+use App\Listeners\SendUserInvitationEmail;
 use App\Models\PersonalAccessToken;
 use App\Services\TimesheetAIService;
 use App\Tenancy\Resolvers\TenantHeaderOrSlugResolver;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Pennant\Feature;
 use Laravel\Sanctum\Sanctum;
@@ -30,8 +33,22 @@ class AppServiceProvider extends ServiceProvider
         // that automatically uses the tenant connection when tenancy is initialized
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
 
+        // Register event listeners
+        $this->registerEventListeners();
+
         // Define Pennant feature flags for multi-tenant module access control
         $this->defineTenantFeatures();
+    }
+
+    /**
+     * Register event listeners.
+     */
+    protected function registerEventListeners(): void
+    {
+        Event::listen(
+            UserInvited::class,
+            SendUserInvitationEmail::class
+        );
     }
 
     /**

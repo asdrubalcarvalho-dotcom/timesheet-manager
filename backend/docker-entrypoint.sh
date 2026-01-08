@@ -44,5 +44,12 @@ php artisan route:cache
 
 echo "✅ Laravel application ready!"
 
-# Start PHP-FPM
-exec php-fpm
+# Start PHP-FPM or custom command
+# If arguments are provided (e.g., "php artisan queue:work"), run those instead
+if [ $# -gt 0 ]; then
+    echo "🚀 Running custom command: $@"
+    exec "$@"
+else
+    echo "🚀 Starting PHP-FPM..."
+    exec php-fpm
+fi
