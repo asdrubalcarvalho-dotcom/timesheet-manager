@@ -2,7 +2,15 @@
 
 namespace App\Providers;
 
+use App\Events\Billing\SubscriptionExpiredDowngraded;
+use App\Events\Billing\SubscriptionPaymentFailed;
+use App\Events\Billing\SubscriptionRecovered;
+use App\Events\Billing\SubscriptionRenewalReminderDue;
 use App\Events\UserInvited;
+use App\Listeners\Billing\SendSubscriptionExpiredDowngradedEmail;
+use App\Listeners\Billing\SendSubscriptionPaymentFailedEmail;
+use App\Listeners\Billing\SendSubscriptionRecoveredEmail;
+use App\Listeners\Billing\SendSubscriptionRenewalReminderEmail;
 use App\Listeners\SendUserInvitationEmail;
 use App\Models\PersonalAccessToken;
 use App\Services\TimesheetAIService;
@@ -48,6 +56,26 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(
             UserInvited::class,
             SendUserInvitationEmail::class
+        );
+
+        Event::listen(
+            SubscriptionRenewalReminderDue::class,
+            SendSubscriptionRenewalReminderEmail::class
+        );
+
+        Event::listen(
+            SubscriptionPaymentFailed::class,
+            SendSubscriptionPaymentFailedEmail::class
+        );
+
+        Event::listen(
+            SubscriptionRecovered::class,
+            SendSubscriptionRecoveredEmail::class
+        );
+
+        Event::listen(
+            SubscriptionExpiredDowngraded::class,
+            SendSubscriptionExpiredDowngradedEmail::class
         );
     }
 
