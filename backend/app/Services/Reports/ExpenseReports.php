@@ -34,7 +34,7 @@ final class ExpenseReports
             return collect();
         }
 
-        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
         $isOwner = $actor->hasRole('Owner');
 
@@ -62,7 +62,7 @@ final class ExpenseReports
             ->where('expenses.date', '<=', (string) $filters['to']);
 
         if (!$isOwner) {
-            // Phase 2: Filter to projects where user is a member
+            // Filter to projects where user is a member
             $memberProjectIds = $actor->projects()->pluck('projects.id')->toArray();
             if (count($memberProjectIds) === 0) {
                 $query->whereRaw('1 = 0'); // No member projects => empty result
@@ -180,7 +180,7 @@ final class ExpenseReports
             return [];
         }
 
-        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
         $isOwner = $actor->hasRole('Owner');
 

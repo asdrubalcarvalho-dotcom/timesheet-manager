@@ -60,8 +60,7 @@ class ExpenseController extends Controller
         $user = $request->user();
         $isOwnerGlobalView = $user->hasRole('Owner');
 
-        // TEMP — Phase 1 Transitional Report Visibility (ACCESS_RULES.md §3.4)
-        // Applies ONLY to report-driven list queries. Canonical list behavior remains unchanged.
+        // Report-driven list query uses canonical project membership scoping (ACCESS_RULES.md §3.4)
         $isReportQuery = $request->boolean('report');
 
         // Optional subject context (used to scope projects when viewing another technician)
@@ -89,7 +88,7 @@ class ExpenseController extends Controller
         $query = Expense::with(['technician', 'project']);
 
         if ($isReportQuery) {
-            // PHASE 2: Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+            // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
             // - Owner: tenant-wide
             // - Others: restrict to expenses whose project_id is in user's project memberships
             if (!$user->hasRole('Owner')) {

@@ -124,7 +124,7 @@ final class TimesheetReports
             return collect();
         }
 
-        // PHASE 2 — Canonical project membership scoping
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         $isOwner = $actor->hasRole('Owner');
 
         $periodExpr = match ($filters['period']) {
@@ -264,7 +264,7 @@ final class TimesheetReports
             ];
         }
 
-        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
         $isOwner = $actor->hasRole('Owner');
 
@@ -627,7 +627,7 @@ final class TimesheetReports
             return [];
         }
 
-        // PHASE 2 — Canonical project membership scoping
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         $isOwner = $actor->hasRole('Owner');
 
         $query = Timesheet::query()

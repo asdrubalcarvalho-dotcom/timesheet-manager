@@ -21,7 +21,7 @@ final class ApprovalReports
      */
     public function heatmap(array $payload, User $actor): array
     {
-        // PHASE 2 — Canonical project membership scoping (ACCESS_RULES.md §2, §3)
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         // Owner: tenant-wide. Others: restrict to projects where user is a member (project_members).
         $isOwner = $actor->hasRole('Owner');
         if (!$isOwner) {
@@ -153,7 +153,7 @@ final class ApprovalReports
 
     private function applyTimesheetApprovalScoping($query, User $actor): void
     {
-        // PHASE 2 — Canonical project membership scoping
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         if ($actor->hasRole('Owner')) {
             return;
         }
@@ -215,7 +215,7 @@ final class ApprovalReports
      */
     private function applyExpenseApprovalScoping($query, User $actor): void
     {
-        // PHASE 2 — Canonical project membership scoping
+        // Canonical project membership scoping (ACCESS_RULES.md §2, §3)
         if ($actor->hasRole('Owner')) {
             return;
         }
