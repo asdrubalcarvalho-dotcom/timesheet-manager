@@ -64,7 +64,7 @@ return [
     | architecture where API and frontend are on different domains.
     |
     */
-    'frontend_url' => env('APP_FRONTEND_URL', env('APP_URL', 'http://localhost')),
+    'frontend_url' => env('FRONTEND_URL', env('APP_FRONTEND_URL', env('APP_URL', 'http://localhost'))),
 
     /*
     |--------------------------------------------------------------------------
