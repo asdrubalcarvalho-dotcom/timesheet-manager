@@ -18,6 +18,9 @@ class UserInvitationEmailTest extends TestCase
         // Arrange: Fake mail to capture emails without sending
         Mail::fake();
 
+        // Ensure invitation link points to the frontend (not API)
+        config()->set('app.frontend_url', 'http://localhost:5173');
+
         // Create test tenant in central database
         $tenant = Tenant::create([
             'id' => '01HZTEST000000000000000001',
@@ -43,7 +46,11 @@ class UserInvitationEmailTest extends TestCase
 
         // Assert: Check that mail was sent to the invited user
         Mail::assertSent(UserInvitationMail::class, function ($mail) use ($invitedUser) {
-            return $mail->hasTo($invitedUser->email);
+            $html = $mail->render();
+            $expectedUrl = 'http://localhost:5173/accept-invitation?token=' . $invitedUser->email;
+
+            return $mail->hasTo($invitedUser->email)
+                && str_contains($html, $expectedUrl);
         });
     }
 
