@@ -6,32 +6,54 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('social_accounts', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('provider'); // 'google', 'microsoft'
-            $table->string('provider_user_id'); // OAuth provider's unique user ID
-            $table->string('provider_email')->nullable(); // Store only if needed for audit
-            $table->timestamps();
+        // Case 1: table does not exist → create it
+        if (!Schema::hasTable('social_accounts')) {
+            Schema::create('social_accounts', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('user_id');
+                $table->string('provider');
+                $table->string('provider_user_id');
+                $table->string('provider_email')->nullable();
+                $table->timestamps();
+            });
 
-            // Unique constraint: one provider identity per tenant
-            $table->unique(['provider', 'provider_user_id'], 'social_accounts_provider_identity_unique');
-            
-            // Index for user lookup
-            $table->index('user_id');
+            return;
+        }
+
+        // Case 2: table exists → ensure required columns exist
+        Schema::table('social_accounts', function (Blueprint $table) {
+            if (!Schema::hasColumn('social_accounts', 'provider')) {
+                $table->string('provider')->after('user_id');
+            }
+
+            if (!Schema::hasColumn('social_accounts', 'provider_user_id')) {
+                $table->string('provider_user_id')->after('provider');
+            }
+
+            if (!Schema::hasColumn('social_accounts', 'provider_email')) {
+                $table->string('provider_email')->nullable()->after('provider_user_id');
+            }
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('social_accounts');
+        // Do NOT drop the table in prod.
+        // Only rollback added columns if they exist.
+        Schema::table('social_accounts', function (Blueprint $table) {
+            if (Schema::hasColumn('social_accounts', 'provider_email')) {
+                $table->dropColumn('provider_email');
+            }
+
+            if (Schema::hasColumn('social_accounts', 'provider_user_id')) {
+                $table->dropColumn('provider_user_id');
+            }
+
+            if (Schema::hasColumn('social_accounts', 'provider')) {
+                $table->dropColumn('provider');
+            }
+        });
     }
 };
