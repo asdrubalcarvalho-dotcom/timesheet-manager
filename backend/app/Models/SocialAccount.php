@@ -4,33 +4,43 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-// SocialAccount stored in tenant DB; BelongsToTenant not required
 
 class SocialAccount extends Model
 {
-    // BelongsToTenant removed
-
     protected $fillable = [
-        'tenant_id',
         'user_id',
-        'provider_name',
-        'provider_id',
+        'provider',
+        'provider_user_id',
         'provider_email',
-        'provider_username',
-        'avatar',
-        'access_token',
-        'refresh_token',
-        'token_expires_at',
-        'metadata',
     ];
 
     protected $casts = [
-        'metadata' => 'array',
-        'token_expires_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Find social account by provider and provider user ID.
+     */
+    public static function findByProvider(string $provider, string $providerUserId): ?self
+    {
+        return self::where('provider', $provider)
+            ->where('provider_user_id', $providerUserId)
+            ->first();
+    }
+
+    /**
+     * Check if a user already has a linked account for the given provider.
+     */
+    public static function existsForUserAndProvider(int $userId, string $provider): bool
+    {
+        return self::where('user_id', $userId)
+            ->where('provider', $provider)
+            ->exists();
     }
 }

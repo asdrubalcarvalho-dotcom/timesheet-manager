@@ -43,11 +43,23 @@ interface Tenant {
   ai_enabled?: boolean;
 }
 
+export type CaptchaChallenge = {
+  provider: string;
+  site_key: string;
+};
+
+export type LoginResult =
+  | { ok: true }
+  | { ok: false; error: string }
+  | { ok: false; rateLimited: true; retryAfterSeconds?: number }
+  | { ok: false; ssoOnlyRequired: true }
+  | { ok: false; captchaRequired: true; captcha: CaptchaChallenge };
+
 interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
   tenantSlug: string | null;
-  login: (email: string, password: string, tenantSlug: string) => Promise<boolean>;
+  login: (email: string, password: string, tenantSlug: string, captchaToken?: string | null) => Promise<LoginResult>;
   logout: () => void;
   loading: boolean;
   isOwner: () => boolean;
@@ -143,25 +155,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (token && storedTenant) {
           setTenantSlugState(storedTenant);
 
-          const response = await fetch(`${API_URL}/api/user`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'X-Tenant': storedTenant,
-            },
-          });
+          const tryFetchUser = async (): Promise<Response> =>
+            fetch(`${API_URL}/api/user`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'X-Tenant': storedTenant,
+              },
+            });
 
-          if (response.ok) {
+          let response: Response | null = null;
+          let lastError: unknown = null;
+
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              response = await tryFetchUser();
+              break;
+            } catch (error) {
+              lastError = error;
+              // Navigation or transient network hiccups can cancel this request (nginx 499).
+              // Don't clear auth storage on these; retry once.
+              if (attempt === 0) {
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                continue;
+              }
+            }
+          }
+
+          if (response?.ok) {
             const userData = await response.json();
             setUser(normalizeUser(userData));
+          } else if (response) {
+            // Only clear stored auth when we're confident the session is invalid.
+            // 401/419: invalid/expired token
+            // 404: tenant not found (common after docker-compose down -v resets DB while browser storage is stale)
+            if (response.status === 401 || response.status === 419 || response.status === 404) {
+              localStorage.removeItem('auth_token');
+              localStorage.removeItem('tenant_slug');
+            } else {
+              console.warn('Auth check failed with non-terminal status:', response.status);
+            }
           } else {
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('tenant_slug');
+            console.warn('Auth check failed (no response):', lastError);
           }
         }
       } catch (error) {
         console.error('Auth check failed:', error);
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('tenant_slug');
+        // Do not clear auth on unexpected exceptions; it can cause unnecessary logouts.
       } finally {
         setLoading(false);
       }
@@ -176,8 +215,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (
     email: string,
     password: string,
-    tenantSlug: string
-  ): Promise<boolean> => {
+    tenantSlug: string,
+    captchaToken?: string | null
+  ): Promise<LoginResult> => {
     try {
       const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
@@ -189,14 +229,74 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify({
           email,
           password,
-          tenant_slug: tenantSlug
+          tenant_slug: tenantSlug,
+          ...(captchaToken ? { captcha_token: captchaToken } : {}),
         })
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        console.error('Login failed:', error);
-        return false;
+        let data: any = null;
+        try {
+          data = await response.json();
+        } catch {
+          // ignore
+        }
+
+        // 429 must be treated as a terminal state in the UI (no retries, no CAPTCHA reload).
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get('retry-after');
+          const rateLimitResetHeader = response.headers.get('x-ratelimit-reset');
+
+          let retryAfterSeconds: number | undefined;
+
+          if (retryAfterHeader) {
+            const parsed = Number(retryAfterHeader);
+            if (!Number.isNaN(parsed) && parsed > 0) {
+              retryAfterSeconds = Math.floor(parsed);
+            }
+          }
+
+          // Some stacks return X-RateLimit-Reset as epoch seconds.
+          if (retryAfterSeconds === undefined && rateLimitResetHeader) {
+            const resetEpoch = Number(rateLimitResetHeader);
+            if (!Number.isNaN(resetEpoch) && resetEpoch > 0) {
+              const nowEpoch = Math.floor(Date.now() / 1000);
+              const delta = resetEpoch - nowEpoch;
+              if (delta > 0) {
+                retryAfterSeconds = delta;
+              }
+            }
+          }
+
+          return { ok: false, rateLimited: true, retryAfterSeconds };
+        }
+
+        if (
+          response.status === 403 &&
+          typeof data?.message === 'string' &&
+          data.message.toLowerCase().includes('requires single sign-on')
+        ) {
+          return { ok: false, ssoOnlyRequired: true };
+        }
+
+        if (response.status === 422 && data?.code === 'captcha_required' && data?.captcha) {
+          return {
+            ok: false,
+            captchaRequired: true,
+            captcha: {
+              provider: String(data.captcha.provider || ''),
+              site_key: String(data.captcha.site_key || ''),
+            },
+          };
+        }
+
+        const message =
+          typeof data?.message === 'string' && data.message.trim()
+            ? data.message
+            : 'Invalid credentials or tenant not found';
+
+        console.error('Login failed:', data);
+        return { ok: false, error: message };
       }
 
       const data = await response.json();
@@ -211,10 +311,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setTenant(data.tenant);
       }
 
-      return true;
+      return { ok: true };
     } catch (error) {
       console.error('Login network error:', error);
-      return false;
+      return { ok: false, error: 'Network error. Please try again.' };
     }
   };
 

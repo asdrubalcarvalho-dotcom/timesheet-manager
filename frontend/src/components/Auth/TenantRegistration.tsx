@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -15,9 +15,13 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import BusinessIcon from '@mui/icons-material/Business';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
+import { CaptchaWidget, type CaptchaChallenge } from './CaptchaWidget';
+
+type CaptchaStatus = 'idle' | 'required' | 'verifying' | 'verified' | 'expired';
 
 interface RegistrationFormData {
   company_name: string;
@@ -58,6 +62,116 @@ const TenantRegistration: React.FC = () => {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [slugError, setSlugError] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaStatus, setCaptchaStatus] = useState<CaptchaStatus>('idle');
+  const [captchaWidgetKey, setCaptchaWidgetKey] = useState(0);
+
+  const resetCaptcha = useCallback(() => {
+    setCaptcha(null);
+    setCaptchaToken(null);
+    setCaptchaStatus('idle');
+    setCaptchaWidgetKey((k) => k + 1);
+  }, []);
+
+  const handleCaptchaVerifying = useCallback(() => {
+    setCaptchaStatus((prev) => (prev === 'verifying' ? prev : 'verifying'));
+  }, []);
+
+  const handleCaptchaExpire = useCallback(() => {
+    setCaptchaToken(null);
+    setCaptchaStatus('expired');
+  }, []);
+
+  const submitRequestSignup = async (token?: string | null) => {
+    const res = await api.post(
+      '/api/tenants/request-signup',
+      {
+      company_name: formData.company_name,
+      slug: formData.slug,
+      admin_name: formData.admin_name,
+      admin_email: formData.admin_email,
+      admin_password: formData.admin_password,
+      admin_password_confirmation: formData.admin_password_confirmation,
+      industry: formData.industry || undefined,
+      country: formData.country || undefined,
+      timezone: formData.timezone || 'UTC',
+      ...(token ? { captcha_token: token } : {}),
+      },
+      {
+        // Expected flow: backend may return 422 captcha_required for risk/adaptive scenarios.
+        // Avoid throwing AxiosError so we can handle it as a normal UI step.
+        validateStatus: () => true,
+      },
+    );
+
+    return res;
+  };
+
+  const attemptSignup = async (token?: string | null) => {
+    setLoading(true);
+    try {
+      const response = await submitRequestSignup(token);
+      const data = response.data;
+
+      if (response.status === 200) {
+        // Show confirmation screen instead of redirecting
+        console.log('[TenantRegistration] API Response:', data);
+        console.log('[TenantRegistration] Verification URL:', data?.verification_url);
+
+        setRegisteredEmail(formData.admin_email);
+        setExpiresInHours(data?.expires_in_hours ?? 24);
+        setVerificationUrl(data?.verification_url || '');
+        setVerificationToken(data?.verification_token || '');
+        setRegistrationComplete(true);
+
+        showSuccess(data?.message || 'Verification email sent! Please check your inbox.');
+        resetCaptcha();
+        return;
+      }
+
+      // 422 captcha_required: expected step for risk/adaptive flows
+      if (response.status === 422 && data?.code === 'captcha_required' && data?.captcha) {
+        setCaptcha({
+          provider: String(data.captcha.provider || ''),
+          site_key: String(data.captcha.site_key || ''),
+        });
+        setCaptchaToken(null);
+        setCaptchaStatus('required');
+        setCaptchaWidgetKey((k) => k + 1);
+        return;
+      }
+
+      if (data?.errors) {
+        setErrors(data.errors);
+        showError('Please fix the form errors');
+        return;
+      }
+
+      if (data?.message) {
+        showError(data.message);
+        return;
+      }
+
+      showError('Signup failed. Please try again.');
+    } catch (error: any) {
+      console.error('Registration failed:', error);
+      showError(error?.message || 'Signup failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCaptchaToken = useCallback((token: string) => {
+    setCaptchaToken(token);
+    setCaptchaStatus('verified');
+
+    // Once CAPTCHA is solved, immediately retry signup with the token.
+    // This avoids requiring a second click on "Create Workspace".
+    if (captcha && !loading) {
+      void attemptSignup(token);
+    }
+  }, [attemptSignup, captcha, loading]);
 
   // Auto-generate slug
   useEffect(() => {
@@ -111,6 +225,11 @@ const TenantRegistration: React.FC = () => {
   ) => {
     setFormData(prev => ({ ...prev, [field]: event.target.value }));
 
+    // Reset CAPTCHA only when user changes email or tenant slug.
+    if (field === 'admin_email' || field === 'slug') {
+      resetCaptcha();
+    }
+
     if (errors[field]) {
       setErrors(prev => {
         const updated = { ...prev };
@@ -142,50 +261,18 @@ const TenantRegistration: React.FC = () => {
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const res = await api.post('/api/tenants/request-signup', {
-        company_name: formData.company_name,
-        slug: formData.slug,
-        admin_name: formData.admin_name,
-        admin_email: formData.admin_email,
-        admin_password: formData.admin_password,
-        admin_password_confirmation: formData.admin_password_confirmation,
-        industry: formData.industry || undefined,
-        country: formData.country || undefined,
-        timezone: formData.timezone || 'UTC',
-      });
-
-      // Show confirmation screen instead of redirecting
-      console.log('[TenantRegistration] API Response:', res.data);
-      console.log('[TenantRegistration] Verification URL:', res.data?.verification_url);
-      
-      setRegisteredEmail(formData.admin_email);
-      setExpiresInHours(res.data?.expires_in_hours ?? 24);
-      setVerificationUrl(res.data?.verification_url || '');
-      setVerificationToken(res.data?.verification_token || '');
-      setRegistrationComplete(true);
-
-      showSuccess(res.data?.message || 'Verification email sent! Please check your inbox.');
-    } catch (error: any) {
-      console.error('Registration failed:', error);
-
-      if (error.response?.data?.errors) {
-        setErrors(error.response.data.errors);
-        showError('Please fix the form errors');
+    if (captcha) {
+      if (captchaStatus !== 'verified' || !captchaToken) {
+        // Informational banner is shown while CAPTCHA is required but incomplete.
+        // This state should not be treated as an error.
+        setCaptchaStatus((prev) => (prev === 'verifying' ? prev : 'required'));
         return;
       }
-
-      if (error.response?.data?.message) {
-        showError(error.response.data.message);
-        return;
-      }
-
-      showError(error.message || 'Signup failed. Please try again.');
-    } finally {
-      setLoading(false);
+      await attemptSignup(captchaToken);
+      return;
     }
+
+    await attemptSignup(null);
   };
 
   const industries = [
@@ -472,12 +559,47 @@ const TenantRegistration: React.FC = () => {
             sx={{ mb: 3 }}
           />
 
+          {captcha && (
+            <>
+              {captchaStatus !== 'verified' && captchaStatus !== 'verifying' && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    bgcolor: 'info.light',
+                    color: 'info.dark',
+                    borderRadius: 2,
+                    px: 2,
+                    py: 1.5,
+                    mb: 2,
+                  }}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <ShieldOutlinedIcon sx={{ color: 'info.main' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Just one more step: confirm you’re not a robot.
+                  </Typography>
+                </Box>
+              )}
+
+              <CaptchaWidget
+                challenge={captcha}
+                key={captchaWidgetKey}
+                onVerifying={handleCaptchaVerifying}
+                onToken={handleCaptchaToken}
+                onExpire={handleCaptchaExpire}
+              />
+            </>
+          )}
+
           <Button
             type="submit"
             fullWidth
             variant="contained"
             size="large"
-            disabled={loading || !slugAvailable || slugChecking}
+            disabled={loading || !slugAvailable || slugChecking || captchaStatus === 'verifying'}
             sx={{ mb: 2 }}
           >
             {loading ? (

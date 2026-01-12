@@ -59,6 +59,9 @@ class InitializeTenancyByRequestData extends BaseInitializeTenancyByRequestData
             '/api/health',
             '/healthz',
             '/readyz',
+            // SSO callbacks originate from the OAuth provider and may not include tenant identifiers.
+            // Tenant is enforced inside the callback using signed state.
+            'api/auth/*/callback',
         ];
 
         foreach ($centralRoutes as $route) {

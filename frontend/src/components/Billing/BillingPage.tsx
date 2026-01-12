@@ -39,21 +39,11 @@ import CheckoutModal from './CheckoutModal';
 import { ConfirmDowngradeDialog } from './ConfirmDowngradeDialog';
 import { ConfirmTrialExitDialog } from './ConfirmTrialExitDialog';
 import api from '../../services/api';
+import { getTrialRemainingLabel } from '../../utils/getTrialRemainingLabel';
 
-/**
- * Calculate remaining trial days
- * Returns null if not in trial or trial has expired
- */
-function getTrialDaysLeft(summary?: BillingSummary | null): number | null {
+function getTrialLabel(summary?: BillingSummary | null, now: Date | string = new Date()): string | null {
   if (!summary?.is_trial || !summary.trial?.ends_at) return null;
-
-  const now = new Date();
-  const end = new Date(summary.trial.ends_at);
-  const diffMs = end.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) return null; // already expired, banner should not show
-  return diffDays;
+  return getTrialRemainingLabel(summary.trial.ends_at, now);
 }
 
 const resolveFeatureEnabled = (value: FeatureFlagValue | boolean | undefined): boolean => {
@@ -530,17 +520,11 @@ const BillingPage: React.FC = () => {
         <Container maxWidth="xl" sx={{ py: 3 }}>
           {/* Trial Banner */}
           {(() => {
-            const daysLeft = getTrialDaysLeft(billingSummary);
-            if (daysLeft === null) return null;
+            const now = new Date();
+            const label = getTrialLabel(billingSummary, now);
+            if (!label || label === 'Trial expired') return null;
 
-            let message = '';
-            if (daysLeft === 0) {
-              message = 'Your trial ends today. Upgrade now to keep all features (travels, planning and AI).';
-            } else if (daysLeft === 1) {
-              message = 'Your trial ends in 1 day. Upgrade now to keep all features (travels, planning and AI).';
-            } else {
-              message = `Your trial ends in ${daysLeft} days. Upgrade now to keep all features (travels, planning and AI).`;
-            }
+            const message = `${label}. Upgrade now to keep all features (travels, planning and AI).`;
 
             return (
               <Box mb={3}>
@@ -633,10 +617,11 @@ const BillingPage: React.FC = () => {
                 </Typography>
                 
                 {billingSummary.is_trial && (() => {
-                  const daysLeft = getTrialDaysLeft(billingSummary);
-                  return daysLeft !== null ? (
+                  const now = new Date();
+                  const label = getTrialLabel(billingSummary, now);
+                  return label && label !== 'Trial expired' ? (
                     <Chip
-                      label={`${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`}
+                      label={label}
                       color="warning"
                       size="small"
                       sx={{ fontWeight: 600 }}
@@ -713,11 +698,14 @@ const BillingPage: React.FC = () => {
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
                       {billingSummary.total === 0 ? 'Free' : `€${billingSummary.total}/month`}
                     </Typography>
-                    {billingSummary.is_trial && billingSummary.trial?.ends_at && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        Trial ends on {new Date(billingSummary.trial.ends_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </Typography>
-                    )}
+                    {billingSummary.is_trial && billingSummary.trial?.ends_at && (() => {
+                      const now = new Date();
+                      return (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                          {getTrialRemainingLabel(billingSummary.trial.ends_at, now)}
+                        </Typography>
+                      );
+                    })()}
                     {!billingSummary.is_trial && billingSummary.subscription?.next_renewal_at && (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                         Next renewal: {new Date(billingSummary.subscription.next_renewal_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}

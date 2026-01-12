@@ -31,12 +31,24 @@ class TenantOnboardingTest extends TestCase
     public function setUp(): void
     {
         parent::setUp();
+
+        // Safety: ensure we start each test in central context.
+        // Some other test base classes switch the default connection to tenant.
+        Tenancy::end();
+        DB::setDefaultConnection('mysql');
+        config(['database.default' => 'mysql']);
         
-        // Clear residual domains/tenants from previous test runs (disable FK checks first)
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        DB::table('domains')->truncate();
-        DB::table('tenants')->truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // Clean up only prior tenants created by this test class.
+        // Do NOT truncate central tables, as other test base classes rely on shared tenant fixtures.
+        $qatestTenantIds = DB::table('tenants')
+            ->where('slug', 'like', 'qatest%')
+            ->pluck('id')
+            ->all();
+
+        if (!empty($qatestTenantIds)) {
+            DB::table('domains')->whereIn('tenant_id', $qatestTenantIds)->delete();
+            DB::table('tenants')->whereIn('id', $qatestTenantIds)->delete();
+        }
         
         // Generate unique slug for this test run (lowercase only, no underscores)
         $this->tenantSlug = 'qatest' . now()->timestamp;
@@ -76,6 +88,12 @@ class TenantOnboardingTest extends TestCase
             'next_steps' => ['login_url', 'api_header'],
         ]);
 
+        // The registration endpoint may initialize tenant context internally.
+        // Reset back to central before any central DB assertions.
+        Tenancy::end();
+        DB::setDefaultConnection('mysql');
+        config(['database.default' => 'mysql']);
+
         // 3️⃣ Check central DB entry (slug is unique, not id)
         $this->assertDatabaseHas('tenants', ['slug' => $this->tenantSlug]);
         
@@ -107,6 +125,8 @@ class TenantOnboardingTest extends TestCase
     /** @test */
     public function it_rejects_reserved_slugs()
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+
         $reserved = ['admin', 'api', 'system'];
 
         foreach ($reserved as $slug) {
@@ -128,11 +148,10 @@ class TenantOnboardingTest extends TestCase
     public function check_slug_endpoint_returns_availability()
     {
         // Create an existing tenant (DB will not be created in tests, only central record)
-        $tenant = Tenant::create([
-            'id' => 'slugcheck',
-            'slug' => 'slugcheck',
-            'name' => 'Slug Check Tenant',
-        ]);
+        $tenant = Tenant::updateOrCreate(
+            ['id' => 'slugcheck'],
+            ['slug' => 'slugcheck', 'name' => 'Slug Check Tenant']
+        );
 
         // Available slug
         $this->getJson('/api/tenants/check-slug?slug=unique-slug')

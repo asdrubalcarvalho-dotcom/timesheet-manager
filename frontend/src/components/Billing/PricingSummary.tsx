@@ -10,6 +10,7 @@ import {
 import {
   Receipt as ReceiptIcon,
 } from '@mui/icons-material';
+import { getTrialRemainingLabel } from '../../utils/getTrialRemainingLabel';
 
 interface PricingSummaryProps {
   baseSubtotal: number;
@@ -138,7 +139,7 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
           {isTrial && trialEndsAt && (
             <Box sx={{ mt: 1 }}>
               <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                Trial ends on {new Date(trialEndsAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {getTrialRemainingLabel(trialEndsAt, new Date())}
               </Typography>
             </Box>
           )}

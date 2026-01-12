@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -12,38 +12,267 @@ import {
 } from '@mui/material';
 import { SmartToy as RobotIcon } from '@mui/icons-material';
 import { useAuth } from './AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CaptchaWidget, type CaptchaChallenge } from './CaptchaWidget';
+import { API_URL } from '../../services/api';
+
+type CaptchaStatus = 'idle' | 'required' | 'verifying' | 'verified' | 'expired';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
   const [error, setError] = useState('');
+  const [ssoFailureNoticeOpen, setSsoFailureNoticeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaStatus, setCaptchaStatus] = useState<CaptchaStatus>('idle');
+  const [captchaWidgetKey, setCaptchaWidgetKey] = useState(0);
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
+  const rateLimitTimerRef = useRef<number | null>(null);
+  const hasProcessedSsoErrorRef = useRef(false);
+  const [ssoOnly, setSsoOnly] = useState(false);
+  const [ssoOnlyForced, setSsoOnlyForced] = useState(false);
+  const [tenantCheckLoading, setTenantCheckLoading] = useState(false);
+  const tenantCheckAbortRef = useRef<AbortController | null>(null);
   
   const { login } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const getSsoOnlyKey = (slug: string) => `tenant_sso_only:${slug}`;
+
+  const startSso = (provider: 'google' | 'microsoft') => {
+    const slug = tenantSlug.trim();
+    if (!slug) {
+      setError('Please enter your workspace (tenant) first.');
+      return;
+    }
+
+    const url = `${API_URL}/auth/${provider}/redirect?tenant=${encodeURIComponent(slug)}`;
+    window.location.assign(url);
+  };
+
+  // Provider-agnostic SSO failure UX: show once on initial page load.
+  // Must not trigger retries or affect CAPTCHA/rate limiting.
+  useEffect(() => {
+    if (hasProcessedSsoErrorRef.current) return;
+    hasProcessedSsoErrorRef.current = true;
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('error') === 'sso_failed') {
+      setSsoFailureNoticeOpen(true);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    const slug = tenantSlug.trim();
+
+    if (!slug) {
+      setTenantCheckLoading(false);
+      setSsoOnly(false);
+      setSsoOnlyForced(false);
+      return;
+    }
+
+    // If backend already enforced SSO-only for this tenant, don't let the
+    // pre-check endpoint override it.
+    if (ssoOnlyForced) {
+      setTenantCheckLoading(false);
+      return;
+    }
+
+    // Debounce to avoid hitting the throttle while typing.
+    const handle = window.setTimeout(async () => {
+      try {
+        tenantCheckAbortRef.current?.abort();
+        const controller = new AbortController();
+        tenantCheckAbortRef.current = controller;
+
+        setTenantCheckLoading(true);
+
+        const res = await fetch(`${API_URL}/api/tenants/check-slug?slug=${encodeURIComponent(slug)}`,
+          {
+            headers: {
+              Accept: 'application/json',
+            },
+            signal: controller.signal,
+          }
+        );
+
+        if (!res.ok) {
+          // If tenant check fails, don't force SSO-only UI.
+          setSsoOnly(false);
+          return;
+        }
+
+        const data: unknown = await res.json();
+        if (typeof data === 'object' && data !== null) {
+          const requireSso = (data as Record<string, unknown>).require_sso;
+          if (typeof requireSso === 'boolean') {
+            setSsoOnly(requireSso);
+            localStorage.setItem(getSsoOnlyKey(slug), requireSso ? 'true' : 'false');
+            return;
+          }
+        }
+
+        // Fallback: keep any cached hint.
+        setSsoOnly(localStorage.getItem(getSsoOnlyKey(slug)) === 'true');
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+        setSsoOnly(localStorage.getItem(getSsoOnlyKey(slug)) === 'true');
+      } finally {
+        setTenantCheckLoading(false);
+      }
+    }, 500);
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [ssoOnlyForced, tenantSlug]);
+
+  useEffect(() => {
+    return () => {
+      if (rateLimitTimerRef.current) {
+        window.clearTimeout(rateLimitTimerRef.current);
+        rateLimitTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const resetCaptcha = useCallback(() => {
+    setCaptcha(null);
+    setCaptchaToken(null);
+    setCaptchaStatus('idle');
+    setCaptchaWidgetKey((k) => k + 1);
+  }, []);
+
+  const isRateLimited = rateLimitedUntil !== null && Date.now() < rateLimitedUntil;
+
+  const attemptLogin = useCallback(async (token?: string | null) => {
+    if (isRateLimited) {
+      return;
+    }
+
     setLoading(true);
     setError('');
 
-    // Basic validation
-    if (!email || !password || !tenantSlug) {
-      setError('Please enter email, password, and tenant');
+    const result = await login(email, password, tenantSlug, token ?? null);
+
+    if (result.ok) {
+      resetCaptcha();
+      setRateLimitedUntil(null);
+      setSsoOnly(false);
       setLoading(false);
       return;
     }
 
-    const success = await login(email, password, tenantSlug);
-    
-    if (!success) {
-      setError('Invalid credentials or tenant not found');
+    // 429: terminal state (no retry, no captcha reload, no auto-submit)
+    if ('rateLimited' in result && result.rateLimited) {
+      const seconds = typeof result.retryAfterSeconds === 'number' && result.retryAfterSeconds > 0
+        ? result.retryAfterSeconds
+        : 60;
+
+      resetCaptcha();
+      setSsoOnly(false);
+      setError('Too many attempts. Please wait before trying again.');
+
+      const until = Date.now() + seconds * 1000;
+      setRateLimitedUntil(until);
+
+      if (rateLimitTimerRef.current) {
+        window.clearTimeout(rateLimitTimerRef.current);
+      }
+      rateLimitTimerRef.current = window.setTimeout(() => {
+        setRateLimitedUntil(null);
+      }, seconds * 1000);
+
+      setLoading(false);
+      return;
     }
-    // Note: Navigation is handled automatically by App.tsx when user state changes
-    
+
+    if ('ssoOnlyRequired' in result && result.ssoOnlyRequired) {
+      resetCaptcha();
+      setSsoOnly(true);
+      setSsoOnlyForced(true);
+      const slug = tenantSlug.trim();
+      if (slug) {
+        localStorage.setItem(getSsoOnlyKey(slug), 'true');
+      }
+      setLoading(false);
+      return;
+    }
+
+    if ('captchaRequired' in result && result.captchaRequired) {
+      setCaptcha(result.captcha);
+      setCaptchaToken(null);
+      setCaptchaStatus('required');
+      setCaptchaWidgetKey((k) => k + 1);
+      setError('Please complete the security check.');
+      setLoading(false);
+      return;
+    }
+
+    if ('error' in result) {
+      setError(result.error);
+    } else {
+      setError('Sign in failed. Please try again.');
+    }
     setLoading(false);
+  }, [email, isRateLimited, login, password, resetCaptcha, tenantSlug]);
+
+  const handleCaptchaToken = useCallback(
+    (token: string) => {
+      if (isRateLimited) {
+        return;
+      }
+      setCaptchaToken(token);
+      setCaptchaStatus('verified');
+    },
+    [isRateLimited]
+  );
+
+  const handleCaptchaExpire = useCallback(() => {
+    setCaptchaToken(null);
+    setCaptchaStatus('expired');
+  }, []);
+
+  const handleCaptchaVerifying = useCallback(() => {
+    setCaptchaStatus('verifying');
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    setError('');
+
+    if (isRateLimited) {
+      setError('Too many attempts. Please wait before trying again.');
+      return;
+    }
+
+    if (ssoOnly) {
+      setError('This workspace requires Single Sign-On. Please use the buttons below.');
+      return;
+    }
+
+    // Basic validation
+    if (!email || !password || !tenantSlug) {
+      setError('Please enter email, password, and tenant');
+      return;
+    }
+
+    if (captcha) {
+      if (captchaStatus !== 'verified' || !captchaToken) {
+        setError('Please complete the security check.');
+        return;
+      }
+      await attemptLogin(captchaToken);
+      return;
+    }
+
+    await attemptLogin(null);
   };
 
   return (
@@ -128,20 +357,39 @@ export const LoginForm: React.FC = () => {
               </Alert>
             )}
 
+            {ssoFailureNoticeOpen && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 2 }}
+                onClose={() => setSsoFailureNoticeOpen(false)}
+              >
+                SSO login failed. Please try again or use email and password.
+              </Alert>
+            )}
+
+            {ssoOnly && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                This organization requires Single Sign-On. Please use your company account.
+                <Box sx={{ mt: 1 }}>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      const slug = tenantSlug.trim();
+                      if (slug) {
+                        localStorage.removeItem(getSsoOnlyKey(slug));
+                      }
+                      setSsoOnly(false);
+                      setSsoOnlyForced(false);
+                    }}
+                    sx={{ textTransform: 'none', p: 0, minWidth: 'auto' }}
+                  >
+                    Use password instead
+                  </Button>
+                </Box>
+              </Alert>
+            )}
+
             <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                size="small"
-                id="email"
-                label="Email Address"
-                name="email"
-                autoComplete="email"
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
               <TextField
                 margin="normal"
                 required
@@ -153,37 +401,92 @@ export const LoginForm: React.FC = () => {
                 placeholder="e.g., demo"
                 helperText="Your organization's unique identifier"
                 value={tenantSlug}
-                onChange={(e) => setTenantSlug(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setTenantSlug(next);
+
+                  // Changing tenant releases any backend-enforced SSO-only state.
+                  setSsoOnlyForced(false);
+
+                  // Reset CAPTCHA only when user changes tenant.
+                  resetCaptcha();
+
+                  // If user changes tenant, drop previous SSO-only hint.
+                  // Backend remains the source of truth; we only switch UI after a real 403.
+                  const slug = next.trim();
+                  if (!slug) {
+                    setSsoOnly(false);
+                    return;
+                  }
+
+                  setSsoOnly(localStorage.getItem(getSsoOnlyKey(slug)) === 'true');
+                }}
               />
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                size="small"
-                name="password"
-                label="Password"
-                type="password"
-                id="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                sx={{ mt: 3, mb: 2 }}
-                disabled={loading}
-              >
-                {loading ? 'Signing in...' : 'Sign In'}
-              </Button>
+
+              {!ssoOnly && (
+                <>
+                  <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    size="small"
+                    id="email"
+                    label="Email Address"
+                    name="email"
+                    autoComplete="email"
+                    autoFocus
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+
+                      // Reset CAPTCHA only when user changes email.
+                      resetCaptcha();
+                    }}
+                  />
+                  <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    size="small"
+                    name="password"
+                    label="Password"
+                    type="password"
+                    id="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                    }}
+                  />
+
+                  {captcha && (
+                    <CaptchaWidget
+                      key={captchaWidgetKey}
+                      challenge={captcha}
+                      onVerifying={handleCaptchaVerifying}
+                      onToken={handleCaptchaToken}
+                      onExpire={handleCaptchaExpire}
+                    />
+                  )}
+
+                  <Button
+                    type="submit"
+                    fullWidth
+                    variant="contained"
+                    sx={{ mt: 3, mb: 2 }}
+                    disabled={loading || isRateLimited || captchaStatus === 'verifying'}
+                  >
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </>
+              )}
 
               {/* SSO Options */}
               <Box sx={{ mt: 2, mb: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <Box sx={{ flex: 1, height: '1px', bgcolor: 'grey.300' }} />
                   <Typography variant="caption" sx={{ px: 2, color: 'text.secondary' }}>
-                    or continue with
+                    {ssoOnly ? 'continue with' : 'or continue with'}
                   </Typography>
                   <Box sx={{ flex: 1, height: '1px', bgcolor: 'grey.300' }} />
                 </Box>
@@ -192,24 +495,26 @@ export const LoginForm: React.FC = () => {
                   <Button
                     fullWidth
                     variant="outlined"
-                    disabled
+                    disabled={loading || tenantCheckLoading || !tenantSlug.trim()}
                     sx={{ 
                       textTransform: 'none',
                       justifyContent: 'center',
                       py: 1
                     }}
+                    onClick={() => startSso('microsoft')}
                   >
-                    Sign in with Microsoft
+                    Sign in with Microsoft (Work or School)
                   </Button>
                   <Button
                     fullWidth
                     variant="outlined"
-                    disabled
+                    disabled={loading || tenantCheckLoading || !tenantSlug.trim()}
                     sx={{ 
                       textTransform: 'none',
                       justifyContent: 'center',
                       py: 1
                     }}
+                    onClick={() => startSso('google')}
                   >
                     Sign in with Google
                   </Button>

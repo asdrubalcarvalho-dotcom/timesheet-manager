@@ -32,6 +32,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'stripe_subscription_id',
         'active_addons',
         'ai_enabled',
+        'require_sso',
         'subscription_renews_at',
         'subscription_status',
         'subscription_state',
@@ -63,6 +64,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'deactivated_at' => 'datetime',
         'is_paused' => 'boolean',
         'ai_enabled' => 'boolean',
+        'require_sso' => 'boolean',
         'subscription_state' => 'string',
         // Stripe Tax fields
         'billing_country' => 'string',
@@ -149,6 +151,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'deactivated_at',
             'settings',
             'ai_enabled',
+            'require_sso',
         ]);
     }
 

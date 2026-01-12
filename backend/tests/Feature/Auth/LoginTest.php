@@ -4,38 +4,31 @@ namespace Tests\Feature\Auth;
 
 use App\Http\Middleware\AllowCentralDomainFallback;
 use App\Http\Middleware\InitializeTenancyByDomainWithFallback;
-use App\Models\Tenant;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
-use Tests\TestCase;
+use Spatie\Permission\Models\Role;
+use Tests\TenantTestCase;
 
-class LoginTest extends TestCase
+class LoginTest extends TenantTestCase
 {
-    use RefreshDatabase;
-
     public function test_admin_can_login_using_tenant_header(): void
     {
-        $tenant = Tenant::create([
-            'name' => 'Demo Tenant',
-            'slug' => 'demo',
-            'owner_email' => 'admin@example.com',
-            'status' => 'active',
-            'plan' => 'standard',
-            'timezone' => config('app.timezone', 'UTC'),
-        ]);
+        $this->tenant->run(function () {
+            Role::findOrCreate('Admin', 'web');
 
-        $user = User::create([
-            'tenant_id' => $tenant->id,
-            'name' => 'Demo Admin',
-            'email' => 'admin@example.com',
-            'password' => Hash::make('password'),
-            'role' => 'Admin',
-        ]);
+            $user = User::factory()->create([
+                'name' => 'Demo Admin',
+                'email' => 'admin@example.com',
+                'password' => Hash::make('password'),
+            ]);
 
-        $response = $this->withHeaders(['X-Tenant' => $tenant->slug])
+            $user->assignRole('Admin');
+        });
+
+        $response = $this->withHeaders(['X-Tenant' => $this->tenant->slug])
             ->postJson('/api/login', [
-                'email' => $user->email,
+                'tenant_slug' => $this->tenant->slug,
+                'email' => 'admin@example.com',
                 'password' => 'password',
             ]);
 
@@ -57,35 +50,25 @@ class LoginTest extends TestCase
             'tenancy.domains.central_fallback.environments' => [],
         ]);
 
-        $tenant = Tenant::create([
-            'name' => 'Demo Tenant',
-            'slug' => 'demo',
-            'owner_email' => 'admin@example.com',
-            'status' => 'active',
-            'plan' => 'standard',
-            'timezone' => config('app.timezone', 'UTC'),
-        ]);
+        // /api/login is a central route; it should remain reachable even when central fallback is disabled.
+        $this->tenant->run(function () {
+            Role::findOrCreate('Admin', 'web');
 
-        $user = User::create([
-            'tenant_id' => $tenant->id,
-            'name' => 'Demo Admin',
-            'email' => 'admin@example.com',
-            'password' => Hash::make('password'),
-            'role' => 'Admin',
-        ]);
+            $user = User::factory()->create([
+                'name' => 'Demo Admin',
+                'email' => 'admin@example.com',
+                'password' => Hash::make('password'),
+            ]);
 
-        $this->withMiddleware([
-            AllowCentralDomainFallback::class,
-            InitializeTenancyByDomainWithFallback::class,
-        ]);
+            $user->assignRole('Admin');
+        });
 
         $response = $this->postJson('/api/login', [
-            'email' => $user->email,
+            'tenant_slug' => $this->tenant->slug,
+            'email' => 'admin@example.com',
             'password' => 'password',
-        ], [
-            'X-Tenant' => $tenant->slug,
         ]);
 
-        $response->assertForbidden();
+        $response->assertOk();
     }
 }

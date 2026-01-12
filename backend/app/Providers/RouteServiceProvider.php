@@ -42,6 +42,24 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->ip());
         });
 
+        // SSO (public unauthenticated endpoints) - EMAIL_POLICY.md baseline
+        RateLimiter::for('sso', function (Request $request) {
+            return [
+                // OAuth flows can legitimately retry/refresh during redirects.
+                // Keep this permissive enough to avoid 429 on callback, while still rate limiting abuse.
+                Limit::perMinute(30)->by($request->ip()),
+                Limit::perHour(200)->by($request->ip()),
+            ];
+        });
+
+        // Public auth endpoints (signup / verify-signup / SSO) - EMAIL_POLICY.md baseline
+        RateLimiter::for('public-auth', function (Request $request) {
+            return [
+                Limit::perMinute(5)->by($request->ip()),
+                Limit::perHour(20)->by($request->ip()),
+            ];
+        });
+
         // Criação de registros
         RateLimiter::for('create', function (Request $request) {
             return Limit::perMinute(30)->by(optional($request->user())->id ?: $request->ip());

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\TimesheetController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\SocialAuthController;
+use App\Http\Controllers\Api\SsoAuthController;
 use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\TenantDataController;
 use App\Http\Controllers\Api\EventController;
@@ -47,13 +48,13 @@ Route::post('stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])
 
 // Tenant onboarding (no tenant context required)
 Route::post('tenants/register', [TenantController::class, 'register'])
-    ->middleware('throttle:10,1'); // 10 registrations per minute (LEGACY - will be deprecated)
+    ->middleware('throttle:public-auth');
 
 Route::post('tenants/request-signup', [TenantController::class, 'requestSignup'])
-    ->middleware('throttle:10,1'); // 10 signup requests per minute
+    ->middleware('throttle:public-auth');
 
 Route::get('tenants/verify-signup', [TenantController::class, 'verifySignup'])
-    ->middleware('throttle:30,1'); // 30 verification attempts per minute
+    ->middleware('throttle:public-auth');
 
 Route::get('tenants/check-slug', [TenantController::class, 'checkSlug'])
     ->middleware('throttle:30,1'); // 30 checks per minute
@@ -97,6 +98,10 @@ Route::prefix('billing')->group(function () {
 */
 
 Route::middleware(['tenant.initialize'])->group(function () {
+    // SSO-2: Account linking (authenticated)
+    Route::post('auth/sso/{provider}/link/start', [SsoAuthController::class, 'linkStart'])
+        ->middleware(['auth:sanctum', 'throttle:create']);
+
     // Special route for attachment download - uses custom auth via token query param
     // Must be OUTSIDE auth:sanctum group to avoid login redirect
     Route::get('expenses/{expense}/attachment', [ExpenseController::class, 'downloadAttachment'])

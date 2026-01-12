@@ -23,6 +23,7 @@ import { LoginForm } from './components/Auth/LoginForm';
 import TenantRegistration from './components/Auth/TenantRegistration';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import SuperAdminApp from './components/SuperAdmin/SuperAdminApp';
+import SsoCallback from './pages/SsoCallback';
 const TimesheetCalendar = React.lazy(() => import('./components/Timesheets/TimesheetCalendar'));
 const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
 const PlanningGantt = React.lazy(() => import('./components/Planning/PlanningGantt'));
@@ -140,10 +141,18 @@ const ModuleLoader: React.FC<{ label?: string }> = ({ label = 'A carregar módul
 
 // Main App Content with Side Menu
 const AppContent: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { billingSummary } = useBilling();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const hasStoredSession = (() => {
+    try {
+      return Boolean(localStorage.getItem('auth_token') && localStorage.getItem('tenant_slug'));
+    } catch {
+      return false;
+    }
+  })();
 
   const isTrialActive = (() => {
     if (!billingSummary?.is_trial) return false;
@@ -182,6 +191,23 @@ const AppContent: React.FC = () => {
 
   // Handle authentication and routing
   if (!user) {
+    // If we already have a token+tenant in storage, don't flash the login screen while
+    // AuthContext is validating the session (common right after SSO callback).
+    if (loading && hasStoredSession) {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 2 }}>
+          <CircularProgress size={32} />
+          <Typography variant="body2" color="text.secondary">
+            Signing you in...
+          </Typography>
+        </Box>
+      );
+    }
+
+    // Handle SSO browser handoff
+    if (location.pathname === '/sso/callback') {
+      return <SsoCallback />;
+    }
     // Show VerifyEmail on /verify-signup route (public route)
     if (location.pathname === '/verify-signup') {
       return <VerifyEmail />;

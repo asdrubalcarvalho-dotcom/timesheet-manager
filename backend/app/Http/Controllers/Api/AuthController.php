@@ -7,8 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use App\Models\Tenant;
+use App\Services\Abuse\Captcha\CaptchaGate;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -30,35 +32,60 @@ class AuthController extends Controller
             ]);
         }
 
+        // SSO-3: SSO-only enforcement (opt-in per tenant, central feature flag)
+        // IMPORTANT: Must happen before entering tenant DB, validating credentials, or issuing tokens.
+        if ((bool) $tenant->require_sso) {
+            Log::warning('auth.password_blocked_sso_only', [
+                'event' => 'auth.password_blocked_sso_only',
+                'tenant' => $tenant->slug,
+                'ip' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'message' => 'This workspace requires Single Sign-On authentication.',
+            ], 403);
+        }
+
+        // Anti-Abuse v2: adaptive CAPTCHA on password login.
+        // IMPORTANT: If CAPTCHA is required and missing/invalid, do NOT count as a failed login attempt.
+        $captchaGate = app(CaptchaGate::class);
+        $captchaGate->assertCaptchaIfRequired(
+            $request,
+            'login',
+            (string) $request->email,
+            (string) $tenant->slug,
+            'login_failures'
+        );
+
         // Initialize tenant context and execute login within tenant database
         return $tenant->run(function () use ($request, $tenant) {
             // MANUAL DATABASE CONNECTION (DatabaseTenancyBootstrapper disabled)
-            // Calculate database name from slug (format: timesheet_{slug})
-            $databaseName = 'timesheet_' . str_replace('-', '-', $tenant->id);
+            // Use tenant internal db_name when available; fallback to prefix+tenant id.
+            $databaseName = (string) ($tenant->getInternal('db_name') ?? '');
+
+            if ($databaseName === '') {
+                $databaseName = (string) config('tenancy.database.prefix', 'timesheet_')
+                    . (string) $tenant->id
+                    . (string) config('tenancy.database.suffix', '');
+            }
             config(['database.connections.tenant.database' => $databaseName]);
             DB::purge('tenant');
             DB::reconnect('tenant');
             DB::setDefaultConnection('tenant');
-            
-            \Log::info('Login attempt', [
-                'email' => $request->email,
-                'database' => $databaseName,
-                'connection' => DB::getDefaultConnection(),
-            ]);
-            
+
             $user = User::where('email', $request->email)->first();
-            
-            \Log::info('User lookup result', [
-                'user_found' => $user !== null,
-                'user_id' => $user?->id,
-                'user_email' => $user?->email,
-            ]);
 
             if (!$user || !Hash::check($request->password, $user->password)) {
+                $captchaGate = app(CaptchaGate::class);
+                $captchaGate->incrementLoginFailure($request, (string) $request->email, (string) $tenant->slug);
+
                 throw ValidationException::withMessages([
                     'email' => ['The provided credentials are incorrect.'],
                 ]);
             }
+
+            $captchaGate = app(CaptchaGate::class);
+            $captchaGate->clearLoginFailures($request, (string) $request->email, (string) $tenant->slug);
 
             $token = $user->createToken("tenant-{$tenant->id}", ["tenant:{$tenant->id}"])->plainTextToken;
 

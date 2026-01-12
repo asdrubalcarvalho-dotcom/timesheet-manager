@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\HandlesConstraintExceptions;
 use App\Models\Technician;
 use App\Models\User;
+use App\Services\Security\EmailPolicyService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
@@ -125,6 +126,8 @@ class TechnicianController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $tenantSlug = tenant()?->slug;
+
         // First, check if an INACTIVE technician with this email already exists
         $existingTechnician = Technician::where('email', $request->email)
             ->where('is_active', 0)
@@ -163,6 +166,12 @@ class TechnicianController extends Controller
                 'worker_contract_country' => 'nullable|string|max:255',
                 'password' => 'nullable|string|min:6',
             ]);
+
+            app(EmailPolicyService::class)->assertAllowedEmail(
+                (string) $validated['email'],
+                $request,
+                ['tenant_slug' => (string) $tenantSlug]
+            );
 
             $existingTechnician->update([
                 'name' => $validated['name'],
@@ -226,6 +235,12 @@ class TechnicianController extends Controller
             'worker_contract_country' => 'nullable|string|max:255',
             'password' => 'required|string|min:6',
         ]);
+
+        app(EmailPolicyService::class)->assertAllowedEmail(
+            (string) $validated['email'],
+            $request,
+            ['tenant_slug' => (string) $tenantSlug]
+        );
 
         $sendInvite = $request->boolean('send_invite', true);
 

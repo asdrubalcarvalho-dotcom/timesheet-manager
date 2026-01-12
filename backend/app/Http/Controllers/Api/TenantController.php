@@ -11,11 +11,14 @@ use App\Models\PendingTenantSignup;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\TenantEmailVerification;
+use App\Services\Abuse\Captcha\CaptchaGate;
+use App\Services\Security\EmailPolicyService;
 use App\Services\Billing\PlanManager;
 use App\Support\EmailRecipient;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -59,6 +62,16 @@ class TenantController extends Controller
                 'errors' => ['slug' => ['This slug is reserved and cannot be used.']]
             ], 422);
         }
+
+        app(EmailPolicyService::class)->assertAllowedEmail(
+            (string) $request->admin_email,
+            $request,
+            ['tenant_slug' => (string) $request->slug]
+        );
+
+        $captchaGate = app(CaptchaGate::class);
+        $captchaGate->recordRegisterAttempt($request, 'tenants/register', (string) $request->admin_email, (string) $request->slug);
+        $captchaGate->assertCaptchaIfRequired($request, 'tenants/register', (string) $request->admin_email, (string) $request->slug, 'register_adaptive');
 
         try {
             // Base domain for tenant URLs (frontend)
@@ -198,9 +211,11 @@ class TenantController extends Controller
             $tenant->run(function () use ($request, $tenant, &$adminToken, $databaseName) {
                 // MANUAL DATABASE CONNECTION (DatabaseTenancyBootstrapper disabled)
                 // Set the tenant connection to use the newly created database
+                config(['database.connections.tenant.database' => $databaseName]);
                 DB::purge('tenant'); // Clear any cached connection
                 DB::reconnect('tenant'); // Reconnect with new database
                 DB::setDefaultConnection('tenant'); // Switch to tenant connection
+                config(['database.default' => 'tenant']);
                 
                 \Log::info('Tenant DB connection established', [
                     'database' => $databaseName,
@@ -316,10 +331,14 @@ class TenantController extends Controller
         }
 
         // Check if slug already exists
-        $exists = Tenant::where('slug', $slug)->exists();
+        $tenant = Tenant::where('slug', $slug)->first();
+        $exists = (bool) $tenant;
 
         return response()->json([
             'available' => !$exists,
+            'exists' => $exists,
+            // Used by the login UI to enforce SSO-only tenants.
+            'require_sso' => $exists ? (bool) $tenant->require_sso : null,
             'message' => $exists ? 'This slug is already taken.' : 'Slug is available.'
         ]);
     }
@@ -433,6 +452,16 @@ class TenantController extends Controller
             ], 422);
         }
 
+        app(EmailPolicyService::class)->assertAllowedEmail(
+            (string) $request->admin_email,
+            $request,
+            ['tenant_slug' => (string) $request->slug]
+        );
+
+        $captchaGate = app(CaptchaGate::class);
+        $captchaGate->recordRegisterAttempt($request, 'tenants/request-signup', (string) $request->admin_email, (string) $request->slug);
+        $captchaGate->assertCaptchaIfRequired($request, 'tenants/request-signup', (string) $request->admin_email, (string) $request->slug, 'request_signup_adaptive');
+
         try {
             // Clean up any expired pending signups for this email
             PendingTenantSignup::where('admin_email', $request->admin_email)
@@ -465,7 +494,6 @@ class TenantController extends Controller
 
             \Log::info('Pending tenant signup created', [
                 'slug' => $request->slug,
-                'email' => $request->admin_email,
                 'expires_at' => $pendingSignup->expires_at,
             ]);
 
@@ -551,6 +579,16 @@ class TenantController extends Controller
                 ], 400);
             }
 
+            app(EmailPolicyService::class)->assertAllowedEmail(
+                (string) $pendingSignup->admin_email,
+                $request,
+                ['tenant_slug' => (string) $pendingSignup->slug]
+            );
+
+            $captchaGate = app(CaptchaGate::class);
+            $captchaGate->recordRegisterAttempt($request, 'tenants/verify-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug);
+            $captchaGate->assertCaptchaIfRequired($request, 'tenants/verify-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug, 'verify_signup_adaptive');
+
             // If a previous verify attempt partially created the tenant, resume provisioning
             // instead of blocking the user with slug_taken.
             $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
@@ -573,7 +611,6 @@ class TenantController extends Controller
 
             \Log::info('Tenant created from verified signup', [
                 'slug' => $tenant->slug,
-                'email' => $tenant->owner_email,
             ]);
 
             // Build login URL
@@ -592,6 +629,11 @@ class TenantController extends Controller
                 ],
                 'login_url' => $loginUrl,
             ], 200);
+
+        } catch (HttpResponseException $e) {
+            // CaptchaGate uses HttpResponseException to short-circuit with a JSON response
+            // (e.g. 422 captcha_required). Do not wrap it as a 500.
+            throw $e;
 
         } catch (\Exception $e) {
             \Log::error('Email verification failed', [
