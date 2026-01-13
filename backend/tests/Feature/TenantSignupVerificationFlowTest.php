@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Mail\VerifySignupMail;
 use App\Models\PendingTenantSignup;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -34,12 +35,13 @@ class TenantSignupVerificationFlowTest extends TestCase
         Mail::fake();
 
         $unique = substr((string) Str::uuid(), 0, 8);
+        $adminEmail = 'owner+' . $unique . '@example.com';
 
         $response = $this->postJson('/api/tenants/request-signup', [
             'company_name' => 'Acme Inc',
             'slug' => 'acme-verify-' . $unique,
             'admin_name' => 'Acme Owner',
-            'admin_email' => 'owner+' . $unique . '@example.com',
+            'admin_email' => $adminEmail,
             'admin_password' => 'password123',
             'admin_password_confirmation' => 'password123',
             'timezone' => 'UTC',
@@ -54,6 +56,12 @@ class TenantSignupVerificationFlowTest extends TestCase
 
         $url = (string) $response->json('verification_url');
         $this->assertStringStartsWith('http://api.test/tenants/verify-signup?token=', $url);
+
+        Mail::assertSent(VerifySignupMail::class, function (VerifySignupMail $mail) use ($adminEmail, $url): bool {
+            return $mail->hasTo($adminEmail)
+                && $mail->companyName === 'Acme Inc'
+                && $mail->verificationUrl === $url;
+        });
     }
 
     public function test_verify_signup_redirect_marks_email_verified_and_is_idempotent(): void

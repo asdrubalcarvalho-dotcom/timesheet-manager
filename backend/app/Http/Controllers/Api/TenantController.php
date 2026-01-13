@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\PendingTenantSignup;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Mail\VerifySignupMail;
 use App\Notifications\TenantEmailVerification;
 use App\Services\Abuse\Captcha\CaptchaGate;
 use App\Services\Security\EmailPolicyService;
@@ -23,6 +24,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Modules\Billing\Models\Subscription;
@@ -491,9 +493,13 @@ class TenantController extends Controller
             $backendUrl = rtrim((string) config('app.url', 'http://localhost'), '/');
             $verificationUrl = $backendUrl . '/tenants/verify-signup?token=' . $verificationToken;
 
-            // Send /verification email
-            $recipient = new EmailRecipient($request->admin_email, $request->admin_name);
-            $recipient->notify(new TenantEmailVerification($verificationUrl, $request->company_name));
+            // Send verification email immediately (no verification/finalization/token consumption here).
+            Mail::to((string) $request->admin_email)->send(
+                new VerifySignupMail(
+                    (string) $request->company_name,
+                    $verificationUrl,
+                )
+            );
 
             \Log::info('Pending tenant signup created', [
                 'slug' => $request->slug,
