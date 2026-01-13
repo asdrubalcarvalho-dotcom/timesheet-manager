@@ -56,6 +56,9 @@ Route::post('tenants/request-signup', [TenantController::class, 'requestSignup']
 Route::get('tenants/verify-signup', [TenantController::class, 'verifySignup'])
     ->middleware('throttle:public-auth');
 
+Route::post('tenants/complete-signup', [TenantController::class, 'completeSignup'])
+    ->middleware('throttle:public-auth');
+
 Route::get('tenants/check-slug', [TenantController::class, 'checkSlug'])
     ->middleware('throttle:30,1'); // 30 checks per minute
 

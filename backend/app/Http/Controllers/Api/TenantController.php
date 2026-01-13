@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -485,8 +486,10 @@ class TenantController extends Controller
             ]);
 
             // Build verification URL
-            $frontendUrl = config('app.frontend_url', config('app.url'));
-            $verificationUrl = $frontendUrl . '/verify-signup?token=' . $verificationToken;
+            // Browser should hit the API domain (not the frontend) so the verification step can be
+            // a simple GET -> 302 redirect and remain robust to link scanners.
+            $backendUrl = rtrim((string) config('app.url', 'http://localhost'), '/');
+            $verificationUrl = $backendUrl . '/tenants/verify-signup?token=' . $verificationToken;
 
             // Send /verification email
             $recipient = new EmailRecipient($request->admin_email, $request->admin_name);
@@ -539,7 +542,10 @@ class TenantController extends Controller
     }
 
     /**
-     * Verify email and complete tenant registration.
+     * Verify email (idempotent).
+     *
+     * NOTE: This endpoint must not create tenants nor consume the token.
+     * Tenant provisioning happens only on the final submit step (completeSignup).
      */
     public function verifySignup(Request $request): JsonResponse
     {
@@ -562,23 +568,144 @@ class TenantController extends Controller
                 ], 404);
             }
 
-            // Check if already verified
-            if ($pendingSignup->verified) {
-                return response()->json([
-                    'message' => 'This email has already been verified',
-                    'error' => 'already_verified',
-                ], 400);
-            }
-
-            // Check if expired
+            // Check if expired (do NOT delete here; keep record for robust, repeatable links)
             if ($pendingSignup->isExpired()) {
-                $pendingSignup->delete();
                 return response()->json([
                     'message' => 'Verification link has expired. Please start the registration process again.',
                     'error' => 'expired',
                 ], 400);
             }
 
+            // Idempotent: if already verified, keep returning success.
+            if (!$pendingSignup->verified || !$pendingSignup->email_verified_at) {
+                $pendingSignup->markEmailVerified();
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Email verified successfully. You can now complete your signup.',
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Email verification failed', [
+                'token' => $token,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Verification failed',
+                'error' => app()->environment('local')
+                    ? $e->getMessage()
+                    : 'An error occurred during verification. Please try again or contact support.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Browser-friendly email verification endpoint.
+     *
+     * Always returns a 302 redirect back to the frontend with a verified=1/0 flag.
+     */
+    public function verifySignupRedirect(Request $request): RedirectResponse
+    {
+        $token = (string) $request->query('token', '');
+
+        $frontendUrl = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $redirectBase = $frontendUrl . '/verify-signup';
+
+        $query = [];
+        if ($token !== '') {
+            $query['token'] = $token;
+        }
+
+        try {
+            if ($token === '') {
+                $query['verified'] = '0';
+                $query['reason'] = 'missing_token';
+                return redirect()->away($redirectBase . '?' . http_build_query($query));
+            }
+
+            $pendingSignup = PendingTenantSignup::where('verification_token', $token)->first();
+
+            if (!$pendingSignup) {
+                $query['verified'] = '0';
+                $query['reason'] = 'not_found';
+                return redirect()->away($redirectBase . '?' . http_build_query($query));
+            }
+
+            if ($pendingSignup->isExpired()) {
+                $query['verified'] = '0';
+                $query['reason'] = 'expired';
+                return redirect()->away($redirectBase . '?' . http_build_query($query));
+            }
+
+            // Mark email verified (idempotent).
+            if (!$pendingSignup->verified || !$pendingSignup->email_verified_at) {
+                $pendingSignup->markEmailVerified();
+            }
+
+            $query['verified'] = '1';
+            return redirect()->away($redirectBase . '?' . http_build_query($query));
+
+        } catch (\Exception $e) {
+            \Log::error('Email verification redirect failed', [
+                'token' => $token,
+                'error' => $e->getMessage(),
+            ]);
+
+            $query['verified'] = '0';
+            $query['reason'] = 'server_error';
+            return redirect()->away($redirectBase . '?' . http_build_query($query));
+        }
+    }
+
+    /**
+     * Final submit: enforce email verification + CAPTCHA and create the tenant.
+     */
+    public function completeSignup(Request $request): JsonResponse
+    {
+        $token = (string) $request->input('token', '');
+
+        if ($token === '') {
+            return response()->json([
+                'message' => 'Verification token is required',
+            ], 400);
+        }
+
+        try {
+            $pendingSignup = PendingTenantSignup::where('verification_token', $token)->first();
+
+            if (!$pendingSignup) {
+                return response()->json([
+                    'message' => 'Invalid verification token',
+                    'error' => 'not_found',
+                ], 404);
+            }
+
+            if ($pendingSignup->isExpired()) {
+                return response()->json([
+                    'message' => 'Verification link has expired. Please start the registration process again.',
+                    'error' => 'expired',
+                ], 400);
+            }
+
+            $hasEmailVerifiedAt = (bool) $pendingSignup->email_verified_at;
+            $hasLegacyVerified = (bool) $pendingSignup->verified;
+
+            if (!$hasEmailVerifiedAt && !$hasLegacyVerified) {
+                return response()->json([
+                    'message' => 'Please verify your email before creating your workspace.',
+                    'code' => 'email_not_verified',
+                ], 422);
+            }
+
+            // Keep legacy flag/timestamp in sync if only one is set.
+            if (!$hasEmailVerifiedAt || !$hasLegacyVerified) {
+                $pendingSignup->markEmailVerified();
+            }
+
+            // Anti-abuse checks happen at the final submit step.
             app(EmailPolicyService::class)->assertAllowedEmail(
                 (string) $pendingSignup->admin_email,
                 $request,
@@ -586,11 +713,10 @@ class TenantController extends Controller
             );
 
             $captchaGate = app(CaptchaGate::class);
-            $captchaGate->recordRegisterAttempt($request, 'tenants/verify-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug);
-            $captchaGate->assertCaptchaIfRequired($request, 'tenants/verify-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug, 'verify_signup_adaptive');
+            $captchaGate->recordRegisterAttempt($request, 'tenants/complete-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug);
+            $captchaGate->assertCaptchaIfRequired($request, 'tenants/complete-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug, 'complete_signup_adaptive');
 
-            // If a previous verify attempt partially created the tenant, resume provisioning
-            // instead of blocking the user with slug_taken.
+            // If a previous attempt partially created the tenant, resume provisioning.
             $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
             if ($existingTenant) {
                 if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
@@ -602,26 +728,23 @@ class TenantController extends Controller
 
                 $tenant = $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup);
             } else {
-                // All checks passed - create the tenant using existing logic
                 $tenant = $this->createTenantFromPendingSignup($pendingSignup);
             }
 
-            // Mark as verified and delete pending signup
-            $pendingSignup->delete();
-
-            \Log::info('Tenant created from verified signup', [
-                'slug' => $tenant->slug,
-            ]);
+            // Mark completed (idempotent) and keep token record intact.
+            $pendingSignup->forceFill([
+                'completed_at' => $pendingSignup->completed_at ?? now(),
+            ])->save();
 
             // Build login URL
             $baseDomain = config('app.domain', 'localhost:8082');
-            $loginUrl = (app()->environment('local') ? 'http://' : 'https://') 
-                . $pendingSignup->slug . '.' . $baseDomain . '/login?email=' 
+            $loginUrl = (app()->environment('local') ? 'http://' : 'https://')
+                . $pendingSignup->slug . '.' . $baseDomain . '/login?email='
                 . urlencode($pendingSignup->admin_email);
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Email verified successfully! Your workspace has been created.',
+                'message' => 'Workspace created successfully.',
                 'tenant' => [
                     'id' => $tenant->id,
                     'slug' => $tenant->slug,
@@ -636,17 +759,17 @@ class TenantController extends Controller
             throw $e;
 
         } catch (\Exception $e) {
-            \Log::error('Email verification failed', [
+            \Log::error('Complete signup failed', [
                 'token' => $token,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
-                'message' => 'Verification failed',
+                'message' => 'Signup failed',
                 'error' => app()->environment('local')
                     ? $e->getMessage()
-                    : 'An error occurred during verification. Please try again or contact support.',
+                    : 'An error occurred during signup. Please try again or contact support.',
             ], 500);
         }
     }

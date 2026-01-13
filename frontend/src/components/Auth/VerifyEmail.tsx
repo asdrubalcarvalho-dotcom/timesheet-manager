@@ -10,7 +10,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useNotification } from '../../contexts/NotificationContext';
-import api from '../../services/api';
+import api, { API_URL } from '../../services/api';
 import { CaptchaWidget, type CaptchaChallenge } from './CaptchaWidget';
 
 type CaptchaStatus = 'idle' | 'required' | 'verifying' | 'verified' | 'expired';
@@ -21,6 +21,8 @@ const VerifyEmail: React.FC = () => {
   const { showSuccess, showError } = useNotification();
 
   const token = useMemo(() => searchParams.get('token') ?? '', [searchParams]);
+  const verified = useMemo(() => searchParams.get('verified'), [searchParams]);
+  const reason = useMemo(() => searchParams.get('reason') ?? '', [searchParams]);
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'captcha'>('loading');
   const [message, setMessage] = useState<string>('');
@@ -81,7 +83,7 @@ const VerifyEmail: React.FC = () => {
     }, safeSeconds * 1000);
   }, []);
 
-  const verifyRequest = useCallback(async (captchaTokenValue?: string | null) => {
+  const completeRequest = useCallback(async (captchaTokenValue?: string | null) => {
     if (!token) {
       setStatus('error');
       setMessage('Verification token is missing');
@@ -100,22 +102,24 @@ const VerifyEmail: React.FC = () => {
     setStatus('loading');
 
     try {
-      const response = await api.get('/api/tenants/verify-signup', {
-        params: {
+      const response = await api.post(
+        '/api/tenants/complete-signup',
+        {
           token,
           ...(captchaTokenValue ? { captcha_token: captchaTokenValue } : {}),
         },
-        // Expected flow: backend may return 422 captcha_required.
-        // Avoid throwing AxiosError so we can handle it as a normal UI step.
-        validateStatus: () => true,
-      });
+        {
+          // Expected flow: backend may return 422 captcha_required.
+          // Avoid throwing AxiosError so we can handle it as a normal UI step.
+          validateStatus: () => true,
+        },
+      );
 
       if (response.status === 200) {
         setStatus('success');
-        setMessage(response.data.message || 'Email verified successfully!');
+        setMessage(response.data.message || 'Your workspace has been created!');
         showSuccess('Your workspace has been created! Redirecting to login...');
 
-        // Redirect to login after 3 seconds
         setTimeout(() => {
           if (response.data.login_url) {
             window.location.href = response.data.login_url;
@@ -126,7 +130,7 @@ const VerifyEmail: React.FC = () => {
         return;
       }
 
-      // 429: terminal cooldown state (no CAPTCHA loop)
+      // 429: terminal cooldown state
       if (response.status === 429) {
         resetCaptcha();
         setStatus('error');
@@ -158,39 +162,77 @@ const VerifyEmail: React.FC = () => {
         return;
       }
 
+      if (response.status === 422 && response.data?.code === 'email_not_verified') {
+        setStatus('error');
+        setErrorType('email_not_verified');
+        setMessage('Please verify your email first, then try again.');
+        showError('Email not verified');
+        return;
+      }
+
       setStatus('error');
       setErrorType(response.data?.error || 'unknown');
 
       if (response.data?.error === 'expired') {
         setMessage('This verification link has expired. Please start the registration process again.');
-      } else if (response.data?.error === 'already_verified') {
-        setMessage('This email has already been verified. Please sign in.');
       } else if (response.data?.error === 'not_found') {
         setMessage('Invalid verification link. Please check your email or start registration again.');
       } else if (response.data?.error === 'slug_taken') {
         setMessage('This workspace name is no longer available. Please start registration again with a different name.');
       } else {
-        setMessage(response.data?.message || 'Verification failed. Please try again or contact support.');
+        setMessage(response.data?.message || 'Signup failed. Please try again or contact support.');
       }
 
-      showError(response.data?.message || 'Verification failed');
+      showError(response.data?.message || 'Signup failed');
     } catch (error: any) {
-      console.error('Verification failed:', error);
+      console.error('Signup completion failed:', error);
       setStatus('error');
       setErrorType('unknown');
-      setMessage('Verification failed. Please try again or contact support.');
-      showError('Verification failed');
+      setMessage('Signup failed. Please try again or contact support.');
+      showError('Signup failed');
     }
   }, [isRateLimited, navigate, resetCaptcha, showError, showSuccess, startCooldown, token]);
 
   useEffect(() => {
-    // New token -> reset previous captcha state and retry without captcha.
     resetCaptcha();
     setErrorType('');
     setMessage('');
     setRateLimitedUntil(null);
-    verifyRequest(null);
-  }, [resetCaptcha, token, verifyRequest]);
+
+    if (!token) {
+      setStatus('error');
+      setMessage('Verification token is missing');
+      setErrorType('missing_token');
+      return;
+    }
+
+    // Legacy links (or dev helpers) may still point to /verify-signup?token=... without redirect flags.
+    // In that case, hand off to the backend browser endpoint which will 302 back with verified=1/0.
+    if (verified === null) {
+      setStatus('loading');
+      window.location.replace(`${API_URL.replace(/\/+$/, '')}/tenants/verify-signup?token=${encodeURIComponent(token)}`);
+      return;
+    }
+
+    if (verified !== '1') {
+      setStatus('error');
+      setErrorType(reason || 'unknown');
+
+      if (reason === 'expired') {
+        setMessage('This verification link has expired. Please start the registration process again.');
+      } else if (reason === 'not_found') {
+        setMessage('Invalid verification link. Please check your email or start registration again.');
+      } else if (reason === 'missing_token') {
+        setMessage('Verification token is missing. Please check your email link.');
+      } else {
+        setMessage('Verification failed. Please try again or contact support.');
+      }
+      return;
+    }
+
+    // Email verified -> final submit creates tenant (may still require CAPTCHA).
+    void completeRequest(null);
+  }, [API_URL, completeRequest, reason, resetCaptcha, token, verified]);
 
   return (
     <Box
@@ -264,11 +306,11 @@ const VerifyEmail: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
               <Button
                 variant="contained"
-                onClick={() => verifyRequest(captchaToken)}
+                onClick={() => completeRequest(captchaToken)}
                 fullWidth
                 disabled={isRateLimited || captchaStatus === 'verifying' || captchaStatus !== 'verified' || !captchaToken}
               >
-                Verify Email
+                Create Workspace
               </Button>
               <Button
                 variant="outlined"

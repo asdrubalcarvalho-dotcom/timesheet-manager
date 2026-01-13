@@ -26,11 +26,15 @@ class PendingTenantSignup extends Model
         'timezone',
         'expires_at',
         'verified',
+        'email_verified_at',
+        'completed_at',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
         'verified' => 'boolean',
+        'email_verified_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     /**
@@ -55,5 +59,16 @@ class PendingTenantSignup extends Model
     public function isValid(): bool
     {
         return !$this->verified && !$this->isExpired();
+    }
+
+    public function markEmailVerified(?Carbon $at = null): void
+    {
+        $at ??= Carbon::now();
+
+        // Keep legacy boolean in sync for backwards compatibility.
+        $this->forceFill([
+            'verified' => true,
+            'email_verified_at' => $this->email_verified_at ?? $at,
+        ])->save();
     }
 }
