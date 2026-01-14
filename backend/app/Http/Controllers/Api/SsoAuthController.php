@@ -363,8 +363,10 @@ class SsoAuthController extends Controller
     private function redirectToFrontendCallback(string $tenantSlug, string $token): RedirectResponse
     {
         $frontend = rtrim((string) config('app.frontend_url', ''), '/');
+
         $url = $frontend . '/sso/callback?' . http_build_query([
             'tenant' => $tenantSlug,
+            'token'  => $token,
         ]);
 
         return redirect($url);
