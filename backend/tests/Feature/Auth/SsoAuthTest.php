@@ -38,6 +38,20 @@ class SsoAuthTest extends TenantTestCase
         $this->assertStringContainsString('login.microsoftonline.com', (string) $response->headers->get('Location'));
     }
 
+    public function test_sso_redirect_is_blocked_when_tenant_signup_not_completed(): void
+    {
+        // TenantTestCase initializes tenancy by default; end it so the request goes through
+        // the normal tenant resolution middleware path.
+        tenancy()->end();
+
+        $response = $this->getJson('/auth/microsoft/redirect?tenant=pending-signup-slug');
+
+        $response->assertStatus(422);
+        $response->assertJson([
+            'message' => 'Tenant signup not completed',
+        ]);
+    }
+
     public function test_existing_tenant_user_can_log_in_via_google_sso(): void
     {
         User::factory()->create([

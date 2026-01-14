@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Stancl\Tenancy\Tenancy;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Initialize tenancy by slug from X-Tenant header or tenant query parameter.
@@ -61,8 +60,12 @@ class InitializeTenancyBySlug
         $tenant = Tenant::where('slug', $slug)->first();
 
         if (! $tenant) {
-            \Log::error("Tenant not found", ['slug' => $slug]);
-            throw new NotFoundHttpException("Tenant with slug '{$slug}' not found.");
+            // Signup Option A: slug may exist only in pending_tenant_signups until complete-signup.
+            // Do NOT fallback to pending signups here; block auth/SSO explicitly until tenant is created.
+            \Log::warning('Tenant signup not completed', ['slug' => $slug]);
+            return response()->json([
+                'message' => 'Tenant signup not completed',
+            ], 422);
         }
 
         // Initialize tenancy
