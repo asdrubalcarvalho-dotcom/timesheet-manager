@@ -21,8 +21,16 @@ const VerifyEmail: React.FC = () => {
   const { showSuccess, showError } = useNotification();
 
   const token = useMemo(() => searchParams.get('token') ?? '', [searchParams]);
-  const verified = useMemo(() => searchParams.get('verified'), [searchParams]);
+  const verifiedRaw = useMemo(() => searchParams.get('verified'), [searchParams]);
   const reason = useMemo(() => searchParams.get('reason') ?? '', [searchParams]);
+
+  const verified = useMemo((): boolean | null => {
+    if (verifiedRaw === null) return null;
+    const v = String(verifiedRaw).trim().toLowerCase();
+    if (v === '1' || v === 'true') return true;
+    if (v === '0' || v === 'false') return false;
+    return false;
+  }, [verifiedRaw]);
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'captcha'>('loading');
   const [message, setMessage] = useState<string>('');
@@ -214,7 +222,7 @@ const VerifyEmail: React.FC = () => {
       return;
     }
 
-    if (verified !== '1') {
+    if (verified !== true) {
       setStatus('error');
       setErrorType(reason || 'unknown');
 
