@@ -12,13 +12,15 @@ const SsoCallback = () => {
   const tenant = params.get('tenant');
 
   useEffect(() => {
-    if (!token || !tenant) {
+    if (!tenant) {
       setError('Missing SSO callback parameters.');
       return;
     }
 
     try {
-      localStorage.setItem('auth_token', token);
+      if (token) {
+        localStorage.setItem('auth_token', token);
+      }
       setTenantSlug(tenant);
 
       // AuthContext reads localStorage only on mount, so reload into an authenticated route.
