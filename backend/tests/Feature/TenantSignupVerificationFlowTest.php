@@ -8,6 +8,7 @@ use App\Mail\VerifySignupMail;
 use App\Models\PendingTenantSignup;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -164,5 +165,43 @@ class TenantSignupVerificationFlowTest extends TestCase
 
         $pending->refresh();
         $this->assertNotNull($pending->completed_at);
+    }
+
+    public function test_verify_signup_is_resilient_when_provision_lock_is_held(): void
+    {
+        config([
+            'cache.default' => 'array',
+        ]);
+
+        $unique = substr((string) Str::uuid(), 0, 8);
+        $token = 'tok_' . $unique;
+        $slug = 'acme-locked-' . $unique;
+        $adminEmail = 'owner+' . $unique . '@example.com';
+
+        $pending = PendingTenantSignup::create([
+            'company_name' => 'Acme Inc',
+            'slug' => $slug,
+            'admin_name' => 'Acme Owner',
+            'admin_email' => $adminEmail,
+            'password_hash' => Hash::make('password123'),
+            'verification_token' => $token,
+            'timezone' => 'UTC',
+            'expires_at' => now()->addHour(),
+            'verified' => false,
+        ]);
+
+        $lock = Cache::lock('tenant:provision:' . $slug, 30);
+        $this->assertTrue($lock->get());
+
+        try {
+            $response = $this->getJson('/api/tenants/verify-signup?token=' . urlencode($token));
+            $response->assertOk();
+
+            $pending->refresh();
+            $this->assertNotNull($pending->completed_at);
+            $this->assertNotNull($pending->email_verified_at);
+        } finally {
+            $lock->release();
+        }
     }
 }

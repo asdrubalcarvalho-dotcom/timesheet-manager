@@ -17,14 +17,17 @@ use App\Services\Security\EmailPolicyService;
 use App\Services\Billing\PlanManager;
 use App\Support\EmailRecipient;
 use Carbon\Carbon;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Modules\Billing\Models\Subscription;
@@ -32,6 +35,9 @@ use Stancl\Tenancy\Database\Models\Domain;
 
 class TenantController extends Controller
 {
+    private const TENANT_PROVISION_LOCK_TTL_SECONDS = 30;
+    private const TENANT_PROVISION_LOCK_WAIT_SECONDS = 15;
+
     /**
      * Register a new tenant (company) with initial admin user.
      */
@@ -587,25 +593,35 @@ class TenantController extends Controller
                 $pendingSignup->markEmailVerified();
             }
 
-            // Provision tenant on verification (idempotent).
-            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
-            if ($existingTenant) {
-                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
-                    return response()->json([
-                        'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
-                        'error' => 'slug_taken',
-                    ], 409);
+            // Close the race window early (idempotent): mark completion BEFORE heavy provisioning.
+            $this->markPendingSignupCompletedIfMissing($pendingSignup);
+
+            // Provision tenant on verification (idempotent + serialized).
+            // If another request is provisioning, return success silently.
+            $result = $this->withTenantProvisioningLock($pendingSignup->slug, 0, function () use ($pendingSignup): array {
+                $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+
+                if ($existingTenant && $existingTenant->owner_email !== $pendingSignup->admin_email) {
+                    return ['error' => 'slug_taken'];
                 }
 
-                $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup);
-            } else {
-                $this->createTenantFromPendingSignup($pendingSignup);
-            }
+                if ($existingTenant && $this->isTenantProvisioned($existingTenant, $pendingSignup)) {
+                    return ['tenant' => $existingTenant];
+                }
 
-            // Mark completed (idempotent).
-            $pendingSignup->forceFill([
-                'completed_at' => $pendingSignup->completed_at ?? now(),
-            ])->save();
+                $tenant = $existingTenant
+                    ? $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup)
+                    : $this->createTenantFromPendingSignup($pendingSignup);
+
+                return ['tenant' => $tenant];
+            });
+
+            if (is_array($result) && ($result['error'] ?? null) === 'slug_taken') {
+                return response()->json([
+                    'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
+                    'error' => 'slug_taken',
+                ], 409);
+            }
 
             return response()->json([
                 'status' => 'success',
@@ -671,24 +687,34 @@ class TenantController extends Controller
                 $pendingSignup->markEmailVerified();
             }
 
-            // Provision tenant on verification (idempotent).
-            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
-            if ($existingTenant) {
-                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
-                    $query['verified'] = '0';
-                    $query['reason'] = 'slug_taken';
-                    return redirect()->away($redirectBase . '?' . http_build_query($query));
+            // Close the race window early (idempotent): mark completion BEFORE heavy provisioning.
+            $this->markPendingSignupCompletedIfMissing($pendingSignup);
+
+            // Provision tenant on verification (idempotent + serialized).
+            // If another request is provisioning, redirect success silently.
+            $result = $this->withTenantProvisioningLock($pendingSignup->slug, 0, function () use ($pendingSignup): array {
+                $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+
+                if ($existingTenant && $existingTenant->owner_email !== $pendingSignup->admin_email) {
+                    return ['error' => 'slug_taken'];
                 }
 
-                $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup);
-            } else {
-                $this->createTenantFromPendingSignup($pendingSignup);
-            }
+                if ($existingTenant && $this->isTenantProvisioned($existingTenant, $pendingSignup)) {
+                    return ['tenant' => $existingTenant];
+                }
 
-            // Mark completed (idempotent).
-            $pendingSignup->forceFill([
-                'completed_at' => $pendingSignup->completed_at ?? now(),
-            ])->save();
+                $tenant = $existingTenant
+                    ? $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup)
+                    : $this->createTenantFromPendingSignup($pendingSignup);
+
+                return ['tenant' => $tenant];
+            });
+
+            if (is_array($result) && ($result['error'] ?? null) === 'slug_taken') {
+                $query['verified'] = '0';
+                $query['reason'] = 'slug_taken';
+                return redirect()->away($redirectBase . '?' . http_build_query($query));
+            }
 
             $query['verified'] = '1';
             return redirect()->away($redirectBase . '?' . http_build_query($query));
@@ -750,32 +776,7 @@ class TenantController extends Controller
                 $pendingSignup->markEmailVerified();
             }
 
-            // Idempotent no-op: if already completed and tenant exists, return success.
             $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
-            if ($pendingSignup->completed_at && $existingTenant) {
-                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
-                    return response()->json([
-                        'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
-                        'error' => 'slug_taken',
-                    ], 409);
-                }
-
-                $baseDomain = config('app.domain', 'localhost:8082');
-                $loginUrl = (app()->environment('local') ? 'http://' : 'https://')
-                    . $pendingSignup->slug . '.' . $baseDomain . '/login?email='
-                    . urlencode($pendingSignup->admin_email);
-
-                return response()->json([
-                    'status' => 'success',
-                    'message' => 'Workspace created successfully.',
-                    'tenant' => [
-                        'id' => $existingTenant->id,
-                        'slug' => $existingTenant->slug,
-                        'name' => $existingTenant->name,
-                    ],
-                    'login_url' => $loginUrl,
-                ], 200);
-            }
 
             // Anti-abuse checks happen at the final submit step.
             app(EmailPolicyService::class)->assertAllowedEmail(
@@ -788,25 +789,67 @@ class TenantController extends Controller
             $captchaGate->recordRegisterAttempt($request, 'tenants/complete-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug);
             $captchaGate->assertCaptchaIfRequired($request, 'tenants/complete-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug, 'complete_signup_adaptive');
 
-            // If a previous attempt partially created the tenant, resume provisioning.
-            $existingTenant = $existingTenant ?? Tenant::where('slug', $pendingSignup->slug)->first();
-            if ($existingTenant) {
-                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
-                    return response()->json([
-                        'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
-                        'error' => 'slug_taken',
-                    ], 409);
+            // Close the race window early (idempotent): mark completion BEFORE heavy provisioning.
+            $this->markPendingSignupCompletedIfMissing($pendingSignup);
+
+            // Serialize provisioning so only one request can create/migrate/seed per tenant.
+            $result = $this->withTenantProvisioningLock($pendingSignup->slug, self::TENANT_PROVISION_LOCK_WAIT_SECONDS, function () use ($pendingSignup): array {
+                $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+
+                if ($existingTenant && $existingTenant->owner_email !== $pendingSignup->admin_email) {
+                    return ['error' => 'slug_taken'];
                 }
 
-                $tenant = $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup);
-            } else {
-                $tenant = $this->createTenantFromPendingSignup($pendingSignup);
+                if ($existingTenant && $this->isTenantProvisioned($existingTenant, $pendingSignup)) {
+                    return ['tenant' => $existingTenant];
+                }
+
+                $tenant = $existingTenant
+                    ? $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup)
+                    : $this->createTenantFromPendingSignup($pendingSignup);
+
+                return ['tenant' => $tenant];
+            });
+
+            if (is_array($result) && ($result['error'] ?? null) === 'slug_taken') {
+                return response()->json([
+                    'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
+                    'error' => 'slug_taken',
+                ], 409);
             }
 
-            // Mark completed (idempotent) and keep token record intact.
-            $pendingSignup->forceFill([
-                'completed_at' => $pendingSignup->completed_at ?? now(),
-            ])->save();
+            // If another request is currently provisioning and we couldn't acquire the lock quickly,
+            // return success if the tenant record already exists.
+            if ($result === null) {
+                $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+                if ($existingTenant && $existingTenant->owner_email === $pendingSignup->admin_email) {
+                    $baseDomain = config('app.domain', 'localhost:8082');
+                    $loginUrl = (app()->environment('local') ? 'http://' : 'https://')
+                        . $pendingSignup->slug . '.' . $baseDomain . '/login?email='
+                        . urlencode($pendingSignup->admin_email);
+
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'Workspace created successfully.',
+                        'tenant' => [
+                            'id' => $existingTenant->id,
+                            'slug' => $existingTenant->slug,
+                            'name' => $existingTenant->name,
+                        ],
+                        'login_url' => $loginUrl,
+                    ], 200);
+                }
+            }
+
+            $tenant = is_array($result) ? ($result['tenant'] ?? null) : null;
+            if (! $tenant instanceof Tenant) {
+                // Extremely rare: lock contention + tenant not yet created.
+                // Avoid a 500 and let the client retry safely.
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Workspace creation is in progress. Please retry in a few seconds.',
+                ], 200);
+            }
 
             // Build login URL
             $baseDomain = config('app.domain', 'localhost:8082');
@@ -843,6 +886,73 @@ class TenantController extends Controller
                     ? $e->getMessage()
                     : 'An error occurred during signup. Please try again or contact support.',
             ], 500);
+        }
+    }
+
+    private function tenantProvisioningLockKey(string $slug): string
+    {
+        return 'tenant:provision:' . strtolower($slug);
+    }
+
+    /**
+     * Mark pending signup as completed (idempotent) using an atomic update.
+     * Requirement: this must happen BEFORE heavy provisioning to close the race window.
+     */
+    private function markPendingSignupCompletedIfMissing(PendingTenantSignup $pendingSignup): void
+    {
+        PendingTenantSignup::whereKey($pendingSignup->id)
+            ->whereNull('completed_at')
+            ->update(['completed_at' => now()]);
+
+        $pendingSignup->refresh();
+    }
+
+    /**
+     * Best-effort check: determines whether the tenant looks provisioned enough to skip heavy work.
+     */
+    private function isTenantProvisioned(Tenant $tenant, PendingTenantSignup $pendingSignup): bool
+    {
+        try {
+            return (bool) $tenant->run(function () use ($pendingSignup, $tenant): bool {
+                if (!Schema::hasTable('users') || !Schema::hasTable('roles') || !Schema::hasTable('permissions')) {
+                    return false;
+                }
+
+                if (Schema::hasTable('companies') && !DB::table('companies')->where('tenant_id', $tenant->id)->exists()) {
+                    return false;
+                }
+
+                return User::where('email', $pendingSignup->admin_email)->exists();
+            });
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Executes a callback under a per-tenant provisioning lock.
+     * Returns null when the lock can't be acquired within the configured wait time.
+     */
+    private function withTenantProvisioningLock(string $slug, int $waitSeconds, \Closure $callback): mixed
+    {
+        $lock = Cache::lock($this->tenantProvisioningLockKey($slug), self::TENANT_PROVISION_LOCK_TTL_SECONDS);
+
+        try {
+            if ($waitSeconds > 0) {
+                return $lock->block($waitSeconds, $callback);
+            }
+
+            if (! $lock->get()) {
+                return null;
+            }
+
+            try {
+                return $callback();
+            } finally {
+                $lock->release();
+            }
+        } catch (LockTimeoutException) {
+            return null;
         }
     }
 
