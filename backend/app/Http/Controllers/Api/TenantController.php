@@ -550,8 +550,8 @@ class TenantController extends Controller
     /**
      * Verify email (idempotent).
      *
-     * NOTE: This endpoint must not create tenants nor consume the token.
-     * Tenant provisioning happens only on the final submit step (completeSignup).
+     * NOTE: This endpoint is idempotent and does not consume the token.
+     * It will also provision the tenant so signup completion is backend-driven.
      */
     public function verifySignup(Request $request): JsonResponse
     {
@@ -586,6 +586,26 @@ class TenantController extends Controller
             if (!$pendingSignup->verified || !$pendingSignup->email_verified_at) {
                 $pendingSignup->markEmailVerified();
             }
+
+            // Provision tenant on verification (idempotent).
+            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+            if ($existingTenant) {
+                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
+                    return response()->json([
+                        'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
+                        'error' => 'slug_taken',
+                    ], 409);
+                }
+
+                $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup);
+            } else {
+                $this->createTenantFromPendingSignup($pendingSignup);
+            }
+
+            // Mark completed (idempotent).
+            $pendingSignup->forceFill([
+                'completed_at' => $pendingSignup->completed_at ?? now(),
+            ])->save();
 
             return response()->json([
                 'status' => 'success',
@@ -651,6 +671,25 @@ class TenantController extends Controller
                 $pendingSignup->markEmailVerified();
             }
 
+            // Provision tenant on verification (idempotent).
+            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+            if ($existingTenant) {
+                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
+                    $query['verified'] = '0';
+                    $query['reason'] = 'slug_taken';
+                    return redirect()->away($redirectBase . '?' . http_build_query($query));
+                }
+
+                $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup);
+            } else {
+                $this->createTenantFromPendingSignup($pendingSignup);
+            }
+
+            // Mark completed (idempotent).
+            $pendingSignup->forceFill([
+                'completed_at' => $pendingSignup->completed_at ?? now(),
+            ])->save();
+
             $query['verified'] = '1';
             return redirect()->away($redirectBase . '?' . http_build_query($query));
 
@@ -711,6 +750,33 @@ class TenantController extends Controller
                 $pendingSignup->markEmailVerified();
             }
 
+            // Idempotent no-op: if already completed and tenant exists, return success.
+            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+            if ($pendingSignup->completed_at && $existingTenant) {
+                if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
+                    return response()->json([
+                        'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
+                        'error' => 'slug_taken',
+                    ], 409);
+                }
+
+                $baseDomain = config('app.domain', 'localhost:8082');
+                $loginUrl = (app()->environment('local') ? 'http://' : 'https://')
+                    . $pendingSignup->slug . '.' . $baseDomain . '/login?email='
+                    . urlencode($pendingSignup->admin_email);
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Workspace created successfully.',
+                    'tenant' => [
+                        'id' => $existingTenant->id,
+                        'slug' => $existingTenant->slug,
+                        'name' => $existingTenant->name,
+                    ],
+                    'login_url' => $loginUrl,
+                ], 200);
+            }
+
             // Anti-abuse checks happen at the final submit step.
             app(EmailPolicyService::class)->assertAllowedEmail(
                 (string) $pendingSignup->admin_email,
@@ -723,7 +789,7 @@ class TenantController extends Controller
             $captchaGate->assertCaptchaIfRequired($request, 'tenants/complete-signup', (string) $pendingSignup->admin_email, (string) $pendingSignup->slug, 'complete_signup_adaptive');
 
             // If a previous attempt partially created the tenant, resume provisioning.
-            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+            $existingTenant = $existingTenant ?? Tenant::where('slug', $pendingSignup->slug)->first();
             if ($existingTenant) {
                 if ($existingTenant->owner_email !== $pendingSignup->admin_email) {
                     return response()->json([
@@ -787,6 +853,8 @@ class TenantController extends Controller
     {
         // Base domain for tenant URLs (frontend)
         $baseDomain = config('app.domain', 'localhost:3000');
+
+        $previousDefaultConnection = DB::getDefaultConnection();
 
         // 1. Create Tenant in central database
         $tenant = Tenant::create([
@@ -882,47 +950,51 @@ class TenantController extends Controller
         ]]);
 
         // 8. Initialize tenant and create admin user
-        $tenant->run(function () use ($pendingSignup, $tenant, $databaseName) {
-            // Set tenant connection
-            config(['database.connections.tenant.database' => $databaseName]);
-            DB::purge('tenant');
-            DB::reconnect('tenant');
-            DB::setDefaultConnection('tenant');
-            
-            // Run migrations
-            \Artisan::call('migrate', [
-                '--path'  => 'database/migrations/tenant',
-                '--force' => true,
-            ]);
+        try {
+            $tenant->run(function () use ($pendingSignup, $tenant, $databaseName) {
+                // Set tenant connection
+                config(['database.connections.tenant.database' => $databaseName]);
+                DB::purge('tenant');
+                DB::reconnect('tenant');
+                DB::setDefaultConnection('tenant');
 
-            // Seed roles and permissions
-            \Artisan::call('db:seed', [
-                '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
-                '--force' => true,
-            ]);
+                // Run migrations
+                \Artisan::call('migrate', [
+                    '--path'  => 'database/migrations/tenant',
+                    '--force' => true,
+                ]);
 
-            // Create owner user
-            $owner = User::create([
-                'name'              => $pendingSignup->admin_name,
-                'email'             => $pendingSignup->admin_email,
-                'password'          => $pendingSignup->password_hash, // Already hashed
-                'email_verified_at' => now(), // Email already verified
-                'role'              => 'Owner',
-            ]);
+                // Seed roles and permissions
+                \Artisan::call('db:seed', [
+                    '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
+                    '--force' => true,
+                ]);
 
-            $owner->assignRole('Owner');
+                // Create owner user
+                $owner = User::create([
+                    'name'              => $pendingSignup->admin_name,
+                    'email'             => $pendingSignup->admin_email,
+                    'password'          => $pendingSignup->password_hash, // Already hashed
+                    'email_verified_at' => now(), // Email already verified
+                    'role'              => 'Owner',
+                ]);
 
-            // Create Technician record
-            \App\Models\Technician::create([
-                'name'       => $owner->name,
-                'email'      => $owner->email,
-                'role'       => 'owner',
-                'phone'      => null,
-                'user_id'    => $owner->id,
-                'created_by' => $owner->id,
-                'updated_by' => $owner->id,
-            ]);
-        });
+                $owner->assignRole('Owner');
+
+                // Create Technician record
+                \App\Models\Technician::create([
+                    'name'       => $owner->name,
+                    'email'      => $owner->email,
+                    'role'       => 'owner',
+                    'phone'      => null,
+                    'user_id'    => $owner->id,
+                    'created_by' => $owner->id,
+                    'updated_by' => $owner->id,
+                ]);
+            });
+        } finally {
+            DB::setDefaultConnection($previousDefaultConnection);
+        }
 
         return $tenant;
     }
@@ -934,6 +1006,8 @@ class TenantController extends Controller
     private function ensureTenantProvisionedFromPendingSignup(Tenant $tenant, PendingTenantSignup $pendingSignup): Tenant
     {
         $tenant->refresh();
+
+        $previousDefaultConnection = DB::getDefaultConnection();
 
         $databaseName = $tenant->getInternal('db_name');
 
@@ -973,57 +1047,61 @@ class TenantController extends Controller
         ]]);
 
         // Provision tenant DB (idempotently)
-        $tenant->run(function () use ($pendingSignup, $tenant, $databaseName) {
-            config(['database.connections.tenant.database' => $databaseName]);
-            DB::purge('tenant');
-            DB::reconnect('tenant');
-            DB::setDefaultConnection('tenant');
+        try {
+            $tenant->run(function () use ($pendingSignup, $tenant, $databaseName) {
+                config(['database.connections.tenant.database' => $databaseName]);
+                DB::purge('tenant');
+                DB::reconnect('tenant');
+                DB::setDefaultConnection('tenant');
 
-            \Artisan::call('migrate', [
-                '--path'  => 'database/migrations/tenant',
-                '--force' => true,
-            ]);
-
-            \Artisan::call('db:seed', [
-                '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
-                '--force' => true,
-            ]);
-
-            // Create Company if missing
-            if (!Company::where('tenant_id', $tenant->id)->exists()) {
-                Company::create([
-                    'tenant_id' => $tenant->id,
-                    'name'      => $pendingSignup->company_name,
-                    'industry'  => $pendingSignup->industry,
-                    'country'   => $pendingSignup->country,
-                    'timezone'  => $pendingSignup->timezone,
-                    'status'    => 'active',
-                ]);
-            }
-
-            // Create owner if missing
-            if (!User::where('email', $pendingSignup->admin_email)->exists()) {
-                $owner = User::create([
-                    'name'              => $pendingSignup->admin_name,
-                    'email'             => $pendingSignup->admin_email,
-                    'password'          => $pendingSignup->password_hash,
-                    'email_verified_at' => now(),
-                    'role'              => 'Owner',
+                \Artisan::call('migrate', [
+                    '--path'  => 'database/migrations/tenant',
+                    '--force' => true,
                 ]);
 
-                $owner->assignRole('Owner');
-
-                \App\Models\Technician::create([
-                    'name'       => $owner->name,
-                    'email'      => $owner->email,
-                    'role'       => 'owner',
-                    'phone'      => null,
-                    'user_id'    => $owner->id,
-                    'created_by' => $owner->id,
-                    'updated_by' => $owner->id,
+                \Artisan::call('db:seed', [
+                    '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
+                    '--force' => true,
                 ]);
-            }
-        });
+
+                // Create Company if missing
+                if (!Company::where('tenant_id', $tenant->id)->exists()) {
+                    Company::create([
+                        'tenant_id' => $tenant->id,
+                        'name'      => $pendingSignup->company_name,
+                        'industry'  => $pendingSignup->industry,
+                        'country'   => $pendingSignup->country,
+                        'timezone'  => $pendingSignup->timezone,
+                        'status'    => 'active',
+                    ]);
+                }
+
+                // Create owner if missing
+                if (!User::where('email', $pendingSignup->admin_email)->exists()) {
+                    $owner = User::create([
+                        'name'              => $pendingSignup->admin_name,
+                        'email'             => $pendingSignup->admin_email,
+                        'password'          => $pendingSignup->password_hash,
+                        'email_verified_at' => now(),
+                        'role'              => 'Owner',
+                    ]);
+
+                    $owner->assignRole('Owner');
+
+                    \App\Models\Technician::create([
+                        'name'       => $owner->name,
+                        'email'      => $owner->email,
+                        'role'       => 'owner',
+                        'phone'      => null,
+                        'user_id'    => $owner->id,
+                        'created_by' => $owner->id,
+                        'updated_by' => $owner->id,
+                    ]);
+                }
+            });
+        } finally {
+            DB::setDefaultConnection($previousDefaultConnection);
+        }
 
         return $tenant;
     }

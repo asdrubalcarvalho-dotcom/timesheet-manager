@@ -27,6 +27,8 @@ class TenantSignupVerificationFlowTest extends TestCase
         config([
             'app.url' => 'http://api.test',
             'app.frontend_url' => 'http://app.test',
+            // Avoid any accidental external gateway calls in this suite.
+            'payments.driver' => 'none',
         ]);
     }
 
@@ -131,5 +133,36 @@ class TenantSignupVerificationFlowTest extends TestCase
         $response->assertJson([
             'code' => 'email_not_verified',
         ]);
+    }
+
+    public function test_verify_signup_redirect_creates_tenant_and_marks_completed(): void
+    {
+        $unique = substr((string) Str::uuid(), 0, 8);
+        $token = 'tok_' . $unique;
+        $slug = 'acme-verified-' . $unique;
+        $adminEmail = 'owner+' . $unique . '@example.com';
+
+        $pending = PendingTenantSignup::create([
+            'company_name' => 'Acme Inc',
+            'slug' => $slug,
+            'admin_name' => 'Acme Owner',
+            'admin_email' => $adminEmail,
+            'password_hash' => Hash::make('password123'),
+            'verification_token' => $token,
+            'timezone' => 'UTC',
+            'expires_at' => now()->addHour(),
+            'verified' => false,
+        ]);
+
+        $response = $this->get('/tenants/verify-signup?token=' . urlencode($token));
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('tenants', [
+            'slug' => $slug,
+            'owner_email' => $adminEmail,
+        ]);
+
+        $pending->refresh();
+        $this->assertNotNull($pending->completed_at);
     }
 }
