@@ -37,10 +37,9 @@ else
     echo "⚠️  Run migrations manually: docker-compose exec app php artisan migrate"
 fi
 
-# Cache configuration for better performance
-echo "⚡ Caching configuration..."
-php artisan config:cache
-php artisan route:cache
+# Clear caches (safe for multi-tenancy)
+echo "🧹 Clearing caches (multi-tenant safe)..."
+php artisan optimize:clear
 
 echo "✅ Laravel application ready!"
 
