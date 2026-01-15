@@ -203,7 +203,7 @@ Route::middleware(['tenant.initialize'])->group(function () {
         Route::delete('technicians/{technician}', [TechnicianController::class, 'destroy'])->middleware('throttle:delete');
     });
     // Projects - manage-projects permission controls access to Project Management page
-    Route::middleware('permission:manage-projects')->group(function () {
+    Route::middleware(['tenant.bootstrapped', 'permission:manage-projects'])->group(function () {
         Route::get('projects', [ProjectController::class, 'index'])->middleware('throttle:read');
         Route::get('projects/{project}', [ProjectController::class, 'show'])->middleware('throttle:read');
         Route::post('projects', [ProjectController::class, 'store'])->middleware('throttle:create');
@@ -212,50 +212,50 @@ Route::middleware(['tenant.initialize'])->group(function () {
     });
 
     // Timesheets - Granular permissions with rate limiting
-    Route::get('timesheets', [TimesheetController::class, 'index'])->middleware(['permission:view-timesheets', 'throttle:read']);
-    Route::post('timesheets', [TimesheetController::class, 'store'])->middleware(['permission:create-timesheets', 'throttle:create']);
+    Route::get('timesheets', [TimesheetController::class, 'index'])->middleware(['tenant.bootstrapped', 'permission:view-timesheets', 'throttle:read']);
+    Route::post('timesheets', [TimesheetController::class, 'store'])->middleware(['tenant.bootstrapped', 'permission:create-timesheets', 'throttle:create']);
     
     // Specific routes BEFORE parameterized routes
-    Route::get('timesheets/manager-view', [TimesheetController::class, 'managerView'])->middleware(['permission:approve-timesheets', 'throttle:read']);
-    Route::get('timesheets/pending-counts', [TimesheetController::class, 'pendingCounts'])->middleware('throttle:read');
-    Route::get('timesheets/pending', [TimesheetController::class, 'pending'])->middleware(['permission:approve-timesheets', 'throttle:read']);
+    Route::get('timesheets/manager-view', [TimesheetController::class, 'managerView'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:read']);
+    Route::get('timesheets/pending-counts', [TimesheetController::class, 'pendingCounts'])->middleware(['tenant.bootstrapped', 'throttle:read']);
+    Route::get('timesheets/pending', [TimesheetController::class, 'pending'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:read']);
     
     // Parameterized routes
-    Route::get('timesheets/{timesheet}', [TimesheetController::class, 'show'])->middleware(['permission:view-timesheets', 'throttle:read']);
-    Route::get('timesheets/{timesheet}/validation', [TimesheetController::class, 'validation'])->middleware(['permission:view-timesheets', 'throttle:read']);
-    Route::put('timesheets/{timesheet}', [TimesheetController::class, 'update'])->middleware(['can.edit.timesheets', 'throttle:edit']);
-    Route::delete('timesheets/{timesheet}', [TimesheetController::class, 'destroy'])->middleware(['can.edit.timesheets', 'throttle:delete']);
+    Route::get('timesheets/{timesheet}', [TimesheetController::class, 'show'])->middleware(['tenant.bootstrapped', 'permission:view-timesheets', 'throttle:read']);
+    Route::get('timesheets/{timesheet}/validation', [TimesheetController::class, 'validation'])->middleware(['tenant.bootstrapped', 'permission:view-timesheets', 'throttle:read']);
+    Route::put('timesheets/{timesheet}', [TimesheetController::class, 'update'])->middleware(['tenant.bootstrapped', 'can.edit.timesheets', 'throttle:edit']);
+    Route::delete('timesheets/{timesheet}', [TimesheetController::class, 'destroy'])->middleware(['tenant.bootstrapped', 'can.edit.timesheets', 'throttle:delete']);
     
     // Timesheet workflow - Manager/Admin only with strict rate limiting
-    Route::put('timesheets/{timesheet}/approve', [TimesheetController::class, 'approve'])->middleware(['permission:approve-timesheets', 'throttle:critical']);
-    Route::put('timesheets/{timesheet}/reject', [TimesheetController::class, 'reject'])->middleware(['permission:approve-timesheets', 'throttle:critical']);
-    Route::put('timesheets/{timesheet}/close', [TimesheetController::class, 'close'])->middleware(['permission:approve-timesheets', 'throttle:critical']);
-    Route::put('timesheets/{timesheet}/reopen', [TimesheetController::class, 'reopen'])->middleware(['permission:approve-timesheets', 'throttle:critical']);
+    Route::put('timesheets/{timesheet}/approve', [TimesheetController::class, 'approve'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:critical']);
+    Route::put('timesheets/{timesheet}/reject', [TimesheetController::class, 'reject'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:critical']);
+    Route::put('timesheets/{timesheet}/close', [TimesheetController::class, 'close'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:critical']);
+    Route::put('timesheets/{timesheet}/reopen', [TimesheetController::class, 'reopen'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:critical']);
 
     // Expenses - Granular permissions
-    Route::get('expenses', [ExpenseController::class, 'index'])->middleware(['permission:view-expenses', 'throttle:read']);
-    Route::post('expenses', [ExpenseController::class, 'store'])->middleware(['permission:create-expenses', 'throttle:create']);
+    Route::get('expenses', [ExpenseController::class, 'index'])->middleware(['tenant.bootstrapped', 'permission:view-expenses', 'throttle:read']);
+    Route::post('expenses', [ExpenseController::class, 'store'])->middleware(['tenant.bootstrapped', 'permission:create-expenses', 'throttle:create']);
     
     // Specific routes MUST come BEFORE parameterized routes
-    Route::get('expenses/pending', [ExpenseController::class, 'pending'])->middleware(['permission:approve-expenses', 'throttle:read']);
+    Route::get('expenses/pending', [ExpenseController::class, 'pending'])->middleware(['tenant.bootstrapped', 'permission:approve-expenses', 'throttle:read']);
     
     // Expense workflow actions - BEFORE {expense} routes
-    Route::put('expenses/{expense}/approve', [ExpenseController::class, 'approve'])->middleware(['permission:approve-expenses', 'throttle:critical']);
-    Route::put('expenses/{expense}/reject', [ExpenseController::class, 'reject'])->middleware(['permission:approve-expenses', 'throttle:critical']);
-    Route::put('expenses/{expense}/approve-finance', [ExpenseController::class, 'approveByFinance'])->middleware(['permission:approve-finance-expenses', 'throttle:critical']);
-    Route::put('expenses/{expense}/mark-paid', [ExpenseController::class, 'markPaid'])->middleware(['permission:mark-expenses-paid', 'throttle:critical']);
-    Route::put('expenses/{expense}/submit', [ExpenseController::class, 'submit'])->middleware(['can.edit.expenses', 'throttle:create']);
+    Route::put('expenses/{expense}/approve', [ExpenseController::class, 'approve'])->middleware(['tenant.bootstrapped', 'permission:approve-expenses', 'throttle:critical']);
+    Route::put('expenses/{expense}/reject', [ExpenseController::class, 'reject'])->middleware(['tenant.bootstrapped', 'permission:approve-expenses', 'throttle:critical']);
+    Route::put('expenses/{expense}/approve-finance', [ExpenseController::class, 'approveByFinance'])->middleware(['tenant.bootstrapped', 'permission:approve-finance-expenses', 'throttle:critical']);
+    Route::put('expenses/{expense}/mark-paid', [ExpenseController::class, 'markPaid'])->middleware(['tenant.bootstrapped', 'permission:mark-expenses-paid', 'throttle:critical']);
+    Route::put('expenses/{expense}/submit', [ExpenseController::class, 'submit'])->middleware(['tenant.bootstrapped', 'can.edit.expenses', 'throttle:create']);
     
     // Generic parameterized routes - MUST come LAST
-    Route::get('expenses/{expense}', [ExpenseController::class, 'show'])->middleware(['permission:view-expenses', 'throttle:read']);
-    Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->middleware(['can.edit.expenses', 'throttle:edit']);
-    Route::post('expenses/{expense}', [ExpenseController::class, 'update'])->middleware(['can.edit.expenses', 'throttle:edit']); // For file uploads with FormData
-    Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->middleware(['can.edit.expenses', 'throttle:delete']);
+    Route::get('expenses/{expense}', [ExpenseController::class, 'show'])->middleware(['tenant.bootstrapped', 'permission:view-expenses', 'throttle:read']);
+    Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->middleware(['tenant.bootstrapped', 'can.edit.expenses', 'throttle:edit']);
+    Route::post('expenses/{expense}', [ExpenseController::class, 'update'])->middleware(['tenant.bootstrapped', 'can.edit.expenses', 'throttle:edit']); // For file uploads with FormData
+    Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->middleware(['tenant.bootstrapped', 'can.edit.expenses', 'throttle:delete']);
 
     // Tasks - View for all, manage for admins
     Route::get('tasks', [\App\Http\Controllers\TaskController::class, 'index'])->middleware('throttle:read');
     Route::get('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'show'])->middleware('throttle:read');
-    Route::get('projects/{project}/tasks', [\App\Http\Controllers\TaskController::class, 'byProject'])->middleware('throttle:read');
+    Route::get('projects/{project}/tasks', [\App\Http\Controllers\TaskController::class, 'byProject'])->middleware(['tenant.bootstrapped', 'throttle:read']);
     Route::middleware('permission:manage-tasks')->group(function () {
         Route::post('tasks', [\App\Http\Controllers\TaskController::class, 'store'])->middleware('throttle:create');
         Route::put('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'update'])->middleware('throttle:edit');
@@ -288,7 +288,7 @@ Route::middleware(['tenant.initialize'])->group(function () {
         ->middleware(['throttle:critical']); // Only Owner can access (enforced in controller)
 
     // Project Members Management - same permission as projects
-    Route::middleware('permission:manage-projects')->group(function () {
+    Route::middleware(['tenant.bootstrapped', 'permission:manage-projects'])->group(function () {
         Route::prefix('projects/{project}')->group(function () {
             Route::get('members', [ProjectController::class, 'getMembers'])->middleware('throttle:read');
             Route::get('user-roles', [ProjectController::class, 'getUserRoles'])->middleware('throttle:read');
@@ -305,7 +305,7 @@ Route::middleware(['tenant.initialize'])->group(function () {
     });
 
     // Additional timesheet workflow methods
-    Route::put('timesheets/{timesheet}/submit', [TimesheetController::class, 'submit'])->middleware(['can.edit.timesheets', 'throttle:create']);
+    Route::put('timesheets/{timesheet}/submit', [TimesheetController::class, 'submit'])->middleware(['tenant.bootstrapped', 'can.edit.timesheets', 'throttle:create']);
 
     // Dashboard - Statistics endpoints
     Route::get('dashboard/statistics', [DashboardController::class, 'getStatistics'])->middleware('throttle:read');
@@ -319,7 +319,7 @@ Route::middleware(['tenant.initialize'])->group(function () {
     Route::delete('events/{event}', [EventController::class, 'destroy'])->middleware(['can_edit_planning', 'throttle:delete']);
 
     // Travel Segments - Requires Team/Enterprise plan or Starter with >2 users
-    Route::prefix('travels')->middleware('module:travels')->group(function () {
+    Route::prefix('travels')->middleware(['tenant.bootstrapped', 'module:travels'])->group(function () {
         Route::get('/', [TravelSegmentController::class, 'index'])->middleware('throttle:read');
         Route::post('/', [TravelSegmentController::class, 'store'])->middleware(['permission:create-timesheets', 'throttle:create']);
         Route::get('/by-date', [TravelSegmentController::class, 'getTravelsByDate'])->middleware('throttle:read'); // Timesheet integration
@@ -330,7 +330,7 @@ Route::middleware(['tenant.initialize'])->group(function () {
     });
 
     // Planning Module - Requires Team/Enterprise plan + Planning addon
-    Route::prefix('planning')->middleware('module:planning')->group(function () {
+    Route::prefix('planning')->middleware(['tenant.bootstrapped', 'module:planning'])->group(function () {
         Route::get('projects', [\App\Http\Controllers\PlanningController::class, 'indexProjects'])->middleware(['permission:view-planning', 'throttle:read']);
         Route::get('projects/{project}', [\App\Http\Controllers\PlanningController::class, 'showProject'])->middleware('permission:view-planning');
         Route::post('projects', [\App\Http\Controllers\PlanningController::class, 'storeProject'])->middleware('permission:create-planning');

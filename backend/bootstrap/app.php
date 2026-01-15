@@ -41,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'subscription.write' => \App\Http\Middleware\EnsureSubscriptionWriteAccess::class, // Billing: Read-only mode hardening
             'telemetry.internal' => \App\Http\Middleware\TelemetryInternalMiddleware::class, // Telemetry API authentication
             'telemetry.superadmin' => \App\Http\Middleware\EnsureSuperAdminAccess::class, // SuperAdmin telemetry access control
+            'tenant.bootstrapped' => \App\Http\Middleware\EnsureTenantBootstrapped::class, // Ensure tenant permissions exist before policies run
         ]);
         
         // CRITICAL: Prepend SetSanctumTenantConnection to API middleware group
