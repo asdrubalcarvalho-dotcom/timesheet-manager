@@ -436,9 +436,9 @@ class TenantController extends Controller
             // A frontend request may still include X-Tenant (e.g. from <tenant>.localhost),
             // which can initialize tenancy and change the default DB connection to `tenant`.
             // Explicitly target the central connection to avoid querying `tenants` inside a tenant DB.
-            'slug' => 'required|string|max:100|unique:mysql.tenants,slug|unique:mysql.pending_tenant_signups,slug|regex:/^[a-z0-9-]+$/',
+            'slug' => 'required|string|max:100|unique:mysql.tenants,slug|regex:/^[a-z0-9-]+$/',
             'admin_name' => 'required|string|max:255',
-            'admin_email' => 'required|string|email|max:255|unique:mysql.pending_tenant_signups,admin_email',
+            'admin_email' => 'required|string|email|max:255',
             'admin_password' => 'required|string|min:8|confirmed',
             'industry' => 'nullable|string|max:100',
             'country' => 'nullable|string|size:2',
@@ -472,74 +472,125 @@ class TenantController extends Controller
         $captchaGate->recordRegisterAttempt($request, 'tenants/request-signup', (string) $request->admin_email, (string) $request->slug);
         $captchaGate->assertCaptchaIfRequired($request, 'tenants/request-signup', (string) $request->admin_email, (string) $request->slug, 'request_signup_adaptive');
 
+        // Availability checks must remain read-only.
+        // Treat expired, unverified, incomplete signups as non-existent.
+        $now = now();
+
+        $pendingSlugTaken = PendingTenantSignup::query()
+            ->where('slug', (string) $request->slug)
+            ->where(function ($query) use ($now): void {
+                $query->where('expires_at', '>=', $now)
+                    ->orWhere('verified', true)
+                    ->orWhereNotNull('completed_at');
+            })
+            ->exists();
+
+        if ($pendingSlugTaken) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => ['slug' => ['The slug has already been taken.']],
+            ], 422);
+        }
+
+        $pendingEmailTaken = PendingTenantSignup::query()
+            ->where('admin_email', (string) $request->admin_email)
+            ->where(function ($query) use ($now): void {
+                $query->where('expires_at', '>=', $now)
+                    ->orWhere('verified', true)
+                    ->orWhereNotNull('completed_at');
+            })
+            ->exists();
+
+        if ($pendingEmailTaken) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => ['admin_email' => ['The admin email has already been taken.']],
+            ], 422);
+        }
+
         try {
-            // Clean up any expired pending signups for this email
-            PendingTenantSignup::where('admin_email', $request->admin_email)
-                ->where('expires_at', '<', now())
-                ->delete();
+            $result = DB::connection('mysql')->transaction(function () use ($request, $now): array {
+                // Defensive cleanup: treat expired, unverified, incomplete signups as non-existent.
+                PendingTenantSignup::query()
+                    ->where('slug', (string) $request->slug)
+                    ->where('verified', false)
+                    ->whereNull('completed_at')
+                    ->where('expires_at', '<', $now)
+                    ->delete();
 
-            // Create pending signup
-            $verificationToken = PendingTenantSignup::generateToken();
-            
-            $pendingSignup = PendingTenantSignup::create([
-                'company_name' => $request->company_name,
-                'slug' => $request->slug,
-                'admin_name' => $request->admin_name,
-                'admin_email' => $request->admin_email,
-                'password_hash' => Hash::make($request->admin_password),
-                'verification_token' => $verificationToken,
-                'industry' => $request->industry,
-                'country' => $request->country,
-                'timezone' => $request->timezone ?? 'UTC',
-                'expires_at' => Carbon::now()->addHours(24),
-            ]);
+                PendingTenantSignup::query()
+                    ->where('admin_email', (string) $request->admin_email)
+                    ->where('verified', false)
+                    ->whereNull('completed_at')
+                    ->where('expires_at', '<', $now)
+                    ->delete();
 
-            $region = $request->input('region', 'EU');
+                // Create pending signup
+                $verificationToken = PendingTenantSignup::generateToken();
 
-            $pendingSignup->settings = array_merge(
-                $pendingSignup->settings ?? [],
-                [
-                    'region' => $region,
-                    'week_start' => $region === 'US' ? 'sunday' : 'monday',
-                ]
-            );
+                $pendingSignup = PendingTenantSignup::create([
+                    'company_name' => $request->company_name,
+                    'slug' => $request->slug,
+                    'admin_name' => $request->admin_name,
+                    'admin_email' => $request->admin_email,
+                    'password_hash' => Hash::make($request->admin_password),
+                    'verification_token' => $verificationToken,
+                    'industry' => $request->industry,
+                    'country' => $request->country,
+                    'timezone' => $request->timezone ?? 'UTC',
+                    'expires_at' => Carbon::now()->addHours(24),
+                ]);
 
-            $pendingSignup->save();
+                $region = $request->input('region', 'EU');
 
-            // Build verification URL
-            // Browser should hit the API domain (not the frontend) so the verification step can be
-            // a simple GET -> 302 redirect and remain robust to link scanners.
-            $backendUrl = rtrim((string) config('app.url', 'http://localhost'), '/');
-            $verificationUrl = $backendUrl . '/tenants/verify-signup?token=' . $verificationToken;
+                $pendingSignup->settings = array_merge(
+                    $pendingSignup->settings ?? [],
+                    [
+                        'region' => $region,
+                        'week_start' => $region === 'US' ? 'sunday' : 'monday',
+                    ]
+                );
 
-            // Send verification email immediately (no verification/finalization/token consumption here).
-            Mail::to((string) $request->admin_email)->send(
-                new VerifySignupMail(
-                    (string) $request->company_name,
-                    $verificationUrl,
-                )
-            );
+                $pendingSignup->save();
 
-            \Log::info('Pending tenant signup created', [
-                'slug' => $request->slug,
-                'expires_at' => $pendingSignup->expires_at,
-            ]);
+                // Build verification URL
+                // Browser should hit the API domain (not the frontend) so the verification step can be
+                // a simple GET -> 302 redirect and remain robust to link scanners.
+                $backendUrl = rtrim((string) config('app.url', 'http://localhost'), '/');
+                $verificationUrl = $backendUrl . '/tenants/verify-signup?token=' . $verificationToken;
 
-            $response = [
-                'status' => 'pending',
-                'message' => 'Verification email sent successfully',
-                'email' => $request->admin_email,
-                'expires_in_hours' => 24,
-            ];
+                // Send verification email immediately.
+                // If sending fails, the transaction will roll back and nothing will be persisted.
+                Mail::to((string) $request->admin_email)->send(
+                    new VerifySignupMail(
+                        (string) $request->company_name,
+                        $verificationUrl,
+                    )
+                );
 
-            // DEV/TEST helper: return the exact same link/token used in the email,
-            // so the test button can copy/paste it reliably.
-            if (app()->environment(['local', 'testing'])) {
-                $response['verification_url'] = $verificationUrl;
-                $response['verification_token'] = $verificationToken;
-            }
+                \Log::info('Pending tenant signup created', [
+                    'slug' => $request->slug,
+                    'expires_at' => $pendingSignup->expires_at,
+                ]);
 
-            return response()->json($response, 200);
+                $response = [
+                    'status' => 'pending',
+                    'message' => 'Verification email sent successfully',
+                    'email' => $request->admin_email,
+                    'expires_in_hours' => 24,
+                ];
+
+                // DEV/TEST helper: return the exact same link/token used in the email,
+                // so the test button can copy/paste it reliably.
+                if (app()->environment(['local', 'testing'])) {
+                    $response['verification_url'] = $verificationUrl;
+                    $response['verification_token'] = $verificationToken;
+                }
+
+                return $response;
+            });
+
+            return response()->json($result, 200);
 
         } catch (\Exception $e) {
             \Log::error('Pending tenant signup failed', [

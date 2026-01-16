@@ -96,6 +96,43 @@ class TenantSignupVerificationFlowTest extends TestCase
         ]);
     }
 
+    public function test_request_signup_is_atomic_and_rolls_back_when_mail_send_fails(): void
+    {
+        $unique = substr((string) Str::uuid(), 0, 8);
+        $adminEmail = 'owner+' . $unique . '@example.com';
+        $slug = 'acme-atomic-' . $unique;
+
+        Mail::shouldReceive('to')
+            ->once()
+            ->with($adminEmail)
+            ->andReturn(new class {
+                public function send(mixed $mailable): void
+                {
+                    throw new \Exception('smtp_failure');
+                }
+            });
+
+        $response = $this->postJson('/api/tenants/request-signup', [
+            'company_name' => 'Acme Inc',
+            'slug' => $slug,
+            'admin_name' => 'Acme Owner',
+            'admin_email' => $adminEmail,
+            'admin_password' => 'password123',
+            'admin_password_confirmation' => 'password123',
+            'timezone' => 'UTC',
+        ]);
+
+        $response->assertStatus(500);
+
+        $this->assertDatabaseMissing('pending_tenant_signups', [
+            'slug' => $slug,
+        ]);
+
+        $this->assertDatabaseMissing('pending_tenant_signups', [
+            'admin_email' => $adminEmail,
+        ]);
+    }
+
     public function test_verify_signup_redirect_marks_email_verified_and_is_idempotent(): void
     {
         $token = 'tok_' . substr((string) Str::uuid(), 0, 8);
