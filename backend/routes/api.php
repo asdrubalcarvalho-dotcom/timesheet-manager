@@ -216,6 +216,8 @@ Route::middleware(['tenant.initialize', 'tenant.set-context'])->group(function (
     Route::post('timesheets', [TimesheetController::class, 'store'])->middleware(['tenant.bootstrapped', 'permission:create-timesheets', 'throttle:create']);
     
     // Specific routes BEFORE parameterized routes
+    Route::get('timesheets/summary', [TimesheetController::class, 'summary'])->middleware(['tenant.bootstrapped', 'permission:view-timesheets', 'throttle:read']);
+    Route::get('timesheets/week', [TimesheetController::class, 'week'])->middleware(['tenant.bootstrapped', 'permission:view-timesheets', 'throttle:read']);
     Route::get('timesheets/manager-view', [TimesheetController::class, 'managerView'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:read']);
     Route::get('timesheets/pending-counts', [TimesheetController::class, 'pendingCounts'])->middleware(['tenant.bootstrapped', 'throttle:read']);
     Route::get('timesheets/pending', [TimesheetController::class, 'pending'])->middleware(['tenant.bootstrapped', 'permission:approve-timesheets', 'throttle:read']);

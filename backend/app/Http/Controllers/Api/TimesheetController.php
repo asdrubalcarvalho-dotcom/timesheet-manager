@@ -35,6 +35,9 @@ use App\Models\Project;
 use App\Models\Technician;
 use App\Models\User;
 use App\Models\Timesheet;
+use App\Services\Compliance\OvertimeCalculator;
+use App\Services\Compliance\WorkweekCalculator;
+use App\Tenancy\TenantContext;
 use App\Services\TimesheetValidation\TimesheetValidationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -693,6 +696,168 @@ class TimesheetController extends Controller
         return response()->json([
             'data' => $rows,
             'summary' => $summary,
+        ]);
+    }
+
+    /**
+     * GET /api/timesheets/summary
+     * Weekly summary for the requested date (tenant-configured workweek).
+     */
+    public function summary(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Timesheet::class);
+
+        /** @var \App\Models\Tenant $tenant */
+        $tenant = app(\App\Models\Tenant::class);
+        $context = app(TenantContext::class);
+
+        $user = $request->user();
+        $isOwner = $user->hasRole('Owner');
+
+        if (!$isOwner) {
+            $technician = $user->technician
+                ?? Technician::where('user_id', $user->id)->first()
+                ?? Technician::where('email', $user->email)->first();
+
+            if (!$technician) {
+                return response()->json([
+                    'regular_hours' => 0,
+                    'overtime_hours' => 0,
+                    'overtime_rate' => 1.5,
+                    'workweek_start' => null,
+                ]);
+            }
+        }
+
+        $date = $request->filled('date')
+            ? Carbon::parse((string) $request->input('date'), $context->timezone)
+            : now($context->timezone);
+
+        $period = app(WorkweekCalculator::class)->periodForDate($tenant, $context, $date);
+
+        $query = Timesheet::query();
+
+        if (!$isOwner) {
+            $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
+            $managedProjectIds = $user->getManagedProjectIds();
+            $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
+
+            if (empty($visibleProjectIds)) {
+                return response()->json([
+                    'regular_hours' => 0,
+                    'overtime_hours' => 0,
+                    'overtime_rate' => 1.5,
+                    'workweek_start' => $period['start']->toDateString(),
+                ]);
+            }
+
+            $query->whereIn('project_id', $visibleProjectIds);
+        }
+
+        $query
+            ->where('date', '>=', $period['start']->toDateString())
+            ->where('date', '<=', $period['end']->toDateString());
+
+        if ($request->filled('project_id')) {
+            $query->where('project_id', (int) $request->input('project_id'));
+        }
+
+        if ($request->filled('technician_id')) {
+            $query->where('technician_id', (int) $request->input('technician_id'));
+        }
+
+        $weekHours = (float) $query->sum('hours_worked');
+
+        $overtime = app(OvertimeCalculator::class)->calculateForTenant($tenant, $weekHours);
+
+        return response()->json([
+            'regular_hours' => round($overtime['regular_hours'], 2),
+            'overtime_hours' => round($overtime['overtime_hours'], 2),
+            'overtime_rate' => $overtime['overtime_rate'],
+            'workweek_start' => $period['start']->toDateString(),
+        ]);
+    }
+
+    /**
+     * GET /api/timesheets/week
+     * Timesheets for the tenant-configured workweek containing the requested date.
+     */
+    public function week(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Timesheet::class);
+
+        /** @var \App\Models\Tenant $tenant */
+        $tenant = app(\App\Models\Tenant::class);
+        $context = app(TenantContext::class);
+
+        $user = $request->user();
+        $isOwner = $user->hasRole('Owner');
+
+        if (!$isOwner) {
+            $technician = $user->technician
+                ?? Technician::where('user_id', $user->id)->first()
+                ?? Technician::where('email', $user->email)->first();
+
+            if (!$technician) {
+                return response()->json([
+                    'data' => [],
+                    'regular_hours' => 0,
+                    'overtime_hours' => 0,
+                    'overtime_rate' => 1.5,
+                    'workweek_start' => null,
+                ]);
+            }
+        }
+
+        $date = $request->filled('date')
+            ? Carbon::parse((string) $request->input('date'), $context->timezone)
+            : now($context->timezone);
+
+        $period = app(WorkweekCalculator::class)->periodForDate($tenant, $context, $date);
+
+        $query = Timesheet::with(['technician', 'project', 'task', 'location']);
+
+        if (!$isOwner) {
+            $memberProjectIds = $user->projects()->pluck('projects.id')->toArray();
+            $managedProjectIds = $user->getManagedProjectIds();
+            $visibleProjectIds = array_values(array_unique(array_merge($memberProjectIds, $managedProjectIds)));
+
+            if (empty($visibleProjectIds)) {
+                return response()->json([
+                    'data' => [],
+                    'regular_hours' => 0,
+                    'overtime_hours' => 0,
+                    'overtime_rate' => 1.5,
+                    'workweek_start' => $period['start']->toDateString(),
+                ]);
+            }
+
+            $query->whereIn('project_id', $visibleProjectIds);
+        }
+
+        $query
+            ->where('date', '>=', $period['start']->toDateString())
+            ->where('date', '<=', $period['end']->toDateString());
+
+        if ($request->filled('project_id')) {
+            $query->where('project_id', (int) $request->input('project_id'));
+        }
+
+        if ($request->filled('technician_id')) {
+            $query->where('technician_id', (int) $request->input('technician_id'));
+        }
+
+        $timesheets = $query->orderBy('date')->get();
+        $weekHours = (float) $timesheets->sum('hours_worked');
+
+        $overtime = app(OvertimeCalculator::class)->calculateForTenant($tenant, $weekHours);
+
+        return response()->json([
+            'data' => $timesheets,
+            'regular_hours' => round($overtime['regular_hours'], 2),
+            'overtime_hours' => round($overtime['overtime_hours'], 2),
+            'overtime_rate' => $overtime['overtime_rate'],
+            'workweek_start' => $period['start']->toDateString(),
         ]);
     }
 
