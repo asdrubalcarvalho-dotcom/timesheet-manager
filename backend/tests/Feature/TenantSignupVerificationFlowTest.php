@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Mail\VerifySignupMail;
+use App\Jobs\ProvisionTenantJob;
 use App\Models\PendingTenantSignup;
+use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -69,6 +71,8 @@ class TenantSignupVerificationFlowTest extends TestCase
 
     public function test_verify_signup_redirect_marks_email_verified_and_is_idempotent(): void
     {
+        Bus::fake();
+
         $token = 'tok_' . substr((string) Str::uuid(), 0, 8);
 
         $pending = PendingTenantSignup::create([
@@ -100,6 +104,12 @@ class TenantSignupVerificationFlowTest extends TestCase
         $this->assertTrue((bool) $pending->verified);
         $this->assertNotNull($pending->email_verified_at);
 
+        $tenant = Tenant::where('slug', $pending->slug)->first();
+        $this->assertNotNull($tenant);
+        $this->assertSame('provisioning', $tenant->status);
+
+        Bus::assertDispatched(ProvisionTenantJob::class, 1);
+
         // Second click should remain successful and not delete the pending signup.
         $second = $this->get('/tenants/verify-signup?token=' . urlencode($token));
         $second->assertRedirect();
@@ -108,6 +118,9 @@ class TenantSignupVerificationFlowTest extends TestCase
             'id' => $pending->id,
             'verification_token' => $token,
         ]);
+
+        // Multiple clicks should not enqueue multiple provisioning runs.
+        Bus::assertDispatched(ProvisionTenantJob::class, 1);
     }
 
     public function test_complete_signup_requires_email_verification(): void
@@ -138,6 +151,8 @@ class TenantSignupVerificationFlowTest extends TestCase
 
     public function test_verify_signup_redirect_creates_tenant_and_marks_completed(): void
     {
+        Bus::fake();
+
         $unique = substr((string) Str::uuid(), 0, 8);
         $token = 'tok_' . $unique;
         $slug = 'acme-verified-' . $unique;
@@ -161,17 +176,18 @@ class TenantSignupVerificationFlowTest extends TestCase
         $this->assertDatabaseHas('tenants', [
             'slug' => $slug,
             'owner_email' => $adminEmail,
+            'status' => 'provisioning',
         ]);
+
+        Bus::assertDispatched(ProvisionTenantJob::class, 1);
 
         $pending->refresh();
         $this->assertNotNull($pending->completed_at);
     }
 
-    public function test_verify_signup_is_resilient_when_provision_lock_is_held(): void
+    public function test_verify_signup_is_fast_and_dispatches_job(): void
     {
-        config([
-            'cache.default' => 'array',
-        ]);
+        Bus::fake();
 
         $unique = substr((string) Str::uuid(), 0, 8);
         $token = 'tok_' . $unique;
@@ -190,18 +206,21 @@ class TenantSignupVerificationFlowTest extends TestCase
             'verified' => false,
         ]);
 
-        $lock = Cache::lock('tenant:provision:' . $slug, 30);
-        $this->assertTrue($lock->get());
+        $start = microtime(true);
+        $response = $this->getJson('/api/tenants/verify-signup?token=' . urlencode($token));
+        $elapsed = microtime(true) - $start;
 
-        try {
-            $response = $this->getJson('/api/tenants/verify-signup?token=' . urlencode($token));
-            $response->assertOk();
+        $response->assertOk();
+        $this->assertLessThan(0.5, $elapsed, 'verify-signup should complete quickly (target <500ms)');
 
-            $pending->refresh();
-            $this->assertNotNull($pending->completed_at);
-            $this->assertNotNull($pending->email_verified_at);
-        } finally {
-            $lock->release();
-        }
+        $pending->refresh();
+        $this->assertNotNull($pending->completed_at);
+        $this->assertNotNull($pending->email_verified_at);
+
+        $tenant = Tenant::where('slug', $slug)->first();
+        $this->assertNotNull($tenant);
+        $this->assertSame('provisioning', $tenant->status);
+
+        Bus::assertDispatched(ProvisionTenantJob::class, 1);
     }
 }

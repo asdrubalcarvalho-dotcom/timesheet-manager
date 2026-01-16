@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateTenantAiRequest;
+use App\Jobs\ProvisionTenantJob;
 use App\Models\Company;
 use App\Models\PendingTenantSignup;
 use App\Models\Tenant;
@@ -593,34 +594,67 @@ class TenantController extends Controller
                 $pendingSignup->markEmailVerified();
             }
 
-            // Close the race window early (idempotent): mark completion BEFORE heavy provisioning.
+            // Close the race window early (idempotent): mark completion BEFORE provisioning.
             $this->markPendingSignupCompletedIfMissing($pendingSignup);
 
-            // Provision tenant on verification (idempotent + serialized).
-            // If another request is provisioning, return success silently.
-            $result = $this->withTenantProvisioningLock($pendingSignup->slug, 0, function () use ($pendingSignup): array {
-                $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+            // Ensure the central tenant row exists (LIGHTWEIGHT ONLY).
+            // Do NOT create DB, run migrations, or seed in this request.
+            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
 
-                if ($existingTenant && $existingTenant->owner_email !== $pendingSignup->admin_email) {
-                    return ['error' => 'slug_taken'];
-                }
-
-                if ($existingTenant && $this->isTenantProvisioned($existingTenant, $pendingSignup)) {
-                    return ['tenant' => $existingTenant];
-                }
-
-                $tenant = $existingTenant
-                    ? $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup)
-                    : $this->createTenantFromPendingSignup($pendingSignup);
-
-                return ['tenant' => $tenant];
-            });
-
-            if (is_array($result) && ($result['error'] ?? null) === 'slug_taken') {
+            if ($existingTenant && $existingTenant->owner_email !== $pendingSignup->admin_email) {
                 return response()->json([
                     'message' => 'This workspace name is no longer available. Please start registration again with a different name.',
                     'error' => 'slug_taken',
                 ], 409);
+            }
+
+            $tenantWasCreated = false;
+            $tenant = $existingTenant;
+
+            if (! $tenant) {
+                try {
+                    $tenant = Tenant::create([
+                        'name'         => $pendingSignup->company_name,
+                        'slug'         => $pendingSignup->slug,
+                        'owner_email'  => $pendingSignup->admin_email,
+                        'status'       => 'provisioning',
+                        'plan'         => 'trial',
+                        'timezone'     => $pendingSignup->timezone,
+                        'trial_ends_at'=> now()->addDays(14),
+                    ]);
+                    $tenantWasCreated = true;
+                } catch (\Illuminate\Database\QueryException) {
+                    // Race: another request created it.
+                    $tenant = Tenant::where('slug', $pendingSignup->slug)->first();
+                }
+            }
+
+            if (! $tenant) {
+                return response()->json([
+                    'message' => 'Workspace creation is in progress. Please retry in a few seconds.',
+                ], 200);
+            }
+
+            $previousStatus = (string) ($tenant->status ?? '');
+
+            // Ensure provisioning state is persisted.
+            if ($tenant->status !== 'active') {
+                $settings = is_array($tenant->settings) ? $tenant->settings : [];
+                $settings['provisioning_status'] = 'provisioning';
+                $settings['provisioning_error'] = null;
+
+                $tenant->forceFill([
+                    'status' => 'provisioning',
+                    'settings' => $settings,
+                ])->save();
+            }
+
+            // Dispatch background provisioning once.
+            // - Multiple clicks should not re-run provisioning.
+            // - If status is failed, allow re-dispatch.
+            $shouldDispatch = $tenantWasCreated || $previousStatus === '' || $previousStatus === 'failed';
+            if ($shouldDispatch && $tenant->status !== 'active') {
+                ProvisionTenantJob::dispatch($tenant->id);
             }
 
             return response()->json([
@@ -687,33 +721,59 @@ class TenantController extends Controller
                 $pendingSignup->markEmailVerified();
             }
 
-            // Close the race window early (idempotent): mark completion BEFORE heavy provisioning.
+            // Close the race window early (idempotent): mark completion BEFORE provisioning.
             $this->markPendingSignupCompletedIfMissing($pendingSignup);
 
-            // Provision tenant on verification (idempotent + serialized).
-            // If another request is provisioning, redirect success silently.
-            $result = $this->withTenantProvisioningLock($pendingSignup->slug, 0, function () use ($pendingSignup): array {
-                $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
+            // Ensure tenant row exists (LIGHTWEIGHT ONLY) and kick provisioning to background.
+            $existingTenant = Tenant::where('slug', $pendingSignup->slug)->first();
 
-                if ($existingTenant && $existingTenant->owner_email !== $pendingSignup->admin_email) {
-                    return ['error' => 'slug_taken'];
-                }
-
-                if ($existingTenant && $this->isTenantProvisioned($existingTenant, $pendingSignup)) {
-                    return ['tenant' => $existingTenant];
-                }
-
-                $tenant = $existingTenant
-                    ? $this->ensureTenantProvisionedFromPendingSignup($existingTenant, $pendingSignup)
-                    : $this->createTenantFromPendingSignup($pendingSignup);
-
-                return ['tenant' => $tenant];
-            });
-
-            if (is_array($result) && ($result['error'] ?? null) === 'slug_taken') {
+            if ($existingTenant && $existingTenant->owner_email !== $pendingSignup->admin_email) {
                 $query['verified'] = '0';
                 $query['reason'] = 'slug_taken';
                 return redirect()->away($redirectBase . '?' . http_build_query($query));
+            }
+
+            $tenantWasCreated = false;
+            $tenant = $existingTenant;
+
+            if (! $tenant) {
+                try {
+                    $tenant = Tenant::create([
+                        'name'         => $pendingSignup->company_name,
+                        'slug'         => $pendingSignup->slug,
+                        'owner_email'  => $pendingSignup->admin_email,
+                        'status'       => 'provisioning',
+                        'plan'         => 'trial',
+                        'timezone'     => $pendingSignup->timezone,
+                        'trial_ends_at'=> now()->addDays(14),
+                    ]);
+                    $tenantWasCreated = true;
+                } catch (\Illuminate\Database\QueryException) {
+                    $tenant = Tenant::where('slug', $pendingSignup->slug)->first();
+                }
+            }
+
+            if (! $tenant) {
+                $query['verified'] = '1';
+                return redirect()->away($redirectBase . '?' . http_build_query($query));
+            }
+
+            $previousStatus = (string) ($tenant->status ?? '');
+
+            if ($tenant->status !== 'active') {
+                $settings = is_array($tenant->settings) ? $tenant->settings : [];
+                $settings['provisioning_status'] = 'provisioning';
+                $settings['provisioning_error'] = null;
+
+                $tenant->forceFill([
+                    'status' => 'provisioning',
+                    'settings' => $settings,
+                ])->save();
+            }
+
+            $shouldDispatch = $tenantWasCreated || $previousStatus === '' || $previousStatus === 'failed';
+            if ($shouldDispatch && $tenant->status !== 'active') {
+                ProvisionTenantJob::dispatch($tenant->id);
             }
 
             $query['verified'] = '1';
@@ -887,6 +947,46 @@ class TenantController extends Controller
                     : 'An error occurred during signup. Please try again or contact support.',
             ], 500);
         }
+    }
+
+    /**
+     * Public provisioning status endpoint (no tenant context required).
+     * Does NOT trigger provisioning.
+     */
+    public function provisioningStatus(Request $request): JsonResponse
+    {
+        $slug = (string) $request->query('slug', '');
+        if ($slug === '') {
+            return response()->json([
+                'message' => 'Slug is required',
+            ], 400);
+        }
+
+        $tenant = Tenant::where('slug', $slug)->first();
+        if (! $tenant) {
+            return response()->json([
+                'message' => 'Tenant not found',
+                'error' => 'not_found',
+            ], 404);
+        }
+
+        $status = (string) ($tenant->status ?? 'provisioning');
+        $settings = is_array($tenant->settings) ? $tenant->settings : [];
+        $error = null;
+        if ($status === 'failed') {
+            $error = $settings['provisioning_error'] ?? 'Provisioning failed';
+        }
+
+        $baseDomain = config('app.domain', 'localhost:8082');
+        $loginUrl = (app()->environment('local') ? 'http://' : 'https://')
+            . $tenant->slug . '.' . $baseDomain . '/login';
+
+        return response()->json([
+            'slug' => $tenant->slug,
+            'status' => $status,
+            'login_url' => $loginUrl,
+            'error' => $error,
+        ], 200);
     }
 
     private function tenantProvisioningLockKey(string $slug): string
@@ -1115,104 +1215,7 @@ class TenantController extends Controller
      */
     private function ensureTenantProvisionedFromPendingSignup(Tenant $tenant, PendingTenantSignup $pendingSignup): Tenant
     {
-        $tenant->refresh();
-
-        $previousDefaultConnection = DB::getDefaultConnection();
-
-        $databaseName = $tenant->getInternal('db_name');
-
-        DB::statement("CREATE DATABASE IF NOT EXISTS `{$databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-
-        try {
-            Artisan::call('tenants:migrate', ['tenant' => $tenant->id]);
-        } catch (\Exception $e) {
-            \Log::error('Failed to run tenant migrations (resume)', [
-                'tenant_id' => $tenant->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        // Ensure trial subscription exists (central)
-        if (!Subscription::where('tenant_id', $tenant->id)->exists()) {
-            $planManager = app(PlanManager::class);
-            $planManager->startTrialForTenant($tenant);
-        }
-
-        // Configure tenant connection
-        config(['database.connections.tenant' => [
-            'driver' => 'mysql',
-            'host' => config('database.connections.mysql.host'),
-            'port' => config('database.connections.mysql.port'),
-            'database' => $databaseName,
-            'username' => config('database.connections.mysql.username'),
-            'password' => config('database.connections.mysql.password'),
-            'unix_socket' => config('database.connections.mysql.unix_socket'),
-            'charset' => config('database.connections.mysql.charset'),
-            'collation' => config('database.connections.mysql.collation'),
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'strict' => true,
-            'engine' => null,
-            'options' => config('database.connections.mysql.options', []),
-        ]]);
-
-        // Provision tenant DB (idempotently)
-        try {
-            $tenant->run(function () use ($pendingSignup, $tenant, $databaseName) {
-                config(['database.connections.tenant.database' => $databaseName]);
-                DB::purge('tenant');
-                DB::reconnect('tenant');
-                DB::setDefaultConnection('tenant');
-
-                \Artisan::call('migrate', [
-                    '--path'  => 'database/migrations/tenant',
-                    '--force' => true,
-                ]);
-
-                \Artisan::call('db:seed', [
-                    '--class' => 'Database\\Seeders\\RolesAndPermissionsSeeder',
-                    '--force' => true,
-                ]);
-
-                // Create Company if missing
-                if (!Company::where('tenant_id', $tenant->id)->exists()) {
-                    Company::create([
-                        'tenant_id' => $tenant->id,
-                        'name'      => $pendingSignup->company_name,
-                        'industry'  => $pendingSignup->industry,
-                        'country'   => $pendingSignup->country,
-                        'timezone'  => $pendingSignup->timezone,
-                        'status'    => 'active',
-                    ]);
-                }
-
-                // Create owner if missing
-                if (!User::where('email', $pendingSignup->admin_email)->exists()) {
-                    $owner = User::create([
-                        'name'              => $pendingSignup->admin_name,
-                        'email'             => $pendingSignup->admin_email,
-                        'password'          => $pendingSignup->password_hash,
-                        'email_verified_at' => now(),
-                        'role'              => 'Owner',
-                    ]);
-
-                    $owner->assignRole('Owner');
-
-                    \App\Models\Technician::create([
-                        'name'       => $owner->name,
-                        'email'      => $owner->email,
-                        'role'       => 'owner',
-                        'phone'      => null,
-                        'user_id'    => $owner->id,
-                        'created_by' => $owner->id,
-                        'updated_by' => $owner->id,
-                    ]);
-                }
-            });
-        } finally {
-            DB::setDefaultConnection($previousDefaultConnection);
-        }
-
-        return $tenant;
+        app(\App\Services\TenantProvisioningService::class)->provisionFromPendingSignup($tenant, $pendingSignup);
+        return $tenant->refresh();
     }
 }
