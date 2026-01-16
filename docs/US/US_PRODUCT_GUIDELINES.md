@@ -14,6 +14,11 @@ Users should never feel that the product originated outside the US.
 
 ## Locale & Regional Defaults
 
+### Tenant region visibility (UI)
+- Region and week start are displayed read-only in the authenticated UI (side menu user panel).
+- Source of truth is `GET /api/user` → `tenant.region` and `tenant.week_start` derived from `tenant.settings`.
+- Older tenants without `tenant.settings` must render safely (API returns `null`; UI shows sensible defaults).
+
 ### United States (en-US)
 - Language: en-US
 - Time format: 12-hour (AM/PM)

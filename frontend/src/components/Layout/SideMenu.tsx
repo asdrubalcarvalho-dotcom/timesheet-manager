@@ -45,6 +45,7 @@ import { useApprovalCounts } from '../../hooks/useApprovalCounts';
 import { useFeatures } from '../../contexts/FeatureContext';
 import { useBilling } from '../../contexts/BillingContext';
 import ResetDataDialog from '../Admin/ResetDataDialog';
+import TenantContextBadge from '../TenantContext/TenantContextBadge';
 
 interface SideMenuProps {
   currentPage: string;
@@ -55,7 +56,7 @@ const DRAWER_WIDTH = 280;
 const DRAWER_WIDTH_COLLAPSED = 72;
 
 export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange }) => {
-  const { user, logout, isAdmin, hasPermission, isOwner } = useAuth();
+  const { user, tenant, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
   const { hasTravels, hasAI, hasPlanning } = useFeatures(); // Billing-controlled feature flags
   const { billingSummary } = useBilling(); // Get billing info to check trial status
@@ -400,6 +401,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
               <Typography variant="caption" sx={{ color: 'grey.400' }} noWrap>
                 {user?.email}
               </Typography>
+
+              <TenantContextBadge
+                region={tenant?.region}
+                weekStart={tenant?.week_start}
+              />
             </Box>
           </Box>
         </Box>

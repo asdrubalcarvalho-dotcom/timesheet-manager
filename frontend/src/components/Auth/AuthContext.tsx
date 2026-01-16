@@ -41,6 +41,8 @@ interface Tenant {
   status: string;
   plan?: string;
   ai_enabled?: boolean;
+  region?: string | null;
+  week_start?: string | null;
 }
 
 export type CaptchaChallenge = {
@@ -184,6 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (response?.ok) {
             const userData = await response.json();
             setUser(normalizeUser(userData));
+            setTenant(userData?.tenant ?? null);
           } else if (response) {
             // Only clear stored auth when we're confident the session is invalid.
             // 401/419: invalid/expired token
@@ -307,9 +310,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(normalizeUser(data.user));
       setTenantSlugState(tenantSlug);
 
-      if (data.tenant) {
-        setTenant(data.tenant);
-      }
+      setTenant(data?.tenant ?? data?.user?.tenant ?? null);
 
       return { ok: true };
     } catch (error) {

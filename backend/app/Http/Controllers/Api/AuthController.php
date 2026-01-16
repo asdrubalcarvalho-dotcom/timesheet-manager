@@ -146,6 +146,8 @@ class AuthController extends Controller
                 'slug' => $tenant->slug,
                 'name' => $tenant->name,
                 'status' => $tenant->status,
+                'region' => data_get($tenant->settings ?? [], 'region'),
+                'week_start' => data_get($tenant->settings ?? [], 'week_start'),
             ] : null,
         ];
     }
