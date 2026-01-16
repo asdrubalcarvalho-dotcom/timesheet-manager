@@ -100,7 +100,7 @@ Route::prefix('billing')->group(function () {
 | These routes require tenant identification via X-Tenant header
 */
 
-Route::middleware(['tenant.initialize'])->group(function () {
+Route::middleware(['tenant.initialize', 'tenant.set-context'])->group(function () {
     // SSO-2: Account linking (authenticated)
     Route::post('auth/sso/{provider}/link/start', [SsoAuthController::class, 'linkStart'])
         ->middleware(['auth:sanctum', 'throttle:create']);
@@ -112,7 +112,7 @@ Route::middleware(['tenant.initialize'])->group(function () {
 
     // Protected routes with tenant context and authentication
     // Note: SetSanctumTenantConnection runs globally via bootstrap/app.php prependToGroup('api')
-    Route::middleware(['tenant.initialize', 'auth:sanctum', 'tenant.auth', 'subscription.write'])->group(function () {
+    Route::middleware(['auth:sanctum', 'tenant.auth', 'subscription.write'])->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('user', [AuthController::class, 'user']);
 

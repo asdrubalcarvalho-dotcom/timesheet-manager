@@ -3,7 +3,10 @@
 namespace App\Http\Middleware;
 
 use App\Services\TenantResolver;
+use App\Tenancy\TenantContext;
+use Carbon\Carbon;
 use Closure;
+use Illuminate\Support\Facades\App;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -30,8 +33,29 @@ class SetTenantContext
         if ($tenant) {
             app()->instance('tenant', $tenant);
             app()->instance(\App\Models\Tenant::class, $tenant);
+
+            // Build and bind tenant-aware context from tenants.settings.
+            $context = TenantContext::fromTenant($tenant);
+            app()->instance(TenantContext::class, $context);
+
+            // Apply locale + timezone BEFORE controllers/policies/validation.
+            App::setLocale($context->locale);
+            Carbon::setLocale($context->locale);
+
+            @date_default_timezone_set($context->timezone);
+            config(['app.timezone' => $context->timezone]);
         }
 
-        return $next($request);
+        $response = $next($request);
+
+        // Attach context headers to every tenant response.
+        if ($tenant && isset($context)) {
+            $response->headers->set('X-Tenant-Locale', $context->locale);
+            $response->headers->set('X-Tenant-Timezone', $context->timezone);
+            $response->headers->set('X-Tenant-Week-Start', $context->weekStart);
+            $response->headers->set('X-Tenant-Currency', $context->currency);
+        }
+
+        return $response;
     }
 }

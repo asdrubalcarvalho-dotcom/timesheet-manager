@@ -47,9 +47,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // CRITICAL: Prepend SetSanctumTenantConnection to API middleware group
         // This MUST run BEFORE auth:sanctum to configure tenant DB connection
         $middleware->prependToGroup('api', \App\Http\Middleware\SetSanctumTenantConnection::class);
-        
-        // Register SetTenantContext globally for billing services
-        $middleware->append(\App\Http\Middleware\SetTenantContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
