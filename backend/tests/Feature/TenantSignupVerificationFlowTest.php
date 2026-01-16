@@ -67,6 +67,35 @@ class TenantSignupVerificationFlowTest extends TestCase
         });
     }
 
+    public function test_request_signup_persists_region_and_week_start_in_settings(): void
+    {
+        Mail::fake();
+
+        $unique = substr((string) Str::uuid(), 0, 8);
+        $adminEmail = 'owner+' . $unique . '@example.com';
+        $slug = 'acme-region-' . $unique;
+
+        $response = $this->postJson('/api/tenants/request-signup', [
+            'company_name' => 'Acme Inc',
+            'slug' => $slug,
+            'admin_name' => 'Acme Owner',
+            'admin_email' => $adminEmail,
+            'admin_password' => 'password123',
+            'admin_password_confirmation' => 'password123',
+            'timezone' => 'UTC',
+            'region' => 'US',
+        ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('pending_tenant_signups', [
+            'slug' => $slug,
+            'admin_email' => $adminEmail,
+            'settings->region' => 'US',
+            'settings->week_start' => 'sunday',
+        ]);
+    }
+
     public function test_verify_signup_redirect_marks_email_verified_and_is_idempotent(): void
     {
         $token = 'tok_' . substr((string) Str::uuid(), 0, 8);

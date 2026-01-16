@@ -24,6 +24,7 @@ class PendingTenantSignup extends Model
         'industry',
         'country',
         'timezone',
+        'settings',
         'expires_at',
         'verified',
         'email_verified_at',
@@ -35,6 +36,7 @@ class PendingTenantSignup extends Model
         'verified' => 'boolean',
         'email_verified_at' => 'datetime',
         'completed_at' => 'datetime',
+        'settings' => 'array',
     ];
 
     /**

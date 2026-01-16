@@ -443,6 +443,7 @@ class TenantController extends Controller
             'industry' => 'nullable|string|max:100',
             'country' => 'nullable|string|size:2',
             'timezone' => 'nullable|string|max:50',
+            'region' => 'nullable|in:EU,US',
         ]);
 
         if ($validator->fails()) {
@@ -492,6 +493,18 @@ class TenantController extends Controller
                 'timezone' => $request->timezone ?? 'UTC',
                 'expires_at' => Carbon::now()->addHours(24),
             ]);
+
+            $region = $request->input('region', 'EU');
+
+            $pendingSignup->settings = array_merge(
+                $pendingSignup->settings ?? [],
+                [
+                    'region' => $region,
+                    'week_start' => $region === 'US' ? 'sunday' : 'monday',
+                ]
+            );
+
+            $pendingSignup->save();
 
             // Build verification URL
             // Browser should hit the API domain (not the frontend) so the verification step can be
@@ -978,6 +991,10 @@ class TenantController extends Controller
         ]);
 
         $tenant->refresh();
+
+        $tenant->forceFill([
+            'settings' => array_merge($tenant->settings ?? [], $pendingSignup->settings ?? []),
+        ])->save();
 
         // 2. Get database name
         $databaseName = $tenant->getInternal('db_name');

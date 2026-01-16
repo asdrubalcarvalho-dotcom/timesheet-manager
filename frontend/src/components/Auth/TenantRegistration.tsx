@@ -30,6 +30,7 @@ interface RegistrationFormData {
   admin_email: string;
   admin_password: string;
   admin_password_confirmation: string;
+  region: 'EU' | 'US';
   industry?: string;
   country?: string;
   timezone?: string;
@@ -46,6 +47,7 @@ const TenantRegistration: React.FC = () => {
     admin_email: '',
     admin_password: '',
     admin_password_confirmation: '',
+    region: 'EU',
     industry: '',
     country: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -93,6 +95,7 @@ const TenantRegistration: React.FC = () => {
       admin_email: formData.admin_email,
       admin_password: formData.admin_password,
       admin_password_confirmation: formData.admin_password_confirmation,
+      region: formData.region,
       industry: formData.industry || undefined,
       country: formData.country || undefined,
       timezone: formData.timezone || 'UTC',
@@ -505,6 +508,20 @@ const TenantRegistration: React.FC = () => {
                   {country.name}
                 </MenuItem>
               ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Region</InputLabel>
+            <Select
+              value={formData.region}
+              onChange={(e) =>
+                handleChange('region')({ target: { value: e.target.value } })
+              }
+              label="Region"
+            >
+              <MenuItem value="EU">Europe (EU)</MenuItem>
+              <MenuItem value="US">United States (US)</MenuItem>
             </Select>
           </FormControl>
 
