@@ -2,11 +2,9 @@
 
 namespace Tests\Unit\Services\Billing;
 
-use Tests\TestCase;
 use App\Services\Billing\PriceCalculator;
-use App\Models\Tenant;
 use App\Models\Subscription;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TenantTestCase;
 
 /**
  * PriceCalculatorTest
@@ -19,10 +17,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  * @group billing
  * @group price-calculation
  */
-class PriceCalculatorTest extends TestCase
+class PriceCalculatorTest extends TenantTestCase
 {
-    use RefreshDatabase;
-
     protected PriceCalculator $calculator;
 
     protected function setUp(): void
@@ -41,7 +37,9 @@ class PriceCalculatorTest extends TestCase
      */
     public function test_team_plan_no_addons()
     {
-        $tenant = Tenant::factory()->create();
+        $tenant = $this->tenant;
+
+        Subscription::query()->where('tenant_id', $tenant->id)->delete();
         
         $subscription = Subscription::factory()->create([
             'tenant_id' => $tenant->id,
@@ -80,7 +78,9 @@ class PriceCalculatorTest extends TestCase
      */
     public function test_team_plan_only_planning_addon()
     {
-        $tenant = Tenant::factory()->create();
+        $tenant = $this->tenant;
+
+        Subscription::query()->where('tenant_id', $tenant->id)->delete();
         
         $subscription = Subscription::factory()->create([
             'tenant_id' => $tenant->id,
@@ -121,7 +121,9 @@ class PriceCalculatorTest extends TestCase
      */
     public function test_team_plan_only_ai_addon()
     {
-        $tenant = Tenant::factory()->create();
+        $tenant = $this->tenant;
+
+        Subscription::query()->where('tenant_id', $tenant->id)->delete();
         
         $subscription = Subscription::factory()->create([
             'tenant_id' => $tenant->id,
@@ -164,7 +166,9 @@ class PriceCalculatorTest extends TestCase
      */
     public function test_team_plan_both_addons_not_compounded()
     {
-        $tenant = Tenant::factory()->create();
+        $tenant = $this->tenant;
+
+        Subscription::query()->where('tenant_id', $tenant->id)->delete();
         
         $subscription = Subscription::factory()->create([
             'tenant_id' => $tenant->id,
@@ -211,7 +215,9 @@ class PriceCalculatorTest extends TestCase
      */
     public function test_enterprise_plan_no_addons()
     {
-        $tenant = Tenant::factory()->create();
+        $tenant = $this->tenant;
+
+        Subscription::query()->where('tenant_id', $tenant->id)->delete();
         
         $subscription = Subscription::factory()->create([
             'tenant_id' => $tenant->id,
@@ -249,7 +255,9 @@ class PriceCalculatorTest extends TestCase
         ];
 
         foreach ($testCases as $case) {
-            $tenant = Tenant::factory()->create();
+            $tenant = $this->tenant;
+
+            Subscription::query()->where('tenant_id', $tenant->id)->delete();
             
             $subscription = Subscription::factory()->create([
                 'tenant_id' => $tenant->id,
@@ -275,13 +283,10 @@ class PriceCalculatorTest extends TestCase
     /**
      * Mock active user count for testing
      */
-    protected function mockActiveUserCount(Tenant $tenant, int $count): void
+    protected function mockActiveUserCount($tenant, int $count): void
     {
-        // Create mock technicians in tenant context
-        $tenant->run(function () use ($count) {
-            \App\Models\Technician::factory()->count($count)->create([
-                'is_active' => 1,
-            ]);
-        });
+        \App\Models\Technician::factory()->count($count)->create([
+            'is_active' => 1,
+        ]);
     }
 }
