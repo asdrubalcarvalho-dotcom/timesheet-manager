@@ -169,12 +169,10 @@ const TenantRegistration: React.FC = () => {
     setCaptchaToken(token);
     setCaptchaStatus('verified');
 
-    // Once CAPTCHA is solved, immediately retry signup with the token.
-    // This avoids requiring a second click on "Create Workspace".
-    if (captcha && !loading) {
-      void attemptSignup(token);
-    }
-  }, [attemptSignup, captcha, loading]);
+    // IMPORTANT: Do not auto-submit on CAPTCHA solve.
+    // If the backend returned 422 (validation or captcha_required), auto-resubmitting can
+    // cause Cloudflare Turnstile to re-trigger in a loop. Require an explicit user click.
+  }, []);
 
   // Auto-generate slug
   useEffect(() => {
