@@ -24,6 +24,20 @@ final class MoneyFormatter
             }
         }
 
-        return $currency . ' ' . number_format((float) $amount, 2, '.', ',');
+        $symbol = $currency === $this->context->currency
+            ? $this->context->currencySymbol
+            : $currency;
+
+        $formattedNumber = number_format(
+            (float) $amount,
+            2,
+            $this->context->decimalSeparator,
+            $this->context->thousandsSeparator
+        );
+
+        // Match expected spacing for EU example ("€ 1.234,56") and US example ("$1,234.56").
+        $space = $this->context->decimalSeparator === ',' ? ' ' : '';
+
+        return $symbol . $space . $formattedNumber;
     }
 }

@@ -11,6 +11,8 @@ import {
   Alert,
 } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate } from '../../utils/tenantFormatting';
 
 interface ConfirmDowngradeDialogProps {
   open: boolean;
@@ -29,13 +31,11 @@ export const ConfirmDowngradeDialog: React.FC<ConfirmDowngradeDialogProps> = ({
   targetPlan,
   effectiveDate,
 }) => {
+  const { tenantContext } = useAuth();
+
   const formatDate = (dateString: string | null): string => {
     if (!dateString) return 'next billing cycle';
-    return new Date(dateString).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    return formatTenantDate(dateString, tenantContext);
   };
 
   return (

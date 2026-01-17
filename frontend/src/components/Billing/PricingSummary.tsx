@@ -11,6 +11,8 @@ import {
   Receipt as ReceiptIcon,
 } from '@mui/icons-material';
 import { getTrialRemainingLabel } from '../../utils/getTrialRemainingLabel';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, formatTenantMoney } from '../../utils/tenantFormatting';
 
 interface PricingSummaryProps {
   baseSubtotal: number;
@@ -49,6 +51,7 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
   isTrial = false,
   trialEndsAt,
 }) => {
+  const { tenantContext } = useAuth();
   // Fallback to 0 if values are undefined
   const safeBaseSubtotal = baseSubtotal ?? 0;
   const safeTotal = total ?? 0;
@@ -131,7 +134,7 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
               Total Monthly
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              €{safeTotal.toFixed(2)}
+              {formatTenantMoney(safeTotal, tenantContext)}
             </Typography>
           </Box>
 
@@ -146,7 +149,7 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
           {!isTrial && nextRenewalAt && (
             <Box sx={{ mt: 1 }}>
               <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                Next renewal: {new Date(nextRenewalAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                Next renewal: {formatTenantDate(nextRenewalAt, tenantContext)}
               </Typography>
             </Box>
           )}

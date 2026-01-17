@@ -23,6 +23,11 @@ final class NumberFormatter
             }
         }
 
-        return number_format((float) $value, $decimals, '.', ',');
+        return number_format(
+            (float) $value,
+            $decimals,
+            $this->context->decimalSeparator,
+            $this->context->thousandsSeparator
+        );
     }
 }

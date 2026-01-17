@@ -45,6 +45,15 @@ interface Tenant {
   week_start?: string | null;
 }
 
+export interface TenantContext {
+  region: string | null;
+  timezone: string;
+  locale: string;
+  date_format: string;
+  currency: string;
+  currency_symbol: string;
+}
+
 export type CaptchaChallenge = {
   provider: string;
   site_key: string;
@@ -60,6 +69,7 @@ export type LoginResult =
 interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
+  tenantContext: TenantContext | null;
   tenantSlug: string | null;
   login: (email: string, password: string, tenantSlug: string, captchaToken?: string | null) => Promise<LoginResult>;
   logout: () => void;
@@ -101,6 +111,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   --------------------------------------------------------------- */
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenantContext, setTenantContext] = useState<TenantContext | null>(null);
   const [tenantSlug, setTenantSlugState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -187,6 +198,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const userData = await response.json();
             setUser(normalizeUser(userData));
             setTenant(userData?.tenant ?? null);
+            setTenantContext(userData?.tenant_context ?? null);
           } else if (response) {
             // Only clear stored auth when we're confident the session is invalid.
             // 401/419: invalid/expired token
@@ -311,6 +323,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setTenantSlugState(tenantSlug);
 
       setTenant(data?.tenant ?? data?.user?.tenant ?? null);
+      setTenantContext(data?.user?.tenant_context ?? null);
 
       return { ok: true };
     } catch (error) {
@@ -327,6 +340,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('tenant_slug');
     setUser(null);
     setTenant(null);
+    setTenantContext(null);
     setTenantSlugState(null);
   };
 
@@ -355,6 +369,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       value={{
         user,
         tenant,
+        tenantContext,
         tenantSlug,
         login,
         logout,
