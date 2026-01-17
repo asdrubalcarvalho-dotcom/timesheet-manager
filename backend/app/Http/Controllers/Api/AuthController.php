@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -126,6 +127,15 @@ class AuthController extends Controller
 
         $tenant = tenant();
 
+        $tenantContext = null;
+        if ($tenant) {
+            $context = app()->bound(TenantContext::class)
+                ? app(TenantContext::class)
+                : TenantContext::fromTenant($tenant);
+
+            $tenantContext = $context->toTenantContextArray();
+        }
+
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -141,6 +151,7 @@ class AuthController extends Controller
                 ? $user->getManagedProjectIds()
                 : [],
             'project_memberships' => $projectMemberships,
+            'tenant_context' => $tenantContext,
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'slug' => $tenant->slug,

@@ -32,9 +32,11 @@ import {
 import PageHeader from '../../Common/PageHeader';
 import ReportFiltersCard from '../../Common/ReportFiltersCard';
 import ReportAISideTab from '../../Common/ReportAISideTab';
+import { useAuth } from '../../Auth/AuthContext';
 import { useBilling } from '../../../contexts/BillingContext';
 import { getTenantAiState } from '../../Common/aiState';
 import { API_URL, fetchWithAuth } from '../../../services/api';
+import { formatTenantMoney } from '../../../utils/tenantFormatting';
 
 type ExpenseEntry = {
   id?: number;
@@ -92,14 +94,6 @@ const toDayjsOrNull = (ymd: string): Dayjs | null => {
   return d.isValid() ? d : null;
 };
 
-const formatMoney = (amount: number): string => {
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' }).format(amount);
-  } catch {
-    return `€${amount.toFixed(2)}`;
-  }
-};
-
 const safeAmount = (value: number | string): number => {
   const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
@@ -153,8 +147,13 @@ const quantile = (sortedAsc: number[], q: number): number | null => {
 
 const ExpensesAnalysisReport: React.FC = () => {
   const theme = useTheme();
+  const { tenantContext } = useAuth();
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
   const aiState = getTenantAiState(billingSummary, tenantAiEnabled);
+
+  const formatMoney = useMemo(() => {
+    return (amount: number) => formatTenantMoney(amount, tenantContext);
+  }, [tenantContext]);
 
   const baselineFilters = useMemo(
     () => ({
