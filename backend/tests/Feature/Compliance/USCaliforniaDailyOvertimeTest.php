@@ -77,6 +77,23 @@ class USCaliforniaDailyOvertimeTest extends TestCase
         $this->assertEquals(0.0, $result['overtime_hours_2_0']);
     }
 
+    public function test_ca_13h_yields_4h_overtime_at_1_5_and_1h_at_2_0(): void
+    {
+        $tenant = $this->makeTenant([
+            'region' => 'US',
+            'state' => 'CA',
+        ]);
+
+        $result = $this->makeCalculator()->calculateDailyBreakdownForTenant($tenant, [
+            '2026-01-12' => 13,
+        ]);
+
+        $this->assertEquals(13.0, $result['total_hours']);
+        $this->assertEquals(8.0, $result['regular_hours']);
+        $this->assertEquals(4.0, $result['overtime_hours_1_5']);
+        $this->assertEquals(1.0, $result['overtime_hours_2_0']);
+    }
+
     public function test_ca_14h_yields_4h_overtime_at_1_5_and_2h_at_2_0(): void
     {
         $tenant = $this->makeTenant([
