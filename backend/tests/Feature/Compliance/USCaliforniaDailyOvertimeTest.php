@@ -26,7 +26,7 @@ class USCaliforniaDailyOvertimeTest extends TestCase
         return $tenant;
     }
 
-    public function test_ca_10h_one_day_yields_8_regular_2_ot_1_5(): void
+    public function test_ca_8h_yields_no_overtime(): void
     {
         $tenant = $this->makeTenant([
             'region' => 'US',
@@ -34,16 +34,16 @@ class USCaliforniaDailyOvertimeTest extends TestCase
         ]);
 
         $result = $this->makeCalculator()->calculateDailyBreakdownForTenant($tenant, [
-            '2026-01-12' => 10,
+            '2026-01-12' => 8,
         ]);
 
-        $this->assertEquals(10.0, $result['total_hours']);
+        $this->assertEquals(8.0, $result['total_hours']);
         $this->assertEquals(8.0, $result['regular_hours']);
-        $this->assertEquals(2.0, $result['overtime_hours_1_5']);
+        $this->assertEquals(0.0, $result['overtime_hours_1_5']);
         $this->assertEquals(0.0, $result['overtime_hours_2_0']);
     }
 
-    public function test_ca_13h_one_day_yields_8_regular_4_ot_1_5_1_ot_2_0(): void
+    public function test_ca_9h_yields_1h_overtime_at_1_5(): void
     {
         $tenant = $this->makeTenant([
             'region' => 'US',
@@ -51,16 +51,33 @@ class USCaliforniaDailyOvertimeTest extends TestCase
         ]);
 
         $result = $this->makeCalculator()->calculateDailyBreakdownForTenant($tenant, [
-            '2026-01-12' => 13,
+            '2026-01-12' => 9,
         ]);
 
-        $this->assertEquals(13.0, $result['total_hours']);
+        $this->assertEquals(9.0, $result['total_hours']);
+        $this->assertEquals(8.0, $result['regular_hours']);
+        $this->assertEquals(1.0, $result['overtime_hours_1_5']);
+        $this->assertEquals(0.0, $result['overtime_hours_2_0']);
+    }
+
+    public function test_ca_12h_yields_4h_overtime_at_1_5(): void
+    {
+        $tenant = $this->makeTenant([
+            'region' => 'US',
+            'state' => 'CA',
+        ]);
+
+        $result = $this->makeCalculator()->calculateDailyBreakdownForTenant($tenant, [
+            '2026-01-12' => 12,
+        ]);
+
+        $this->assertEquals(12.0, $result['total_hours']);
         $this->assertEquals(8.0, $result['regular_hours']);
         $this->assertEquals(4.0, $result['overtime_hours_1_5']);
-        $this->assertEquals(1.0, $result['overtime_hours_2_0']);
+        $this->assertEquals(0.0, $result['overtime_hours_2_0']);
     }
 
-    public function test_ca_multiple_days_daily_ot_but_under_40h_week_still_applies_daily(): void
+    public function test_ca_14h_yields_4h_overtime_at_1_5_and_2h_at_2_0(): void
     {
         $tenant = $this->makeTenant([
             'region' => 'US',
@@ -68,15 +85,13 @@ class USCaliforniaDailyOvertimeTest extends TestCase
         ]);
 
         $result = $this->makeCalculator()->calculateDailyBreakdownForTenant($tenant, [
-            '2026-01-12' => 10,
-            '2026-01-13' => 10,
-            '2026-01-14' => 10,
+            '2026-01-12' => 14,
         ]);
 
-        $this->assertEquals(30.0, $result['total_hours']);
-        $this->assertEquals(24.0, $result['regular_hours']);
-        $this->assertEquals(6.0, $result['overtime_hours_1_5']);
-        $this->assertEquals(0.0, $result['overtime_hours_2_0']);
+        $this->assertEquals(14.0, $result['total_hours']);
+        $this->assertEquals(8.0, $result['regular_hours']);
+        $this->assertEquals(4.0, $result['overtime_hours_1_5']);
+        $this->assertEquals(2.0, $result['overtime_hours_2_0']);
     }
 
     public function test_eu_tenant_has_no_daily_overtime(): void

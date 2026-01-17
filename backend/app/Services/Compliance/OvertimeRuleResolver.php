@@ -16,8 +16,20 @@ final class OvertimeRuleResolver
         $region = strtoupper((string) data_get($tenant->settings ?? [], 'region', ''));
         $region = trim($region);
 
+        $state = strtoupper((string) data_get($tenant->settings ?? [], 'state', ''));
+        $state = trim($state);
+
         if ($region === '') {
             return null;
+        }
+
+        // New shape: region=US + state=CA/NY
+        if ($region === 'US' && $state !== '') {
+            return match ($state) {
+                'CA' => new CAOvertimeRule(),
+                'NY' => new NYOvertimeRule(),
+                default => new FederalOvertimeRule(),
+            };
         }
 
         if ($region === 'US' || str_starts_with($region, 'US-')) {

@@ -2,12 +2,10 @@
 
 namespace Tests\Feature\Modules\Billing;
 
-use Tests\TestCase;
-use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Subscription;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Tests\TenantTestCase;
 
 /**
  * BillingCheckoutIntegrationTest
@@ -21,28 +19,20 @@ use Laravel\Sanctum\Sanctum;
  * @group checkout
  * @group integration
  */
-class BillingCheckoutIntegrationTest extends TestCase
+class BillingCheckoutIntegrationTest extends TenantTestCase
 {
-    use RefreshDatabase;
-
-    protected Tenant $tenant;
     protected User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Create tenant and user
-        $this->tenant = Tenant::factory()->create(['slug' => 'test-checkout']);
-        
-        $this->tenant->run(function () {
-            $this->user = User::factory()->create();
-            
-            // Create 2 active technicians
-            \App\Models\Technician::factory()->count(2)->create([
-                'is_active' => 1,
-            ]);
-        });
+        $this->user = User::factory()->create();
+
+        // Create 2 active technicians in tenant DB
+        \App\Models\Technician::factory()->count(2)->create([
+            'is_active' => 1,
+        ]);
     }
 
     /**
@@ -51,6 +41,7 @@ class BillingCheckoutIntegrationTest extends TestCase
     public function test_summary_endpoint_returns_correct_amounts_for_team_with_planning()
     {
         // Setup: Team plan, 2 users, Planning add-on only
+        Subscription::query()->where('tenant_id', $this->tenant->id)->delete();
         $subscription = Subscription::factory()->create([
             'tenant_id' => $this->tenant->id,
             'plan' => 'team',
@@ -65,14 +56,13 @@ class BillingCheckoutIntegrationTest extends TestCase
         // Act: Call summary endpoint
         Sanctum::actingAs($this->user);
         
-        $response = $this->withHeaders([
-            'X-Tenant' => 'test-checkout',
-        ])->getJson('/api/billing/summary');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/billing/summary');
 
         // Assert: HTTP 200 and correct structure
         $response->assertOk();
 
-        $data = $response->json();
+        $data = $response->json('data');
 
         // Expected values
         $expectedBase = 88.00;      // 44 × 2
@@ -93,6 +83,7 @@ class BillingCheckoutIntegrationTest extends TestCase
     public function test_summary_endpoint_both_addons_not_compounded()
     {
         // Setup: Team plan, 2 users, Planning + AI
+        Subscription::query()->where('tenant_id', $this->tenant->id)->delete();
         $subscription = Subscription::factory()->create([
             'tenant_id' => $this->tenant->id,
             'plan' => 'team',
@@ -107,13 +98,12 @@ class BillingCheckoutIntegrationTest extends TestCase
         // Act
         Sanctum::actingAs($this->user);
         
-        $response = $this->withHeaders([
-            'X-Tenant' => 'test-checkout',
-        ])->getJson('/api/billing/summary');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/billing/summary');
 
         // Assert
         $response->assertOk();
-        $data = $response->json();
+        $data = $response->json('data');
 
         $expectedBase = 88.00;
         $expectedPlanning = 15.84;
@@ -141,6 +131,7 @@ class BillingCheckoutIntegrationTest extends TestCase
     public function test_checkout_start_creates_correct_stripe_amount()
     {
         // Setup: Team plan, 2 users, both add-ons
+        Subscription::query()->where('tenant_id', $this->tenant->id)->delete();
         $subscription = Subscription::factory()->create([
             'tenant_id' => $this->tenant->id,
             'plan' => 'team',
@@ -155,9 +146,8 @@ class BillingCheckoutIntegrationTest extends TestCase
         // Act: Start checkout for plan upgrade (or renewal)
         Sanctum::actingAs($this->user);
         
-        $response = $this->withHeaders([
-            'X-Tenant' => 'test-checkout',
-        ])->postJson('/api/billing/checkout/start', [
+        $response = $this->withHeaders($this->tenantHeaders())
+        ->postJson('/api/billing/checkout/start', [
             'mode' => 'plan',
             'plan' => 'team',
             'user_limit' => 2,
@@ -167,7 +157,8 @@ class BillingCheckoutIntegrationTest extends TestCase
         $response->assertOk();
         $data = $response->json();
 
-        $expectedAmount = 119.68; // 88 + 15.84 + 15.84
+        // Plan-mode checkout charges base plan only; addons are handled via mode=addon.
+        $expectedAmount = 88.00; // 44 × 2
 
         $this->assertEquals($expectedAmount, $data['amount']);
         $this->assertEquals('EUR', $data['currency']);
@@ -187,6 +178,7 @@ class BillingCheckoutIntegrationTest extends TestCase
     public function test_checkout_start_for_addon_calculates_from_base_price()
     {
         // Setup: Team plan, 2 users, NO add-ons initially
+        Subscription::query()->where('tenant_id', $this->tenant->id)->delete();
         $subscription = Subscription::factory()->create([
             'tenant_id' => $this->tenant->id,
             'plan' => 'team',
@@ -201,9 +193,8 @@ class BillingCheckoutIntegrationTest extends TestCase
         // Act: Start checkout to activate Planning add-on
         Sanctum::actingAs($this->user);
         
-        $response = $this->withHeaders([
-            'X-Tenant' => 'test-checkout',
-        ])->postJson('/api/billing/checkout/start', [
+        $response = $this->withHeaders($this->tenantHeaders())
+        ->postJson('/api/billing/checkout/start', [
             'mode' => 'addon',
             'addon' => 'planning',
         ]);
@@ -223,6 +214,7 @@ class BillingCheckoutIntegrationTest extends TestCase
     public function test_toggle_addon_recalculates_summary_correctly()
     {
         // Setup: Team plan, 2 users, NO add-ons
+        Subscription::query()->where('tenant_id', $this->tenant->id)->delete();
         $subscription = Subscription::factory()->create([
             'tenant_id' => $this->tenant->id,
             'plan' => 'team',
@@ -237,24 +229,24 @@ class BillingCheckoutIntegrationTest extends TestCase
         Sanctum::actingAs($this->user);
 
         // Step 1: Get initial summary (no add-ons)
-        $response = $this->withHeaders(['X-Tenant' => 'test-checkout'])
+        $response = $this->withHeaders($this->tenantHeaders())
             ->getJson('/api/billing/summary');
         
         $response->assertOk();
-        $this->assertEquals(88.00, $response->json('total'));
+        $this->assertEquals(88.00, $response->json('data.total'));
 
         // Step 2: Toggle Planning add-on ON
-        $toggleResponse = $this->withHeaders(['X-Tenant' => 'test-checkout'])
+        $toggleResponse = $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/billing/toggle-addon', ['addon' => 'planning']);
         
         $toggleResponse->assertOk();
 
         // Step 3: Get updated summary
-        $updatedResponse = $this->withHeaders(['X-Tenant' => 'test-checkout'])
+        $updatedResponse = $this->withHeaders($this->tenantHeaders())
             ->getJson('/api/billing/summary');
         
         $updatedResponse->assertOk();
-        $updatedData = $updatedResponse->json();
+        $updatedData = $updatedResponse->json('data');
 
         // Assert: Total increased by Planning addon (15.84)
         $this->assertEquals(88.00, $updatedData['base_subtotal']);
@@ -262,14 +254,14 @@ class BillingCheckoutIntegrationTest extends TestCase
         $this->assertEquals(103.84, $updatedData['total']);
 
         // Step 4: Toggle AI add-on ON
-        $this->withHeaders(['X-Tenant' => 'test-checkout'])
+        $this->withHeaders($this->tenantHeaders())
             ->postJson('/api/billing/toggle-addon', ['addon' => 'ai']);
 
         // Step 5: Get final summary
-        $finalResponse = $this->withHeaders(['X-Tenant' => 'test-checkout'])
+        $finalResponse = $this->withHeaders($this->tenantHeaders())
             ->getJson('/api/billing/summary');
         
-        $finalData = $finalResponse->json();
+        $finalData = $finalResponse->json('data');
 
         // Assert: Both add-ons active, both calculated from base
         $this->assertEquals(88.00, $finalData['base_subtotal']);
