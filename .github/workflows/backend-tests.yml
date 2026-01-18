@@ -1,0 +1,86 @@
+name: backend-tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  bounded-backend-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: timesheet_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: testing
+      APP_DEBUG: false
+      APP_URL: http://localhost
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_DATABASE: timesheet_ci
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_DRIVER: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo_mysql, intl
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: backend/vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare .env
+        run: |
+          if [ -f .env.example ]; then cp .env.example .env; else touch .env; fi
+          php -r "file_put_contents('.env', preg_replace('/^APP_KEY=.*/m', 'APP_KEY=', file_get_contents('.env')));"
+          php artisan key:generate --force
+          php artisan config:clear
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -proot && break
+            sleep 2
+          done
+
+      - name: Migrate
+        run: php artisan migrate --force
+
+      - name: Run bounded tests (US overtime)
+        run: php artisan test --filter "USOvertime"
