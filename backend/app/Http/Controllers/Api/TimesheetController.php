@@ -766,14 +766,30 @@ class TimesheetController extends Controller
             $query->where('technician_id', (int) $request->input('technician_id'));
         }
 
-        $weekHours = (float) $query->sum('hours_worked');
+        $daySums = (clone $query)
+            ->selectRaw('date, SUM(hours_worked) as hours')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
 
-        $overtime = app(OvertimeCalculator::class)->calculateForTenant($tenant, $weekHours);
+        $dayHoursByDate = [];
+        $cursor = $period['start']->copy();
+        while ($cursor->lte($period['end'])) {
+            $dayHoursByDate[$cursor->toDateString()] = 0.0;
+            $cursor = $cursor->addDay();
+        }
+
+        foreach ($daySums as $row) {
+            $dayHoursByDate[(string) $row->date] = max(0.0, (float) $row->hours);
+        }
+
+        $overtime = app(OvertimeCalculator::class)->calculateWeekSummaryForTenant($tenant, $dayHoursByDate);
 
         return response()->json([
             'regular_hours' => round($overtime['regular_hours'], 2),
             'overtime_hours' => round($overtime['overtime_hours'], 2),
             'overtime_rate' => $overtime['overtime_rate'],
+            'overtime_hours_2_0' => round((float) ($overtime['overtime_hours_2_0'] ?? 0.0), 2),
             'workweek_start' => $period['start']->toDateString(),
         ]);
     }
@@ -848,15 +864,26 @@ class TimesheetController extends Controller
         }
 
         $timesheets = $query->orderBy('date')->get();
-        $weekHours = (float) $timesheets->sum('hours_worked');
 
-        $overtime = app(OvertimeCalculator::class)->calculateForTenant($tenant, $weekHours);
+        $dayHoursByDate = [];
+        $cursor = $period['start']->copy();
+        while ($cursor->lte($period['end'])) {
+            $dayHoursByDate[$cursor->toDateString()] = 0.0;
+            $cursor = $cursor->addDay();
+        }
+
+        foreach ($timesheets->groupBy('date') as $date => $rows) {
+            $dayHoursByDate[(string) $date] = max(0.0, (float) $rows->sum('hours_worked'));
+        }
+
+        $overtime = app(OvertimeCalculator::class)->calculateWeekSummaryForTenant($tenant, $dayHoursByDate);
 
         return response()->json([
             'data' => $timesheets,
             'regular_hours' => round($overtime['regular_hours'], 2),
             'overtime_hours' => round($overtime['overtime_hours'], 2),
             'overtime_rate' => $overtime['overtime_rate'],
+            'overtime_hours_2_0' => round((float) ($overtime['overtime_hours_2_0'] ?? 0.0), 2),
             'workweek_start' => $period['start']->toDateString(),
         ]);
     }

@@ -120,6 +120,124 @@ class USOvertimeTest extends TenantTestCase
         $response = $this->getJson('/api/timesheets/summary?date=2026-01-14', $this->tenantHeaders());
 
         $response->assertOk();
+        // CA v3.1 combination: daily OT exists, and weekly converts remaining regular hours.
+        // 5 days x 9h = 45h total.
+        // Daily: 5h OT1.5 + 40h regular.
+        // Weekly excess 5h converts from remaining regular => 10h OT1.5 + 35h regular.
+        $response->assertJson([
+            'regular_hours' => 35.0,
+            'overtime_hours' => 10.0,
+            'overtime_rate' => 1.5,
+            'workweek_start' => '2026-01-11',
+        ]);
+    }
+
+    public function test_ny_tenant_45h_yields_5h_overtime_weekly_only(): void
+    {
+        $this->tenant->forceFill([
+            'settings' => [
+                'locale' => 'en_US',
+                'currency' => 'USD',
+                'region' => 'US',
+                'state' => 'NY',
+                'week_start' => 'sunday',
+            ],
+        ])->saveQuietly();
+
+        $user = $this->seedUserWithTechnician();
+        $this->seedPermissions($user);
+        Sanctum::actingAs($user);
+
+        [$project, $task, $location] = $this->seedProjectTaskLocation($user);
+
+        $technicianId = (int) Technician::where('user_id', $user->id)->value('id');
+
+        $dates = [
+            '2026-01-12',
+            '2026-01-13',
+            '2026-01-14',
+            '2026-01-15',
+            '2026-01-16',
+        ];
+
+        $this->seedWeekHours($user, $technicianId, $project->id, $task->id, $location->id, $dates, 9.0);
+
+        $response = $this->getJson('/api/timesheets/summary?date=2026-01-14', $this->tenantHeaders());
+
+        $response->assertOk();
+        $response->assertJson([
+            'regular_hours' => 40.0,
+            'overtime_hours' => 5.0,
+            'overtime_rate' => 1.5,
+            'workweek_start' => '2026-01-11',
+        ]);
+    }
+
+    public function test_ny_tenant_10h_single_day_has_no_daily_overtime(): void
+    {
+        $this->tenant->forceFill([
+            'settings' => [
+                'locale' => 'en_US',
+                'currency' => 'USD',
+                'region' => 'US',
+                'state' => 'NY',
+                'week_start' => 'sunday',
+            ],
+        ])->saveQuietly();
+
+        $user = $this->seedUserWithTechnician();
+        $this->seedPermissions($user);
+        Sanctum::actingAs($user);
+
+        [$project, $task, $location] = $this->seedProjectTaskLocation($user);
+        $technicianId = (int) Technician::where('user_id', $user->id)->value('id');
+
+        $this->seedWeekHours($user, $technicianId, $project->id, $task->id, $location->id, ['2026-01-14'], 10.0);
+
+        $response = $this->getJson('/api/timesheets/summary?date=2026-01-14', $this->tenantHeaders());
+
+        $response->assertOk();
+        $response->assertJson([
+            'regular_hours' => 10.0,
+            'overtime_hours' => 0.0,
+            'overtime_rate' => 1.5,
+            'workweek_start' => '2026-01-11',
+        ]);
+    }
+
+    public function test_us_federal_fallback_applies_when_state_unknown(): void
+    {
+        $this->tenant->forceFill([
+            'settings' => [
+                'locale' => 'en_US',
+                'currency' => 'USD',
+                'region' => 'US',
+                'state' => 'TX',
+                'week_start' => 'sunday',
+            ],
+        ])->saveQuietly();
+
+        $user = $this->seedUserWithTechnician();
+        $this->seedPermissions($user);
+        Sanctum::actingAs($user);
+
+        [$project, $task, $location] = $this->seedProjectTaskLocation($user);
+
+        $technicianId = (int) Technician::where('user_id', $user->id)->value('id');
+
+        $dates = [
+            '2026-01-12',
+            '2026-01-13',
+            '2026-01-14',
+            '2026-01-15',
+            '2026-01-16',
+        ];
+
+        $this->seedWeekHours($user, $technicianId, $project->id, $task->id, $location->id, $dates, 9.0);
+
+        $response = $this->getJson('/api/timesheets/summary?date=2026-01-14', $this->tenantHeaders());
+
+        $response->assertOk();
         $response->assertJson([
             'regular_hours' => 40.0,
             'overtime_hours' => 5.0,
