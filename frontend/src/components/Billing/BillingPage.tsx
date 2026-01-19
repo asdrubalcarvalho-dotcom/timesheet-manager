@@ -38,8 +38,9 @@ import PricingSummary from './PricingSummary';
 import CheckoutModal from './CheckoutModal';
 import { ConfirmDowngradeDialog } from './ConfirmDowngradeDialog';
 import { ConfirmTrialExitDialog } from './ConfirmTrialExitDialog';
-import api from '../../services/api';
+import api, { tenantApi } from '../../services/api';
 import { getTrialRemainingLabel } from '../../utils/getTrialRemainingLabel';
+import { useAuth } from '../Auth/AuthContext';
 
 function getTrialLabel(summary?: BillingSummary | null, now: Date | string = new Date()): string | null {
   if (!summary?.is_trial || !summary.trial?.ends_at) return null;
@@ -169,6 +170,7 @@ function getFeatureSummary(
  * All pricing data comes from backend (no frontend calculations)
  */
 const BillingPage: React.FC = () => {
+  const { tenantContext, refreshUser } = useAuth();
   const { 
     billingSummary, 
     tenantAiEnabled,
@@ -198,6 +200,8 @@ const BillingPage: React.FC = () => {
   const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
   const [licenseIncrement, setLicenseIncrement] = useState<number>(1);
   const [updatingTenantAi, setUpdatingTenantAi] = useState(false);
+  const [tenantState, setTenantState] = useState<string>('');
+  const [updatingTenantState, setUpdatingTenantState] = useState(false);
 
   console.log('[BillingPage] 🎨 RENDER - billingSummary:', billingSummary, 'loading:', loading, 'initializing:', initializing);
 
@@ -208,6 +212,11 @@ const BillingPage: React.FC = () => {
     refreshSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps = run only on mount
+
+  useEffect(() => {
+    const nextState = tenantContext?.state ? String(tenantContext.state).toUpperCase() : '';
+    setTenantState(nextState);
+  }, [tenantContext?.state]);
 
   // ONE-WAY ENFORCEMENT: Billing OFF → Tenant AI OFF
   // NOTE: AI enforcement applies ONLY to Team plan. Enterprise includes AI by default.
@@ -296,6 +305,29 @@ const BillingPage: React.FC = () => {
       console.error('[BillingPage] Failed to update tenant AI toggle', error);
     } finally {
       setUpdatingTenantAi(false);
+    }
+  };
+
+  const handleTenantStateSave = async () => {
+    const normalized = tenantState.trim().toUpperCase();
+    const payloadState = normalized === '' ? null : normalized;
+
+    // Frontend guard to match backend validation (nullable|string|size:2)
+    if (payloadState !== null && payloadState.length !== 2) {
+      showWarning('State must be a 2-letter code (e.g., CA, NY).');
+      return;
+    }
+
+    setUpdatingTenantState(true);
+    try {
+      await tenantApi.updateComplianceSettings({ state: payloadState });
+      await refreshUser();
+      showSuccess('Tenant state updated.');
+    } catch (err: any) {
+      console.error('[BillingPage] Failed to update tenant state', err);
+      showError(err?.response?.data?.message || 'Failed to update tenant state');
+    } finally {
+      setUpdatingTenantState(false);
     }
   };
 
@@ -954,6 +986,55 @@ const BillingPage: React.FC = () => {
                       )}
                     </Box>
                   </Box>
+
+                  {String(tenantContext?.region ?? '').toUpperCase() === 'US' && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: { xs: 'column', sm: 'row' },
+                          justifyContent: 'space-between',
+                          alignItems: { xs: 'flex-start', sm: 'center' },
+                          gap: 2,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            US State (Compliance)
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Set your 2-letter state code (e.g., CA, NY) to apply the correct overtime policy.
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+                          <TextField
+                            label="State"
+                            value={tenantState}
+                            onChange={(event) => {
+                              const next = String(event.target.value || '')
+                                .toUpperCase()
+                                .replace(/[^A-Z]/g, '')
+                                .slice(0, 2);
+                              setTenantState(next);
+                            }}
+                            inputProps={{ maxLength: 2 }}
+                            size="small"
+                            sx={{ width: 120 }}
+                            placeholder="CA"
+                            disabled={updatingTenantState}
+                          />
+                          <Button
+                            variant="contained"
+                            onClick={handleTenantStateSave}
+                            disabled={updatingTenantState}
+                          >
+                            Save
+                          </Button>
+                        </Box>
+                      </Box>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </Grid>

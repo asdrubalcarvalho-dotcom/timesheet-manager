@@ -10,9 +10,16 @@ import type { Project, Timesheet, Task, Location, Technician } from '../../types
 import type { TravelSegment } from '../../services/travels';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useNavigate } from 'react-router-dom';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
 import { useFeatures } from '../../contexts/FeatureContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { formatTenantDate, formatTenantNumber } from '../../utils/tenantFormatting';
+import { getPolicyAlertModel } from '../../utils/policyAlert';
+import { computeCaDailyOt2Candidates } from '../../utils/computeCaDailyOt2Candidates';
+import { getVisibleTimesheets } from '../../utils/getVisibleTimesheets';
+import { applyTimesheetUiFilters } from './timesheetUiFilters';
+import { weekStartToFirstDay } from '../../utils/weekStartToFirstDay';
 
 // API Response types
 interface ApiResponse<T> {
@@ -27,6 +34,8 @@ import {
   Box,
   Typography,
   Button,
+  Alert,
+  AlertTitle,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -156,10 +165,18 @@ const DAILY_HOUR_CAP = 12;
 
 
 const TimesheetCalendar: React.FC = () => {
-  const { user, isManager, isAdmin, loading: authLoading } = useAuth();
+  const { user, tenant, isManager, isAdmin, loading: authLoading, tenantContext } = useAuth();
+  const navigate = useNavigate();
   const { hasTravels } = useFeatures();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const policyAlert = useMemo(() => getPolicyAlertModel(tenantContext), [tenantContext]);
+
+  const weekFirstDay = useMemo(
+    () => weekStartToFirstDay(tenantContext?.week_start ?? tenant?.week_start),
+    [tenantContext?.week_start, tenant?.week_start]
+  );
   
   // Calendar ref to access API methods
   const calendarRef = useRef<FullCalendar>(null);
@@ -179,6 +196,19 @@ const TimesheetCalendar: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<Timesheet | null>(null);
   const [currentCalendarViewType, setCurrentCalendarViewType] = useState<string>('dayGridMonth');
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string | null>(null);
+
+  // Week summary (read-only UI)
+  const [weekSummary, setWeekSummary] = useState<{
+    regular_hours: number;
+    overtime_hours: number;
+    overtime_rate: number;
+    overtime_hours_2_0: number;
+    workweek_start: string | null;
+    policy_key?: 'US-CA' | 'US-NY' | 'US-FLSA' | 'NON-US' | string;
+  } | null>(null);
+  const [weekSummaryStatus, setWeekSummaryStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const lastSummaryDateRef = useRef<string | null>(null);
   
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState({ 
@@ -314,12 +344,16 @@ const TimesheetCalendar: React.FC = () => {
     return currentUserTechnician ? [currentUserTechnician] : [];
   }, [technicians, user, userIsManager, userIsAdmin, timesheetScope, projectId, projects]);
 
+  const policyVisibleTimesheets = useMemo(() => {
+    return getVisibleTimesheets(timesheets);
+  }, [timesheets]);
+
   const validationSummary = useMemo(() => {
     const aiFlaggedIds = new Set<number>();
     const overCapIds = new Set<number>();
     const totals = new Map<string, { hours: number; ids: number[] }>();
 
-    timesheets.forEach((ts) => {
+    policyVisibleTimesheets.forEach((ts) => {
       if (ts.ai_flagged) {
         aiFlaggedIds.add(ts.id);
       }
@@ -349,7 +383,7 @@ const TimesheetCalendar: React.FC = () => {
       overCap: overCapIds.size,
       overCapIds,
     };
-  }, [timesheets]);
+  }, [policyVisibleTimesheets]);
 
   const toggleValidationFilter = (target: 'ai_flagged' | 'overcap') => {
     setValidationFilter((prev) => (prev === target ? 'all' : target));
@@ -443,12 +477,50 @@ const TimesheetCalendar: React.FC = () => {
     await loadTimesheets();
   }, [loadTimesheets]);
 
+  const loadWeekSummary = useCallback(async (date: string) => {
+    if (!date) return;
+    if (authLoading) return;
+    if (!user) return;
+
+    // Dedupe repeated calls for the same week start while navigating
+    // NOTE: On errors, we still dedupe to avoid spamming; user can change view/week to retry.
+    if (lastSummaryDateRef.current === date) {
+      return;
+    }
+
+    lastSummaryDateRef.current = date;
+    setWeekSummaryStatus('loading');
+
+    try {
+      const data = await timesheetsApi.getSummary({ date });
+      setWeekSummary(data);
+      setWeekSummaryStatus('loaded');
+    } catch (error) {
+      console.warn('[TimesheetCalendar] Week summary unavailable:', error);
+      setWeekSummary(null);
+      setWeekSummaryStatus('error');
+    }
+  }, [authLoading, user]);
+
   // Handle view change - reload data when switching to Week view
   const handleViewChange = useCallback((info: any) => {
     console.log('View changed to:', info.view.type, 'Date range:', info.startStr, 'to', info.endStr);
 
     // Track active view type to allow view-specific header formatting
     setCurrentCalendarViewType(info.view.type);
+
+    const isTimeGridWeek = info.view.type === 'timeGridWeek';
+    if (isTimeGridWeek) {
+      const date = dayjs(info.start).format('YYYY-MM-DD');
+      setCurrentWeekStartDate(date);
+      loadWeekSummary(date);
+    } else {
+      // Avoid showing stale data if user leaves week views
+      setWeekSummary(null);
+      setWeekSummaryStatus('idle');
+      lastSummaryDateRef.current = null;
+      setCurrentWeekStartDate(null);
+    }
     
     // Don't reload timesheets on view change - let the existing data render
     // Timesheets are already loaded and will display correctly in any view
@@ -462,7 +534,7 @@ const TimesheetCalendar: React.FC = () => {
       console.log('Loading travels for month:', newMonth);
       loadTravels(newMonth);
     }
-  }, [travelsByDate]);
+  }, [travelsByDate, loadWeekSummary]);
 
   const loadProjects = async (technicianId?: number | '') => {
     try {
@@ -1133,82 +1205,102 @@ const TimesheetCalendar: React.FC = () => {
 
     return false;
   }, [user]);
-
-  // Helper function to check if user can VIEW a timesheet
-  // Note: Backend already filters via Policy, this is just frontend safety
-  const canViewTimesheet = useCallback((timesheet: Timesheet): boolean => {
-    if (!user) {
-      return false;
-    }
-
-    // Admins can view all timesheets
-    if (userIsAdmin) {
-      return true;
-    }
-
-    // Owner can always view their own timesheets
-    if (isTimesheetOwnedByUser(timesheet)) {
-      return true;
-    }
-
-    // For Managers: Backend already filtered the timesheets
-    // If a timesheet appears in the response, the Manager is allowed to see it
-    // This includes:
-    // - Their own timesheets
-    // - Timesheets from 'member' technicians in projects they manage
-    // (Backend blocks timesheets from other managers)
-    if (userIsManager && user.managed_projects?.includes(timesheet.project_id)) {
-      return true;
-    }
-
-    return false;
-  }, [user, userIsAdmin, userIsManager, isTimesheetOwnedByUser]);
-
-  const visibleTimesheets = useMemo(() => {
-    if (!timesheets) {
-      return [] as Timesheet[];
-    }
-
+  const uiFilteredTimesheets = useMemo(() => {
     if (!user) {
       return [] as Timesheet[];
     }
 
-    // First, filter by view permissions (Managers cannot see other Managers' timesheets)
-    const viewableTimesheets = timesheets.filter((timesheetItem) => canViewTimesheet(timesheetItem));
-    
-    console.log('Timesheet filtering:', {
+    return applyTimesheetUiFilters(policyVisibleTimesheets, {
       scope: timesheetScope,
-      totalTimesheets: timesheets.length,
-      viewableTimesheets: viewableTimesheets.length,
+      validationFilter,
+      overCapIds: validationSummary.overCapIds,
+      isOwnedByUser: isTimesheetOwnedByUser,
     });
+  }, [user, policyVisibleTimesheets, timesheetScope, validationFilter, validationSummary.overCapIds, isTimesheetOwnedByUser]);
 
-    // 'mine' scope: show only user's own timesheets
-    if (timesheetScope === 'mine') {
-      const mineTimesheets = viewableTimesheets.filter((timesheetItem) => isTimesheetOwnedByUser(timesheetItem));
-      console.log('Mine scope - showing', mineTimesheets.length, 'timesheets');
-      return mineTimesheets;
+  const caOt2Candidates = useMemo(() => {
+    if (currentCalendarViewType !== 'timeGridWeek') return [];
+
+    const weekStartDate = weekSummary?.workweek_start ?? currentWeekStartDate;
+    if (!weekStartDate) return [];
+
+    // Grouping fields used ("what is a day"):
+    // - Timesheet.date (YYYY-MM-DD) is treated as the local work day key.
+    // - Timesheet.hours_worked is summed for that day.
+    // NOTE: We do NOT use /api/timesheets/summary for per-day breakdown (it doesn't include it).
+    return computeCaDailyOt2Candidates(
+      policyVisibleTimesheets.map((ts) => ({
+        technician_id: ts.technician_id,
+        date: ts.date,
+        hours_worked: ts.hours_worked,
+      })),
+      weekStartDate
+    );
+  }, [currentCalendarViewType, currentWeekStartDate, weekSummary?.workweek_start, policyVisibleTimesheets]);
+
+  const caOt2Alert = useMemo(() => {
+    const region = String(tenantContext?.region ?? '').toUpperCase();
+    const state = String(tenantContext?.state ?? '').toUpperCase();
+
+    if (currentCalendarViewType !== 'timeGridWeek') return null;
+    if (region !== 'US' || state !== 'CA') return null;
+
+    // Requires week summary AND a positive OT(2.0x) total from backend.
+    // We only *pinpoint days* using a UI heuristic; we do not compute totals here.
+    if (!weekSummary || weekSummaryStatus !== 'loaded') return null;
+
+    const ot2Total = weekSummary.overtime_hours_2_0 ?? 0;
+    if (ot2Total <= 0) return null;
+
+    // Compute total daily hours (across all visible timesheets) for the same week window.
+    const weekStartDate = weekSummary?.workweek_start ?? currentWeekStartDate;
+    const weekStart = dayjs(weekStartDate, 'YYYY-MM-DD', true);
+    if (!weekStart.isValid()) return null;
+    const weekEndExclusive = weekStart.add(7, 'day');
+
+    const dailyTotalsByDate = new Map<string, number>();
+    for (const ts of policyVisibleTimesheets) {
+      const date = typeof ts?.date === 'string' ? ts.date : '';
+      if (!date) continue;
+      const dateObj = dayjs(date, 'YYYY-MM-DD', true);
+      if (!dateObj.isValid()) continue;
+      if (dateObj.isBefore(weekStart) || !dateObj.isBefore(weekEndExclusive)) continue;
+
+      const hours = typeof ts.hours_worked === 'number' ? ts.hours_worked : Number(ts.hours_worked);
+      if (!Number.isFinite(hours)) continue;
+
+      const key = dateObj.format('YYYY-MM-DD');
+      dailyTotalsByDate.set(key, (dailyTotalsByDate.get(key) ?? 0) + hours);
     }
 
-    // 'others' scope: show all timesheets EXCEPT user's own
-    if (timesheetScope === 'others') {
-      const othersTimesheets = viewableTimesheets.filter((timesheetItem) => !isTimesheetOwnedByUser(timesheetItem));
-      console.log('Others scope - showing', othersTimesheets.length, 'timesheets');
-      return othersTimesheets;
+    const rows = (Array.isArray(caOt2Candidates) ? caOt2Candidates : [])
+      .map((candidate) => {
+        const totalHours = dailyTotalsByDate.get(candidate.date);
+        if (!Number.isFinite(totalHours)) return null;
+
+        return {
+          date: candidate.date,
+          ot2Hours: candidate.ot2Hours,
+          totalHours,
+        };
+      })
+      .filter((row): row is { date: string; ot2Hours: number; totalHours: number } => row !== null);
+
+    if (rows.length === 0) {
+      return {
+        title: 'California 2.0x overtime detected',
+        severity: 'info' as const,
+        message:
+          'OT (2.0x) is present in the weekly summary, but no >12h day was found in the visible entries for this workweek. This can happen when OT2 comes from non-">12h" rules (e.g., 7th consecutive day) or from entries not visible to you.',
+      };
     }
 
-    // 'all' scope: show all timesheets (that user has permission to view)
-    const scoped = viewableTimesheets;
-
-    return scoped.filter((timesheetItem) => {
-      if (validationFilter === 'ai_flagged') {
-        return Boolean(timesheetItem.ai_flagged);
-      }
-      if (validationFilter === 'overcap') {
-        return validationSummary.overCapIds.has(timesheetItem.id);
-      }
-      return true;
-    });
-  }, [timesheets, timesheetScope, isTimesheetOwnedByUser, canViewTimesheet, user, validationFilter, validationSummary]);
+    return {
+      title: 'California 2.0x overtime detected',
+      severity: 'error' as const,
+      rows,
+    };
+  }, [tenantContext, currentCalendarViewType, currentWeekStartDate, policyVisibleTimesheets, weekSummary, weekSummaryStatus, caOt2Candidates]);
 
   // Filter tasks for selected project
   const filteredTasks = (tasks || []).filter(task => task.project_id === projectId);
@@ -1243,11 +1335,11 @@ const TimesheetCalendar: React.FC = () => {
 
   // Generate calendar events from timesheets
   const calendarEvents = useMemo(() => {
-    if (!visibleTimesheets) {
+    if (!uiFilteredTimesheets) {
       return [];
     }
 
-    return visibleTimesheets.map((timesheet) => {
+    return uiFilteredTimesheets.map((timesheet) => {
       const isOwner = isTimesheetOwnedByUser(timesheet);
       const managesProject = Boolean(userIsManager && user?.managed_projects?.includes(timesheet.project_id));
       const canEdit = isOwner || userIsAdmin || managesProject;
@@ -1322,7 +1414,7 @@ const TimesheetCalendar: React.FC = () => {
 
       return eventData;
     });
-  }, [visibleTimesheets, user, userIsManager, userIsAdmin, isTimesheetOwnedByUser, timesheetScope]);
+  }, [uiFilteredTimesheets, user, userIsManager, userIsAdmin, isTimesheetOwnedByUser]);
 
   // Day cell renderer - add travel indicators to calendar days
   const handleDayCellDidMount = (info: any) => {
@@ -1881,48 +1973,161 @@ const TimesheetCalendar: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Box
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 1,
-          alignItems: 'center',
-          pt: 0.5,
-          mb: 0.5
-        }}
-      >
-        <Tooltip title="Entries flagged by AI Cortex">
-          <span>
+      <Box sx={{ pt: 0.5, mb: 0.5 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'text.secondary' }}>
+          Filters
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 0.25 }}>
+          <Tooltip title="Entries flagged by AI Cortex">
+            <span>
+              <Chip
+                label={`AI alerts (${validationSummary.aiFlagged})`}
+                color={validationFilter === 'ai_flagged' ? 'warning' : 'default'}
+                variant={validationSummary.aiFlagged ? 'filled' : 'outlined'}
+                onClick={() => toggleValidationFilter('ai_flagged')}
+                disabled={!validationSummary.aiFlagged}
+                sx={{ fontWeight: 600 }}
+              />
+            </span>
+          </Tooltip>
+          <Tooltip title="Days where technician's total exceeds 12h">
+            <span>
+              <Chip
+                label={`Daily > ${DAILY_HOUR_CAP}h (${validationSummary.overCap})`}
+                color={validationFilter === 'overcap' ? 'warning' : 'default'}
+                variant={validationSummary.overCap ? 'filled' : 'outlined'}
+                onClick={() => toggleValidationFilter('overcap')}
+                disabled={!validationSummary.overCap}
+                sx={{ fontWeight: 600 }}
+              />
+            </span>
+          </Tooltip>
+          {validationFilter !== 'all' && (
             <Chip
-              label={`AI alerts (${validationSummary.aiFlagged})`}
-              color={validationFilter === 'ai_flagged' ? 'warning' : 'default'}
-              variant={validationSummary.aiFlagged ? 'filled' : 'outlined'}
-              onClick={() => toggleValidationFilter('ai_flagged')}
-              disabled={!validationSummary.aiFlagged}
-              sx={{ fontWeight: 600 }}
+              label="Clear filter"
+              onClick={() => setValidationFilter('all')}
+              variant="outlined"
             />
-          </span>
-        </Tooltip>
-        <Tooltip title="Days where technician's total exceeds 12h">
-          <span>
-            <Chip
-              label={`Daily > ${DAILY_HOUR_CAP}h (${validationSummary.overCap})`}
-              color={validationFilter === 'overcap' ? 'warning' : 'default'}
-              variant={validationSummary.overCap ? 'filled' : 'outlined'}
-              onClick={() => toggleValidationFilter('overcap')}
-              disabled={!validationSummary.overCap}
-              sx={{ fontWeight: 600 }}
-            />
-          </span>
-        </Tooltip>
-        {validationFilter !== 'all' && (
-          <Chip
-            label="Clear filter"
-            onClick={() => setValidationFilter('all')}
-            variant="outlined"
-          />
-        )}
+          )}
+        </Box>
       </Box>
+
+      <Box sx={{ mb: 0.5 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'text.secondary' }}>
+          Alerts
+        </Typography>
+        <Box sx={{ mt: 0.25 }}>
+          {policyAlert && (
+            <Alert
+              severity={policyAlert.severity}
+              sx={{ mb: 0.5 }}
+              action={
+                policyAlert.cta ? (
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => navigate(policyAlert.cta!.to)}
+                  >
+                    {policyAlert.cta.label}
+                  </Button>
+                ) : null
+              }
+            >
+              <AlertTitle>{policyAlert.title}</AlertTitle>
+              {policyAlert.message}
+            </Alert>
+          )}
+
+          {caOt2Alert && (
+            <Alert severity={caOt2Alert.severity} sx={{ mb: 0.5 }}>
+              <AlertTitle>{caOt2Alert.title}</AlertTitle>
+              {'message' in caOt2Alert ? (
+                <Typography variant="body2">{caOt2Alert.message}</Typography>
+              ) : (
+                <Box component="ul" sx={{ pl: 2, my: 0 }}>
+                  {caOt2Alert.rows.map((row) => {
+                    const dateLabel = formatTenantDate(row.date, tenantContext);
+                    const ot2Label = formatTenantNumber(row.ot2Hours, tenantContext, 2);
+                    const totalLabel = formatTenantNumber(row.totalHours, tenantContext, 2);
+                    return (
+                      <li key={row.date}>
+                        {dateLabel}: {ot2Label}h at 2.0x ({totalLabel}h worked)
+                      </li>
+                    );
+                  })}
+                </Box>
+              )}
+            </Alert>
+          )}
+
+          {!policyAlert && !caOt2Alert && (
+            <Typography variant="body2" sx={{ color: 'text.secondary', py: 0.5 }}>
+              No alerts for this week
+            </Typography>
+          )}
+        </Box>
+      </Box>
+
+        {currentCalendarViewType === 'timeGridWeek' && (
+          <Card sx={{ mb: 0.5, borderRadius: 2, boxShadow: 0, border: '1px solid', borderColor: 'grey.200' }}>
+            <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Weekly breakdown
+                </Typography>
+                {weekSummary?.policy_key && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    Policy: {String(weekSummary.policy_key)}
+                  </Typography>
+                )}
+                {weekSummary?.workweek_start && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    Workweek start: {formatTenantDate(weekSummary.workweek_start, tenantContext)}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Manual QA (DevTools): switch to Week view => Network shows GET /api/timesheets/summary?date=YYYY-MM-DD */}
+
+              {weekSummaryStatus === 'loading' && (
+                <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                  Loading summary…
+                </Typography>
+              )}
+
+              {weekSummaryStatus === 'error' && (
+                <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                  Summary unavailable
+                </Typography>
+              )}
+
+              {weekSummaryStatus === 'loaded' && weekSummary && (
+                <Grid container spacing={1} sx={{ mt: 0.25 }}>
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>Regular</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2)} h
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      OT ({formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1)}x)
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2)} h
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>OT (2.0x)</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2)} h
+                    </Typography>
+                  </Grid>
+                </Grid>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
       {/* Calendar Container - Scrollable */}
       <Paper 
@@ -2202,7 +2407,19 @@ const TimesheetCalendar: React.FC = () => {
           dateClick={handleDateClick}
           height="100%" // Usar 100% da altura disponível
           locale="en"
-          firstDay={1}
+          views={{
+            // Manual QA:
+            // - US tenant (week_start Sunday): Week view shows Sunday first; summary/alerts align to Sun–Sat.
+            // - EU tenant (week_start Monday): Week view shows Monday first.
+            // - DevTools Network: switching to Week triggers GET /api/timesheets/summary?date=YYYY-MM-DD
+            //   where date corresponds to the visible first day column.
+            timeGridWeek: {
+              firstDay: weekFirstDay,
+            },
+            listWeek: {
+              firstDay: weekFirstDay,
+            },
+          }}
           weekNumbers={!isMobile}
           // Time grid configurations - Todas as 24 horas
           slotMinTime="00:00:00" // Início: meia-noite

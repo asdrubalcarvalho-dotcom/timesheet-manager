@@ -129,6 +129,7 @@ class USOvertimeTest extends TenantTestCase
             'overtime_hours' => 10.0,
             'overtime_rate' => 1.5,
             'workweek_start' => '2026-01-11',
+            'policy_key' => 'US-CA',
         ]);
     }
 
@@ -170,6 +171,7 @@ class USOvertimeTest extends TenantTestCase
             'overtime_hours' => 5.0,
             'overtime_rate' => 1.5,
             'workweek_start' => '2026-01-11',
+            'policy_key' => 'US-NY',
         ]);
     }
 
@@ -202,6 +204,7 @@ class USOvertimeTest extends TenantTestCase
             'overtime_hours' => 0.0,
             'overtime_rate' => 1.5,
             'workweek_start' => '2026-01-11',
+            'policy_key' => 'US-NY',
         ]);
     }
 
@@ -243,6 +246,7 @@ class USOvertimeTest extends TenantTestCase
             'overtime_hours' => 5.0,
             'overtime_rate' => 1.5,
             'workweek_start' => '2026-01-11',
+            'policy_key' => 'US-FLSA',
         ]);
     }
 
@@ -283,6 +287,7 @@ class USOvertimeTest extends TenantTestCase
             'overtime_hours' => 0.0,
             'overtime_rate' => 1.5,
             'workweek_start' => '2026-01-12',
+            'policy_key' => 'NON-US',
         ]);
     }
 

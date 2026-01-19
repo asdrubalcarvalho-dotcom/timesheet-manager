@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tenancy;
 
 use App\Models\Tenant;
+use App\Services\Compliance\OvertimeRuleResolver;
 
 final readonly class TenantContext
 {
@@ -13,6 +14,14 @@ final readonly class TenantContext
          * Region from tenant settings (e.g. EU/US). Used for presentation defaults.
          */
         public ?string $region,
+        /**
+         * US state code from tenant settings (e.g. CA/NY). Used for compliance defaults.
+         */
+        public ?string $state,
+        /**
+         * Canonical compliance policy key derived from tenant settings.
+         */
+        public string $policyKey,
         /**
          * IETF locale tag for frontend Intl APIs (e.g. en-US, pt-PT).
          */
@@ -49,6 +58,11 @@ final readonly class TenantContext
         $region = strtoupper(trim((string) data_get($tenant->settings ?? [], 'region', '')));
         $region = $region !== '' ? $region : null;
 
+        $state = strtoupper(trim((string) data_get($tenant->settings ?? [], 'state', '')));
+        $state = $state !== '' ? $state : null;
+
+        $policyKey = app(OvertimeRuleResolver::class)->policyKeyForTenant($tenant);
+
         $locale = (string) $localeConfig['app_locale'];
         $presentationLocale = (string) $localeConfig['locale'];
         $numberLocale = (string) $localeConfig['number_locale'];
@@ -67,6 +81,8 @@ final readonly class TenantContext
 
         return new self(
             region: $region,
+            state: $state,
+            policyKey: $policyKey,
             presentationLocale: $presentationLocale,
             locale: $locale,
             timezone: $timezone,
@@ -88,6 +104,8 @@ final readonly class TenantContext
     {
         return [
             'region' => $this->region,
+            'state' => $this->state,
+            'policy_key' => $this->policyKey,
             'timezone' => $this->timezone,
             'locale' => $this->presentationLocale,
             'date_format' => $this->dateFormat,

@@ -7,6 +7,8 @@ import {
   Typography,
   CircularProgress,
   Alert,
+  AlertTitle,
+  Button,
   Paper,
   useTheme,
   alpha
@@ -37,13 +39,18 @@ import { dashboardApi } from '../../services/api';
 import type { DashboardStatistics } from '../../types';
 import { useAuth } from '../Auth/AuthContext';
 import PageHeader from '../Common/PageHeader';
+import { useNavigate } from 'react-router-dom';
+import { getPolicyAlertModel } from '../../utils/policyAlert';
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
-  const { user } = useAuth();
+  const { user, tenantContext } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState<DashboardStatistics | null>(null);
+
+  const policyAlert = React.useMemo(() => getPolicyAlertModel(tenantContext), [tenantContext]);
 
   useEffect(() => {
     loadStatistics();
@@ -142,6 +149,23 @@ const Dashboard: React.FC = () => {
         title="Dashboard"
         subtitle={`Welcome back, ${user?.name || 'User'}! Here's your overview for the last 30 days.`}
       />
+
+      {policyAlert && (
+        <Alert
+          severity={policyAlert.severity}
+          sx={{ mt: 2 }}
+          action={
+            policyAlert.cta ? (
+              <Button color="inherit" size="small" onClick={() => navigate(policyAlert.cta!.to)}>
+                {policyAlert.cta.label}
+              </Button>
+            ) : null
+          }
+        >
+          <AlertTitle>{policyAlert.title}</AlertTitle>
+          {policyAlert.message}
+        </Alert>
+      )}
 
       {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 4, mt: 4 }}>

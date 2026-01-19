@@ -151,6 +151,7 @@ export interface Timesheet {
   project?: Project;
   task?: Task;
   location?: Location;
+  permissions?: Partial<TimesheetPermissions>;
   ai_flagged?: boolean;
   ai_score?: number | null;
   ai_feedback?: string[] | null;

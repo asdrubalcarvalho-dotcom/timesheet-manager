@@ -124,6 +124,7 @@ Route::middleware(['tenant.initialize', 'tenant.set-context'])->group(function (
             Route::post('cancel-scheduled-downgrade', [\App\Modules\Billing\Controllers\BillingController::class, 'cancelScheduledDowngrade']);
             Route::post('toggle-addon', [\App\Modules\Billing\Controllers\BillingController::class, 'toggleAddon']);
             Route::put('ai-toggle', [TenantController::class, 'updateAiToggle'])->middleware('throttle:edit');
+            Route::put('compliance-settings', [TenantController::class, 'updateComplianceSettings'])->middleware('throttle:edit');
             Route::post('licenses/increase', [\App\Modules\Billing\Controllers\BillingController::class, 'increaseLicenses'])->middleware('throttle:edit');
             Route::post('checkout/start', [\App\Modules\Billing\Controllers\BillingController::class, 'checkoutStart']);
             Route::post('checkout/confirm', [\App\Modules\Billing\Controllers\BillingController::class, 'checkoutConfirm']);
