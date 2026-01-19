@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateTenantAiRequest;
+use App\Http\Requests\Admin\UpdateTenantComplianceRequest;
 use App\Models\Company;
 use App\Models\PendingTenantSignup;
 use App\Models\Tenant;
@@ -421,6 +422,44 @@ class TenantController extends Controller
         return response()->json([
             'tenant' => [
                 'ai_enabled' => (bool) $tenant->ai_enabled,
+            ],
+        ]);
+    }
+
+    /**
+     * Update tenant compliance settings (e.g., US state for overtime policy resolution).
+     */
+    public function updateComplianceSettings(UpdateTenantComplianceRequest $request, ?Tenant $tenant = null): JsonResponse
+    {
+        $tenant ??= tenancy()->tenant;
+
+        if (!$tenant) {
+            return response()->json([
+                'message' => 'Tenant context is required to update compliance settings.',
+            ], 400);
+        }
+
+        $rawState = $request->input('state');
+        $state = is_string($rawState) ? strtoupper(trim($rawState)) : null;
+        $state = ($state !== null && $state !== '') ? $state : null;
+
+        $settings = is_array($tenant->settings) ? $tenant->settings : [];
+
+        if ($state === null) {
+            unset($settings['state']);
+        } else {
+            $settings['state'] = $state;
+        }
+
+        $tenant->update([
+            'settings' => $settings,
+        ]);
+
+        return response()->json([
+            'tenant' => [
+                'settings' => [
+                    'state' => data_get($tenant->settings ?? [], 'state'),
+                ],
             ],
         ]);
     }

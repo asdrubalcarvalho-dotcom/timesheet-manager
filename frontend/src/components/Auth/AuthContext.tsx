@@ -47,6 +47,9 @@ interface Tenant {
 
 export interface TenantContext {
   region: string | null;
+  week_start?: string | null;
+  state?: string | null;
+  policy_key?: string | null;
   timezone: string;
   locale: string;
   date_format: string;
@@ -73,6 +76,7 @@ interface AuthContextType {
   tenantSlug: string | null;
   login: (email: string, password: string, tenantSlug: string, captchaToken?: string | null) => Promise<LoginResult>;
   logout: () => void;
+  refreshUser: () => Promise<boolean>;
   loading: boolean;
   isOwner: () => boolean;
   isManager: () => boolean;
@@ -115,8 +119,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [tenantSlug, setTenantSlugState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-
-
   /* ---------------------------------------------------------------
      NORMALIZE USER
   --------------------------------------------------------------- */
@@ -155,6 +157,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       tenant_id: userData?.tenant_id
     };
   }, []);
+
+  const refreshUser = useCallback(async (): Promise<boolean> => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const storedTenant = localStorage.getItem('tenant_slug');
+
+      if (!token || !storedTenant) {
+        return false;
+      }
+
+      const response = await fetch(`${API_URL}/api/user`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Tenant': storedTenant,
+        },
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const userData = await response.json();
+      setUser(normalizeUser(userData));
+      setTenant(userData?.tenant ?? null);
+      setTenantContext(userData?.tenant_context ?? null);
+      setTenantSlugState(storedTenant);
+      return true;
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+      return false;
+    }
+  }, [normalizeUser]);
 
   /* ---------------------------------------------------------------
      CHECK SESSION ON LOAD
@@ -373,6 +407,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         tenantSlug,
         login,
         logout,
+        refreshUser,
         loading,
         isOwner,
         isManager,

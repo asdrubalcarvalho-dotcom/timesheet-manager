@@ -231,6 +231,15 @@ export interface TimesheetManagerViewParams {
   technician_ids?: number[];
 }
 
+export interface TimesheetWeekSummary {
+  regular_hours: number;
+  overtime_hours: number;
+  overtime_rate: number;
+  overtime_hours_2_0: number;
+  workweek_start: string | null;
+  policy_key?: 'US-CA' | 'US-NY' | 'US-FLSA' | 'NON-US' | string;
+}
+
 // Technicians API
 export const techniciansApi = {
   getAll: (): Promise<ApiResponse<Technician[]>> =>
@@ -282,6 +291,13 @@ export const timesheetsApi = {
     date_to?: string; 
   }): Promise<Timesheet[]> =>
     api.get('/api/timesheets', { params }).then(res => res.data),
+
+  getSummary: (params: {
+    date: string;
+    project_id?: number;
+    technician_id?: number;
+  }): Promise<TimesheetWeekSummary> =>
+    api.get('/api/timesheets/summary', { params }).then(res => res.data),
   
   getById: (id: number): Promise<TimesheetMutationResponse> =>
     api.get(`/api/timesheets/${id}`).then(res => res.data),
@@ -510,6 +526,12 @@ export const tenantApi = {
     api.put('/api/billing/ai-toggle', {
       ai_enabled: aiEnabled,
     }).then(res => res.data),
+
+  /**
+   * Update compliance settings for current tenant (tenant-scoped route).
+   */
+  updateComplianceSettings: (payload: { state: string | null }): Promise<any> =>
+    api.put('/api/billing/compliance-settings', payload).then(res => res.data),
 };
 
 // Task-Location Management API

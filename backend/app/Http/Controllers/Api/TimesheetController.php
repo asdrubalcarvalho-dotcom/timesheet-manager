@@ -710,6 +710,7 @@ class TimesheetController extends Controller
         /** @var \App\Models\Tenant $tenant */
         $tenant = app(\App\Models\Tenant::class);
         $context = app(TenantContext::class);
+        $policyKey = app(\App\Services\Compliance\OvertimeRuleResolver::class)->policyKeyForTenant($tenant);
 
         $user = $request->user();
         $isOwner = $user->hasRole('Owner');
@@ -724,7 +725,9 @@ class TimesheetController extends Controller
                     'regular_hours' => 0,
                     'overtime_hours' => 0,
                     'overtime_rate' => 1.5,
+                    'overtime_hours_2_0' => 0,
                     'workweek_start' => null,
+                    'policy_key' => $policyKey,
                 ]);
             }
         }
@@ -747,7 +750,9 @@ class TimesheetController extends Controller
                     'regular_hours' => 0,
                     'overtime_hours' => 0,
                     'overtime_rate' => 1.5,
+                    'overtime_hours_2_0' => 0,
                     'workweek_start' => $period['start']->toDateString(),
+                    'policy_key' => $policyKey,
                 ]);
             }
 
@@ -791,6 +796,7 @@ class TimesheetController extends Controller
             'overtime_rate' => $overtime['overtime_rate'],
             'overtime_hours_2_0' => round((float) ($overtime['overtime_hours_2_0'] ?? 0.0), 2),
             'workweek_start' => $period['start']->toDateString(),
+            'policy_key' => $policyKey,
         ]);
     }
 
