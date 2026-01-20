@@ -36,6 +36,7 @@ import {
   Button,
   Alert,
   AlertTitle,
+  Drawer,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -54,6 +55,8 @@ import {
   Tooltip,
   useTheme,
   useMediaQuery,
+  Tabs,
+  Tab,
   Avatar,
   ToggleButton,
   ToggleButtonGroup
@@ -173,10 +176,17 @@ const TimesheetCalendar: React.FC = () => {
 
   const policyAlert = useMemo(() => getPolicyAlertModel(tenantContext), [tenantContext]);
 
-  const weekFirstDay = useMemo(
-    () => weekStartToFirstDay(tenantContext?.week_start ?? tenant?.week_start),
-    [tenantContext?.week_start, tenant?.week_start]
-  );
+  const sourceWeekStart = tenantContext?.week_start ?? tenant?.week_start;
+  const weekFirstDay = useMemo(() => weekStartToFirstDay(sourceWeekStart), [sourceWeekStart]);
+
+  useEffect(() => {
+    console.debug('[TimesheetCalendar] week start debug', {
+      region: tenantContext?.region,
+      tenantWeekStart: tenant?.week_start,
+      ctxWeekStart: tenantContext?.week_start,
+      weekFirstDay,
+    });
+  }, [weekFirstDay, tenant?.week_start, tenantContext?.week_start, tenantContext?.region]);
   
   // Calendar ref to access API methods
   const calendarRef = useRef<FullCalendar>(null);
@@ -198,6 +208,22 @@ const TimesheetCalendar: React.FC = () => {
   const [currentCalendarViewType, setCurrentCalendarViewType] = useState<string>('dayGridMonth');
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string | null>(null);
 
+  const isTenantDrivenFirstDayView =
+    currentCalendarViewType === 'timeGridWeek' ||
+    currentCalendarViewType === 'listWeek' ||
+    currentCalendarViewType === 'dayGridMonth' ||
+    currentCalendarViewType === 'listMonth';
+
+  useEffect(() => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+
+    // FullCalendar sometimes doesn't reliably re-apply `views.*.firstDay` after auth/tenant arrives.
+    // We explicitly set the global option only while in tenant-driven views.
+    // For other views, reset to Sunday (keeps current behavior with locale="en").
+    api.setOption('firstDay', isTenantDrivenFirstDayView ? weekFirstDay : 0);
+  }, [isTenantDrivenFirstDayView, weekFirstDay]);
+
   // Week summary (read-only UI)
   const [weekSummary, setWeekSummary] = useState<{
     regular_hours: number;
@@ -209,6 +235,25 @@ const TimesheetCalendar: React.FC = () => {
   } | null>(null);
   const [weekSummaryStatus, setWeekSummaryStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const lastSummaryDateRef = useRef<string | null>(null);
+
+  // Insights drawer (UI-only)
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [insightsTab, setInsightsTab] = useState<'alerts' | 'weekly'>('alerts');
+  const insightsButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleCloseInsights = useCallback(() => {
+    setInsightsOpen(false);
+    window.setTimeout(() => {
+      insightsButtonRef.current?.focus();
+    }, 0);
+  }, []);
+
+  const handleSwitchToWeekView = useCallback(() => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    api.setOption('firstDay', weekFirstDay);
+    api.changeView('timeGridWeek');
+  }, [weekFirstDay]);
   
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState({ 
@@ -1238,6 +1283,28 @@ const TimesheetCalendar: React.FC = () => {
     );
   }, [currentCalendarViewType, currentWeekStartDate, weekSummary?.workweek_start, policyVisibleTimesheets]);
 
+  const policyPillLabel = useMemo(() => {
+    const raw = weekSummary?.policy_key ?? tenantContext?.policy_key;
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    return trimmed ? `Policy: ${trimmed}` : null;
+  }, [tenantContext?.policy_key, weekSummary?.policy_key]);
+
+  const weeklySummaryPillLabel = useMemo(() => {
+    if (currentCalendarViewType !== 'timeGridWeek') return null;
+
+    if (weekSummaryStatus === 'loading') return 'Summary: loading…';
+    if (weekSummaryStatus === 'error') return 'Summary unavailable';
+    if (weekSummaryStatus !== 'loaded' || !weekSummary) return 'Summary unavailable';
+
+    const regular = formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2);
+    const overtimeRate = formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1);
+    const overtime = formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2);
+    const overtime2 = formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2);
+
+    return `Regular ${regular}h | OT${overtimeRate} ${overtime}h | OT2.0 ${overtime2}h`;
+  }, [currentCalendarViewType, tenantContext, weekSummary, weekSummaryStatus]);
+
   const caOt2Alert = useMemo(() => {
     const region = String(tenantContext?.region ?? '').toUpperCase();
     const state = String(tenantContext?.state ?? '').toUpperCase();
@@ -1301,6 +1368,25 @@ const TimesheetCalendar: React.FC = () => {
       rows,
     };
   }, [tenantContext, currentCalendarViewType, currentWeekStartDate, policyVisibleTimesheets, weekSummary, weekSummaryStatus, caOt2Candidates]);
+
+  const insightsAlertsCount = useMemo(() => {
+    let count = 0;
+    if (policyAlert) count += 1;
+    if (caOt2Alert) count += 1;
+    return count;
+  }, [policyAlert, caOt2Alert]);
+
+  const handleOpenInsights = useCallback(() => {
+    const defaultTab: 'alerts' | 'weekly' =
+      insightsAlertsCount > 0
+        ? 'alerts'
+        : currentCalendarViewType === 'timeGridWeek' && (weekSummaryStatus === 'loaded' || Boolean(weekSummary))
+          ? 'weekly'
+          : 'alerts';
+
+    setInsightsTab(defaultTab);
+    setInsightsOpen(true);
+  }, [insightsAlertsCount, currentCalendarViewType, weekSummaryStatus, weekSummary]);
 
   // Filter tasks for selected project
   const filteredTasks = (tasks || []).filter(task => task.project_id === projectId);
@@ -1973,11 +2059,19 @@ const TimesheetCalendar: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Box sx={{ pt: 0.5, mb: 0.5 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'text.secondary' }}>
-          Filters
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 0.25 }}>
+      {/* Compact top strip: filters (left) + policy/summary pills + Insights (right) */}
+      <Box
+        sx={{
+          pt: 0.5,
+          mb: 0.5,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1,
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
+        }}
+      >
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
           <Tooltip title="Entries flagged by AI Cortex">
             <span>
               <Chip
@@ -2010,124 +2104,209 @@ const TimesheetCalendar: React.FC = () => {
             />
           )}
         </Box>
-      </Box>
 
-      <Box sx={{ mb: 0.5 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'text.secondary' }}>
-          Alerts
-        </Typography>
-        <Box sx={{ mt: 0.25 }}>
-          {policyAlert && (
-            <Alert
-              severity={policyAlert.severity}
-              sx={{ mb: 0.5 }}
-              action={
-                policyAlert.cta ? (
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={() => navigate(policyAlert.cta!.to)}
-                  >
-                    {policyAlert.cta.label}
-                  </Button>
-                ) : null
-              }
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+          {policyPillLabel && (
+            <Chip label={policyPillLabel} size="small" variant="outlined" sx={{ fontWeight: 700 }} />
+          )}
+
+          {weeklySummaryPillLabel && (
+            <Chip label={weeklySummaryPillLabel} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
+          )}
+
+          <Badge
+            variant="dot"
+            color="warning"
+            invisible={insightsAlertsCount === 0}
+            overlap="rectangular"
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            sx={{ '& .MuiBadge-badge': { right: 6, top: 6 } }}
+          >
+            <Button
+              ref={insightsButtonRef}
+              variant="contained"
+              size="small"
+              onClick={handleOpenInsights}
+              sx={{ whiteSpace: 'nowrap' }}
             >
-              <AlertTitle>{policyAlert.title}</AlertTitle>
-              {policyAlert.message}
-            </Alert>
-          )}
-
-          {caOt2Alert && (
-            <Alert severity={caOt2Alert.severity} sx={{ mb: 0.5 }}>
-              <AlertTitle>{caOt2Alert.title}</AlertTitle>
-              {'message' in caOt2Alert ? (
-                <Typography variant="body2">{caOt2Alert.message}</Typography>
-              ) : (
-                <Box component="ul" sx={{ pl: 2, my: 0 }}>
-                  {caOt2Alert.rows.map((row) => {
-                    const dateLabel = formatTenantDate(row.date, tenantContext);
-                    const ot2Label = formatTenantNumber(row.ot2Hours, tenantContext, 2);
-                    const totalLabel = formatTenantNumber(row.totalHours, tenantContext, 2);
-                    return (
-                      <li key={row.date}>
-                        {dateLabel}: {ot2Label}h at 2.0x ({totalLabel}h worked)
-                      </li>
-                    );
-                  })}
-                </Box>
-              )}
-            </Alert>
-          )}
-
-          {!policyAlert && !caOt2Alert && (
-            <Typography variant="body2" sx={{ color: 'text.secondary', py: 0.5 }}>
-              No alerts for this week
-            </Typography>
-          )}
+              Insights
+            </Button>
+          </Badge>
         </Box>
       </Box>
 
-        {currentCalendarViewType === 'timeGridWeek' && (
-          <Card sx={{ mb: 0.5, borderRadius: 2, boxShadow: 0, border: '1px solid', borderColor: 'grey.200' }}>
-            <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                  Weekly breakdown
-                </Typography>
-                {weekSummary?.policy_key && (
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Policy: {String(weekSummary.policy_key)}
-                  </Typography>
+      <Drawer
+        anchor={isMobile ? 'bottom' : 'right'}
+        open={insightsOpen}
+        onClose={handleCloseInsights}
+        ModalProps={{ keepMounted: true }}
+        PaperProps={{
+          sx: isMobile
+            ? { height: '80vh', borderTopLeftRadius: 12, borderTopRightRadius: 12 }
+            : { width: 420 },
+        }}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              display: 'flex',
+              alignItems: 'center',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              gap: 1,
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, flex: 1 }}>
+              Insights
+            </Typography>
+            <IconButton aria-label="Close insights" onClick={handleCloseInsights}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Tabs
+            value={insightsTab}
+            onChange={(_, next) => {
+              if (next === 'alerts' || next === 'weekly') {
+                setInsightsTab(next);
+              }
+            }}
+            variant="fullWidth"
+          >
+            <Tab value="alerts" label={insightsAlertsCount ? `Alerts (${insightsAlertsCount})` : 'Alerts'} />
+            <Tab value="weekly" label="Weekly breakdown" />
+          </Tabs>
+
+          <Box sx={{ p: 2, overflow: 'auto', flex: 1 }}>
+            {insightsTab === 'alerts' ? (
+              <Box>
+                {policyAlert && (
+                  <Alert
+                    severity={policyAlert.severity}
+                    sx={{ mb: 1 }}
+                    action={
+                      policyAlert.cta ? (
+                        <Button
+                          color="inherit"
+                          size="small"
+                          onClick={() => navigate(policyAlert.cta!.to)}
+                        >
+                          {policyAlert.cta.label}
+                        </Button>
+                      ) : null
+                    }
+                  >
+                    <AlertTitle>{policyAlert.title}</AlertTitle>
+                    {policyAlert.message}
+                  </Alert>
                 )}
-                {weekSummary?.workweek_start && (
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Workweek start: {formatTenantDate(weekSummary.workweek_start, tenantContext)}
+
+                {caOt2Alert && (
+                  <Alert severity={caOt2Alert.severity} sx={{ mb: 1 }}>
+                    <AlertTitle>{caOt2Alert.title}</AlertTitle>
+                    {'message' in caOt2Alert ? (
+                      <Typography variant="body2">{caOt2Alert.message}</Typography>
+                    ) : (
+                      <Box component="ul" sx={{ pl: 2, my: 0 }}>
+                        {caOt2Alert.rows.map((row) => {
+                          const dateLabel = formatTenantDate(row.date, tenantContext);
+                          const ot2Label = formatTenantNumber(row.ot2Hours, tenantContext, 2);
+                          const totalLabel = formatTenantNumber(row.totalHours, tenantContext, 2);
+                          return (
+                            <li key={row.date}>
+                              {dateLabel}: {ot2Label}h at 2.0x ({totalLabel}h worked)
+                            </li>
+                          );
+                        })}
+                      </Box>
+                    )}
+                  </Alert>
+                )}
+
+                {!policyAlert && !caOt2Alert && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No alerts
                   </Typography>
                 )}
               </Box>
-
-              {/* Manual QA (DevTools): switch to Week view => Network shows GET /api/timesheets/summary?date=YYYY-MM-DD */}
-
-              {weekSummaryStatus === 'loading' && (
-                <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                  Loading summary…
-                </Typography>
-              )}
-
-              {weekSummaryStatus === 'error' && (
-                <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                  Summary unavailable
-                </Typography>
-              )}
-
-              {weekSummaryStatus === 'loaded' && weekSummary && (
-                <Grid container spacing={1} sx={{ mt: 0.25 }}>
-                  <Grid item xs={12} sm={4}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>Regular</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2)} h
+            ) : (
+              <Box>
+                {currentCalendarViewType !== 'timeGridWeek' ? (
+                  <Box>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                      Weekly breakdown is available in Week view.
                     </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      OT ({formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1)}x)
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2)} h
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>OT (2.0x)</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2)} h
-                    </Typography>
-                  </Grid>
-                </Grid>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                    <Button variant="outlined" size="small" onClick={handleSwitchToWeekView}>
+                      Switch to Week view
+                    </Button>
+                  </Box>
+                ) : (
+                  <Card sx={{ borderRadius: 2, boxShadow: 0, border: '1px solid', borderColor: 'grey.200' }}>
+                    <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          Weekly breakdown
+                        </Typography>
+                        {weekSummary?.policy_key && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Policy: {String(weekSummary.policy_key)}
+                          </Typography>
+                        )}
+                        {weekSummary?.workweek_start && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Workweek start: {formatTenantDate(weekSummary.workweek_start, tenantContext)}
+                          </Typography>
+                        )}
+                      </Box>
+
+                      {/* Manual QA (DevTools): switch to Week view => Network shows GET /api/timesheets/summary?date=YYYY-MM-DD */}
+
+                      {weekSummaryStatus === 'loading' && (
+                        <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                          Loading summary…
+                        </Typography>
+                      )}
+
+                      {weekSummaryStatus === 'error' && (
+                        <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                          Summary unavailable
+                        </Typography>
+                      )}
+
+                      {weekSummaryStatus === 'loaded' && weekSummary && (
+                        <Grid container spacing={1} sx={{ mt: 0.25 }}>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Regular</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2)} h
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              OT ({formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1)}x)
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2)} h
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>OT (2.0x)</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2)} h
+                            </Typography>
+                          </Grid>
+                        </Grid>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </Box>
+            )}
+          </Box>
+        </Box>
+      </Drawer>
 
       {/* Calendar Container - Scrollable */}
       <Paper 
@@ -2374,6 +2553,7 @@ const TimesheetCalendar: React.FC = () => {
         }}
       >
         <FullCalendar
+          key={`weekFirstDay:${weekFirstDay}`}
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
           initialView="dayGridMonth"
@@ -2407,16 +2587,31 @@ const TimesheetCalendar: React.FC = () => {
           dateClick={handleDateClick}
           height="100%" // Usar 100% da altura disponível
           locale="en"
+          firstDay={
+            currentCalendarViewType === 'timeGridWeek' ||
+            currentCalendarViewType === 'listWeek' ||
+            currentCalendarViewType === 'dayGridMonth' ||
+            currentCalendarViewType === 'listMonth'
+              ? weekFirstDay
+              : undefined
+          }
           views={{
             // Manual QA:
-            // - US tenant (week_start Sunday): Week view shows Sunday first; summary/alerts align to Sun–Sat.
-            // - EU tenant (week_start Monday): Week view shows Monday first.
+            // - EU tenant (week_start monday): Week/ListWeek views are Monday-first.
+            // - US tenant (week_start sunday): Week/ListWeek views are Sunday-first.
+            // - Month/ListMonth also follow tenant week_start.
             // - DevTools Network: switching to Week triggers GET /api/timesheets/summary?date=YYYY-MM-DD
             //   where date corresponds to the visible first day column.
+            dayGridMonth: {
+              firstDay: weekFirstDay,
+            },
             timeGridWeek: {
               firstDay: weekFirstDay,
             },
             listWeek: {
+              firstDay: weekFirstDay,
+            },
+            listMonth: {
               firstDay: weekFirstDay,
             },
           }}
