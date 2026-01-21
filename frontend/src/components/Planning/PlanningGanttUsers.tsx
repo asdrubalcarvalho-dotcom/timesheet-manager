@@ -241,6 +241,7 @@ import api from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 import ProjectMembersDialog from './ProjectMembersDialog';
 import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate } from '../../utils/tenantFormatting';
 
 interface User {
   id: number;
@@ -332,7 +333,8 @@ const normalizeRoleLabel = (value: any): string => {
 
 const buildColumns = (
   visibleColumns: VisibleColumnsState,
-  resolveRoleBadge?: (task: any) => RoleBadge | null
+  resolveRoleBadge?: (task: any) => RoleBadge | null,
+  formatGridDate?: (value: unknown) => string
 ) => {
   const cols: any[] = [];
 
@@ -355,11 +357,29 @@ const buildColumns = (
 
 
   if (visibleColumns.start_date) {
-    cols.push({ name: 'start_date', label: 'Start', width: 100, align: 'center' });
+    cols.push({
+      name: 'start_date',
+      label: 'Start',
+      width: 100,
+      align: 'center',
+      template: (task: any) => {
+        if (!formatGridDate) return String(task?.start_date ?? '');
+        return formatGridDate(task?.start_date);
+      },
+    });
   }
 
   if (visibleColumns.end_date) {
-    cols.push({ name: 'end_date', label: 'End', width: 100, align: 'center' });
+    cols.push({
+      name: 'end_date',
+      label: 'End',
+      width: 100,
+      align: 'center',
+      template: (task: any) => {
+        if (!formatGridDate) return String(task?.end_date ?? '');
+        return formatGridDate(task?.end_date);
+      },
+    });
   }
 
   if (visibleColumns.progress) {
@@ -693,8 +713,26 @@ const buildUsersPlanning = (
 
 const PlanningGanttUsers: React.FC = () => {
   useTenantGuard();
-  const { hasPermission } = useAuth();
+  const { hasPermission, tenantContext } = useAuth();
   const canCreatePlanning = hasPermission('create-planning');
+
+  const formatGridDate = useMemo(() => {
+    const toYmd = (value: unknown): string | null => {
+      if (value instanceof Date) {
+        return dayjs(value).isValid() ? dayjs(value).format('YYYY-MM-DD') : null;
+      }
+      if (typeof value === 'string') {
+        const s = value.trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      }
+      return null;
+    };
+
+    return (value: unknown): string => {
+      const ymd = toYmd(value);
+      return ymd ? formatTenantDate(ymd, tenantContext) : '';
+    };
+  }, [tenantContext]);
 
   const ganttContainerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -1092,7 +1130,12 @@ const PlanningGanttUsers: React.FC = () => {
           gantt.config.auto_scheduling = false;
           gantt.config.show_progress = true;
           gantt.config.row_height = 34;
-          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, resolveRoleBadge);
+          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, resolveRoleBadge, formatGridDate);
+
+          gantt.templates.tooltip_date_format = (date: Date) => {
+            const ymd = dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DD') : '';
+            return ymd ? formatTenantDate(ymd, tenantContext) : '';
+          };
 
           let selectedTaskId: string | number | null = null;
           gantt.templates.task_class = (_start: Date, _end: Date, task: any) => {
@@ -1164,21 +1207,21 @@ const PlanningGanttUsers: React.FC = () => {
         }
       }
     };
-  }, [ganttReady, ganttInitialized, gridVisible, viewMode]);
+  }, [ganttReady, ganttInitialized, gridVisible, viewMode, formatGridDate, tenantContext]);
 
   // Update columns/grid when toggled
   useEffect(() => {
     if (!ganttInitialized || !window.gantt) return;
     const gantt = window.gantt;
     gantt.config.grid_width = gridVisible ? 300 : 0;
-    gantt.config.columns = buildColumns(visibleColumns, resolveRoleBadge);
+    gantt.config.columns = buildColumns(visibleColumns, resolveRoleBadge, formatGridDate);
     gantt.render();
     try {
       gantt.setSizes();
     } catch (e) {
       // no-op
     }
-  }, [visibleColumns, gridVisible, ganttInitialized, rolesByUserProject]);
+  }, [visibleColumns, gridVisible, ganttInitialized, rolesByUserProject, formatGridDate]);
 
   // Update view mode / scales
   useEffect(() => {

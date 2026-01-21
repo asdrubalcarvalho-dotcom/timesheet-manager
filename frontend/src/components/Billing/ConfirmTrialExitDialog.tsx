@@ -11,6 +11,8 @@ import {
   Alert,
 } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate } from '../../utils/tenantFormatting';
 
 interface ConfirmTrialExitDialogProps {
   open: boolean;
@@ -27,14 +29,8 @@ export const ConfirmTrialExitDialog: React.FC<ConfirmTrialExitDialogProps> = ({
   targetPlan,
   trialEndsAt,
 }) => {
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return 'unknown';
-    return new Date(dateString).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
+  const { tenantContext } = useAuth();
+  const trialEndsAtLabel = trialEndsAt ? formatTenantDate(trialEndsAt, tenantContext) : 'unknown';
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -56,7 +52,7 @@ export const ConfirmTrialExitDialog: React.FC<ConfirmTrialExitDialogProps> = ({
               What will happen:
             </Typography>
             <Typography variant="body2" component="ul" sx={{ pl: 2, mb: 0 }}>
-              <li><strong>Trial ends immediately</strong> (originally until {formatDate(trialEndsAt)})</li>
+              <li><strong>Trial ends immediately</strong> (originally until {trialEndsAtLabel})</li>
               <li>Plan changes to <strong>{targetPlan}</strong> right away (no scheduling)</li>
               <li>Features adjust according to the new plan</li>
               <li>Your billing cycle starts today</li>

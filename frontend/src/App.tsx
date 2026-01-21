@@ -5,11 +5,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import 'dayjs/locale/pt';
 import dayjs from 'dayjs';
+import 'dayjs/locale/en';
+import 'dayjs/locale/pt';
+import 'dayjs/locale/es';
+import 'dayjs/locale/fr';
+import 'dayjs/locale/de';
 
-// Set dayjs locale to Portuguese (Portugal) for DD/MM/YYYY format
-dayjs.locale('pt');
+import { getTenantUiLocale } from './utils/tenantFormatting';
 
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -38,6 +41,21 @@ const TasksManager = React.lazy(() => import('./components/Admin/TasksManager'))
 const LocationsManager = React.lazy(() => import('./components/Admin/LocationsManager'));
 const CountriesManager = React.lazy(() => import('./components/Admin/CountriesManager'));
 const UsersManager = React.lazy(() => import('./components/Admin/UsersManager'));
+
+const TenantDateLocalizationProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { tenantContext } = useAuth();
+  const adapterLocale = getTenantUiLocale(tenantContext);
+
+  useEffect(() => {
+    dayjs.locale(adapterLocale);
+  }, [adapterLocale]);
+
+  return (
+    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={adapterLocale}>
+      {children}
+    </LocalizationProvider>
+  );
+};
 const AdminAccessManagerPage = React.lazy(() => import('./pages/AdminAccessManager'));
 const TravelsList = React.lazy(() => import('./components/Travels/TravelsList'));
 const BillingPage = React.lazy(() => import('./components/Billing/BillingPage'));
@@ -348,9 +366,9 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt">
-          <CssBaseline />
-          <AuthProvider>
+        <CssBaseline />
+        <AuthProvider>
+          <TenantDateLocalizationProvider>
             <NotificationProvider>
               <BillingProvider>
                 <FeatureProvider>
@@ -358,8 +376,8 @@ const App: React.FC = () => {
                 </FeatureProvider>
               </BillingProvider>
             </NotificationProvider>
-          </AuthProvider>
-        </LocalizationProvider>
+          </TenantDateLocalizationProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

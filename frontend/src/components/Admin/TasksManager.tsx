@@ -36,6 +36,8 @@ import EmptyState from '../Common/EmptyState';
 import api, { taskLocationsApi } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 
 interface Task {
   id: number;
@@ -84,6 +86,8 @@ const normalizeApiResponse = <T,>(payload: any): T[] => {
 };
 
 const TasksManager: React.FC = () => {
+  const { tenantContext } = useAuth();
+  const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { showSuccess, showError } = useNotification();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -359,7 +363,7 @@ const TasksManager: React.FC = () => {
       width: 140,
       renderCell: ({ value }) => {
         if (!value) return <span style={{ color: '#999' }}>-</span>;
-        return <span>{dayjs(value).format('DD/MM/YYYY')}</span>;
+        return <span>{formatTenantDate(value, tenantContext)}</span>;
       }
     },
     {
@@ -368,7 +372,7 @@ const TasksManager: React.FC = () => {
       width: 140,
       renderCell: ({ value }) => {
         if (!value) return <span style={{ color: '#999' }}>-</span>;
-        return <span>{dayjs(value).format('DD/MM/YYYY')}</span>;
+        return <span>{formatTenantDate(value, tenantContext)}</span>;
       }
     },
     {
@@ -622,12 +626,14 @@ const TasksManager: React.FC = () => {
                 label="Start Date"
                 value={formData.start_date ? dayjs(formData.start_date) : null}
                 onChange={(newValue) => setFormData({ ...formData, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
+                format={datePickerFormat}
                 slotProps={{ textField: { fullWidth: true } }}
               />
               <DatePicker
                 label="End Date"
                 value={formData.end_date ? dayjs(formData.end_date) : null}
                 onChange={(newValue) => setFormData({ ...formData, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
+                format={datePickerFormat}
                 slotProps={{ textField: { fullWidth: true } }}
               />
             </Box>

@@ -22,6 +22,9 @@ import { useBilling } from '../../contexts/BillingContext';
 import { getTenantAiState } from '../Common/aiState';
 import ReportFiltersCard from '../Common/ReportFiltersCard';
 import ReportAISideTab from '../Common/ReportAISideTab';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, formatTenantDayMonth, getTenantDatePickerFormat, getTenantUiLocale } from '../../utils/tenantFormatting';
+import { weekStartToFirstDay } from '../../utils/weekStartToFirstDay';
 
 type HeatmapRequestPayload = {
   range: {
@@ -96,20 +99,20 @@ const diffDaysInclusive = (from: Date, to: Date): number => {
   return diff + 1;
 };
 
-const startOfWeekMonday = (date: Date): Date => {
+const startOfWeek = (date: Date, firstDay: 0 | 1): Date => {
   const d = new Date(date);
   const day = d.getDay(); // 0=Sun, 1=Mon
-  const delta = (day + 6) % 7; // days since Monday
+  const delta = firstDay === 1 ? (day + 6) % 7 : day; // days since week start
   d.setDate(d.getDate() - delta);
   d.setHours(0, 0, 0, 0);
   return d;
 };
 
-const formatTooltipDay = (date: Date): string =>
-  new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(date);
-
 const ApprovalHeatmapReport: React.FC = () => {
   const theme = useTheme();
+  const { tenantContext } = useAuth();
+  const firstDay = weekStartToFirstDay(tenantContext?.week_start);
+  const datePickerFormat = getTenantDatePickerFormat(tenantContext);
 
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
   const aiState = getTenantAiState(billingSummary, tenantAiEnabled);
@@ -205,17 +208,19 @@ const ApprovalHeatmapReport: React.FC = () => {
 
   const calendarStart = useMemo(() => {
     if (!fromDate) return null;
-    return startOfWeekMonday(fromDate);
-  }, [fromDate]);
+    return startOfWeek(fromDate, firstDay);
+  }, [fromDate, firstDay]);
 
   const calendarCells = useMemo(() => {
     if (!calendarStart || !toDate) return [] as string[];
     const end = new Date(toDate);
     end.setHours(0, 0, 0, 0);
 
-    // End on Sunday to close the last week
-    const endDay = end.getDay(); // 0=Sun
-    const addDays = (7 - ((endDay + 6) % 7) - 1 + 7) % 7; // days until Sunday when Monday is start
+    // End the grid at the end of the last displayed week.
+    // Monday-start -> end on Sunday. Sunday-start -> end on Saturday.
+    const endDay = end.getDay();
+    const targetEndDay = firstDay === 1 ? 0 : 6;
+    const addDays = (targetEndDay - endDay + 7) % 7;
     end.setDate(end.getDate() + addDays);
 
     const res: string[] = [];
@@ -225,7 +230,18 @@ const ApprovalHeatmapReport: React.FC = () => {
       d.setDate(d.getDate() + 1);
     }
     return res;
-  }, [calendarStart, toDate]);
+  }, [calendarStart, toDate, firstDay]);
+
+  const weekdayLabels = useMemo(() => {
+    const locale = getTenantUiLocale(tenantContext);
+    // Known Sunday: 2020-08-02, Monday: 2020-08-03
+    const base = firstDay === 0 ? new Date(Date.UTC(2020, 7, 2)) : new Date(Date.UTC(2020, 7, 3));
+    return Array.from({ length: 7 }, (_v, i) => {
+      const d = new Date(base);
+      d.setUTCDate(d.getUTCDate() + i);
+      return new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(d);
+    });
+  }, [firstDay, tenantContext?.locale, tenantContext?.ui_locale, tenantContext?.region]);
 
   const totals = useMemo(() => {
     const days = data?.days ?? {};
@@ -319,6 +335,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                 label="From"
                 value={fromPickerValue}
                 onChange={(val) => val && setFrom(val.format('YYYY-MM-DD'))}
+                format={datePickerFormat}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
@@ -328,6 +345,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                 label="To"
                 value={toPickerValue}
                 onChange={(val) => val && setTo(val.format('YYYY-MM-DD'))}
+                format={datePickerFormat}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
@@ -374,7 +392,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                     {totals.scoped}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
-                    {from} → {to}
+                    {formatTenantDate(from, tenantContext)} → {formatTenantDate(to, tenantContext)}
                   </Typography>
                 </Stack>
               </Grid>
@@ -444,7 +462,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                 maxWidth: 980,
               }}
             >
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dow) => (
+              {weekdayLabels.map((dow) => (
                 <Typography
                   key={dow}
                   variant="caption"
@@ -478,14 +496,13 @@ const ApprovalHeatmapReport: React.FC = () => {
                   return alpha(theme.palette.error.main, 0.35);
                 })();
 
-                const dateObj = ymdToDate(ymd);
-                const dayNumber = dateObj ? dateObj.getDate() : '';
+                const dayNumber = Number(ymd.slice(8, 10)).toString();
 
                 const tooltip = (() => {
                   if (!inRange) return null;
 
                   const dateObj = ymdToDate(ymd);
-                  const header = dateObj ? formatTooltipDay(dateObj) : ymd;
+                  const header = dateObj ? formatTenantDayMonth(ymd, tenantContext) : ymd;
 
                   const tsPending = day?.timesheets?.pending ?? 0;
                   const exPending = day?.expenses?.pending ?? 0;
@@ -542,7 +559,7 @@ const ApprovalHeatmapReport: React.FC = () => {
             </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              Showing {data.meta.from} → {data.meta.to} (scoped: {data.meta.scoped})
+              Showing {formatTenantDate(String(data.meta.from ?? ''), tenantContext)} → {formatTenantDate(String(data.meta.to ?? ''), tenantContext)} (scoped: {data.meta.scoped})
             </Typography>
           </Box>
         )}

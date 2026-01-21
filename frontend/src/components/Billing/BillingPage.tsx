@@ -41,6 +41,7 @@ import { ConfirmTrialExitDialog } from './ConfirmTrialExitDialog';
 import api, { tenantApi } from '../../services/api';
 import { getTrialRemainingLabel } from '../../utils/getTrialRemainingLabel';
 import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, formatTenantMoney, formatTenantNumber } from '../../utils/tenantFormatting';
 
 function getTrialLabel(summary?: BillingSummary | null, now: Date | string = new Date()): string | null {
   if (!summary?.is_trial || !summary.trial?.ends_at) return null;
@@ -615,11 +616,7 @@ const BillingPage: React.FC = () => {
                 <AlertTitle>Downgrade Scheduled</AlertTitle>
                 Your plan will change to <strong>{billingSummary.pending_downgrade.target_plan.charAt(0).toUpperCase() + billingSummary.pending_downgrade.target_plan.slice(1)}</strong> on{' '}
                 {billingSummary.pending_downgrade.effective_at 
-                  ? new Date(billingSummary.pending_downgrade.effective_at).toLocaleDateString('en-GB', { 
-                      day: '2-digit',
-                      month: 'short', 
-                      year: 'numeric' 
-                    })
+                  ? formatTenantDate(billingSummary.pending_downgrade.effective_at, tenantContext)
                   : 'next renewal date'}.
                 <br />
                 <strong>All features of your current {currentPlan} plan remain active until that date.</strong>
@@ -691,7 +688,7 @@ const BillingPage: React.FC = () => {
                             </Typography>
 
                             <Typography variant="h6" sx={{ fontWeight: 400 }}>
-                              {effectiveLimit} {effectiveLimit === 1 ? 'license' : 'licenses'}
+                              {formatTenantNumber(effectiveLimit, tenantContext, 0)} {effectiveLimit === 1 ? 'license' : 'licenses'}
                             </Typography>
 
                             <Typography
@@ -700,7 +697,7 @@ const BillingPage: React.FC = () => {
                               sx={{ display: 'block', mt: 0.5 }}
                             >
                               {/* DISPLAY ONLY: Active users can differ from billable licenses (user_limit). */}
-                              {billingSummary.user_count} {billingSummary.user_count === 1 ? 'active user' : 'active users'}
+                              {formatTenantNumber(billingSummary.user_count ?? 0, tenantContext, 0)} {billingSummary.user_count === 1 ? 'active user' : 'active users'}
                             </Typography>
                           </Box>
                         </Box>
@@ -728,7 +725,7 @@ const BillingPage: React.FC = () => {
                       Estimated monthly total
                     </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                      {billingSummary.total === 0 ? 'Free' : `€${billingSummary.total}/month`}
+                      {billingSummary.total === 0 ? 'Free' : `${formatTenantMoney(billingSummary.total, tenantContext)}/month`}
                     </Typography>
                     {billingSummary.is_trial && billingSummary.trial?.ends_at && (() => {
                       const now = new Date();
@@ -740,12 +737,12 @@ const BillingPage: React.FC = () => {
                     })()}
                     {!billingSummary.is_trial && billingSummary.subscription?.next_renewal_at && (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        Next renewal: {new Date(billingSummary.subscription.next_renewal_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        Next renewal: {formatTenantDate(billingSummary.subscription.next_renewal_at, tenantContext)}
                       </Typography>
                     )}
                     {!billingSummary.is_trial && billingSummary.subscription?.subscription_start_date && (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        Subscription started: {new Date(billingSummary.subscription.subscription_start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        Subscription started: {formatTenantDate(billingSummary.subscription.subscription_start_date, tenantContext)}
                       </Typography>
                     )}
                   </Box>
@@ -833,7 +830,7 @@ const BillingPage: React.FC = () => {
                   const hasPendingDowngrade = billingSummary?.pending_downgrade?.target_plan === planName;
                   
                   // Downgrades MUST NOT go through checkout.
-                  // Stripe checkout is upgrade-oriented and can attempt to create a €0.00 payment for downgrades.
+                  // Stripe checkout is upgrade-oriented and can attempt to create a 0.00 payment for downgrades.
                   // Use the existing schedule-downgrade flow for lower-tier selections, even if the tenant is currently read-only.
                   // Starter path (restore previous behavior):
                   // - Trial → Starter uses the existing downgrade handler (backend applies immediate trial conversion).

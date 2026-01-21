@@ -14,7 +14,13 @@ import { useNavigate } from 'react-router-dom';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
 import { useFeatures } from '../../contexts/FeatureContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
-import { formatTenantDate, formatTenantNumber } from '../../utils/tenantFormatting';
+import {
+  formatTenantDate,
+  formatTenantDateTime,
+  formatTenantNumber,
+  getTenantDatePickerFormat,
+  getTenantUiLocale,
+} from '../../utils/tenantFormatting';
 import { getPolicyAlertModel } from '../../utils/policyAlert';
 import { computeCaDailyOt2Candidates } from '../../utils/computeCaDailyOt2Candidates';
 import { getVisibleTimesheets } from '../../utils/getVisibleTimesheets';
@@ -77,7 +83,6 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
-import 'dayjs/locale/en';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import type { DateSelectArg, EventClickArg } from '@fullcalendar/core';
@@ -86,10 +91,9 @@ import { useTimesheetAISuggestion } from '../../hooks/useTimesheetAISuggestion';
 import AISuggestionCard from '../AI/AISuggestionCard';
 
 
-// Configure dayjs plugins and locale
+// Configure dayjs plugins
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
-dayjs.locale('en');
 
 // Custom date formatter to ensure English format
 const formatDate = (date: Dayjs | null): string => {
@@ -173,6 +177,8 @@ const TimesheetCalendar: React.FC = () => {
   const { hasTravels } = useFeatures();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const datePickerFormat = useMemo(() => getTenantDatePickerFormat(tenantContext), [tenantContext]);
 
   const policyAlert = useMemo(() => getPolicyAlertModel(tenantContext), [tenantContext]);
 
@@ -2665,7 +2671,7 @@ const TimesheetCalendar: React.FC = () => {
       </Paper>
 
       {/* Enhanced Timesheet Entry Dialog */}
-      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en">
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={getTenantUiLocale(tenantContext)}>
         <Dialog
           open={dialogOpen}
           onClose={handleDialogClose}
@@ -2881,7 +2887,7 @@ const TimesheetCalendar: React.FC = () => {
                             label="Date"
                             value={selectedDate}
                             onChange={(newDate) => setSelectedDate(newDate)}
-                            format="DD/MM/YYYY"
+                            format={datePickerFormat}
                             slotProps={{
                               textField: {
                                 fullWidth: true,
@@ -3181,7 +3187,7 @@ const TimesheetCalendar: React.FC = () => {
           fullWidth
         >
           <DialogTitle>
-            Travel Details - {selectedTravelDate ? dayjs(selectedTravelDate).format('DD/MM/YYYY') : ''}
+            Travel Details - {selectedTravelDate ? formatTenantDate(selectedTravelDate, tenantContext) : ''}
           </DialogTitle>
           <DialogContent>
             <Box sx={{ mt: 2 }}>
@@ -3222,9 +3228,9 @@ const TimesheetCalendar: React.FC = () => {
                         </Typography>
                         <Typography variant="body1">
                           {travel.start_at 
-                            ? dayjs(travel.start_at).format('DD/MM/YYYY HH:mm')
+                            ? formatTenantDateTime(travel.start_at, tenantContext)
                             : travel.travel_date 
-                              ? dayjs(travel.travel_date).format('DD/MM/YYYY')
+                              ? formatTenantDate(travel.travel_date, tenantContext)
                               : 'N/A'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
@@ -3237,7 +3243,7 @@ const TimesheetCalendar: React.FC = () => {
                         </Typography>
                         <Typography variant="body1">
                           {travel.end_at 
-                            ? dayjs(travel.end_at).format('DD/MM/YYYY HH:mm')
+                            ? formatTenantDateTime(travel.end_at, tenantContext)
                             : 'N/A'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">

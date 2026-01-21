@@ -27,6 +27,19 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { getAuthHeaders, fetchWithAuth, API_URL, techniciansApi, projectsApi } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useAuth } from '../Auth/AuthContext';
+import {
+  displayDistanceToKm,
+  displayRateToRatePerKm,
+  formatTenantDate,
+  formatTenantMoney,
+  formatTenantMoneyPerDistanceKm,
+  getTenantDatePickerFormat,
+  getTenantUiLocale,
+  getTenantDistanceUnit,
+  kmToDisplayDistance,
+  ratePerKmToDisplayRate,
+} from '../../utils/tenantFormatting';
 
 interface Project {
   id: number;
@@ -73,6 +86,9 @@ const expenseCategories = [
 
 export const ExpenseManager: React.FC = () => {
   const { showSuccess, showError, showWarning } = useNotification();
+  const { tenantContext } = useAuth();
+  const datePickerFormat = getTenantDatePickerFormat(tenantContext);
+  const distanceUnit = getTenantDistanceUnit(tenantContext);
   useTenantGuard(); // Ensure tenant_slug exists
   const { isReadOnly: isReadOnlyMode, warn: showReadOnlyWarning } = useReadOnlyGuard('expenses');
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
@@ -503,7 +519,7 @@ export const ExpenseManager: React.FC = () => {
       headerName: 'Date',
       width: 120,
       valueGetter: (_value, row) => row.date,
-      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => dayjs(params.row.date).format('DD/MM/YYYY'),
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => formatTenantDate(params.row.date, tenantContext),
     },
     {
       field: 'technician',
@@ -526,7 +542,8 @@ export const ExpenseManager: React.FC = () => {
       headerName: 'Amount',
       width: 120,
       valueGetter: (_value, row) => Number(row.amount),
-      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => `€${Number(params.row.amount).toFixed(2)}`,
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) =>
+        formatTenantMoney(Number(params.row.amount) || 0, tenantContext),
     },
     {
       field: 'description',
@@ -687,7 +704,7 @@ export const ExpenseManager: React.FC = () => {
       )}
 
       {/* Expense Entry Dialog */}
-      <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={getTenantUiLocale(tenantContext)}>
         <Dialog 
           open={dialogOpen} 
           onClose={() => setDialogOpen(false)} 
@@ -805,7 +822,7 @@ export const ExpenseManager: React.FC = () => {
               label="Expense Date"
               value={expenseDate}
               onChange={(newValue) => setExpenseDate(newValue)}
-              format="DD/MM/YYYY"
+              format={datePickerFormat}
               slotProps={{
                 textField: {
                   fullWidth: true,
@@ -823,7 +840,7 @@ export const ExpenseManager: React.FC = () => {
               required
             >
               <MenuItem value="reimbursement">Reimbursement (Receipt Required)</MenuItem>
-              <MenuItem value="mileage">Mileage/Kilometers</MenuItem>
+              <MenuItem value="mileage">Mileage ({distanceUnit})</MenuItem>
               <MenuItem value="company_card">Company Card</MenuItem>
             </TextField>
 
@@ -849,20 +866,21 @@ export const ExpenseManager: React.FC = () => {
                 <TextField
                   type="number"
                   fullWidth
-                  label="Distance (km)"
-                  value={distanceKm}
-                  onChange={(e) => setDistanceKm(Number(e.target.value))}
+                  label={`Distance (${getTenantDistanceUnit(tenantContext)})`}
+                  value={Number.isFinite(distanceKm) ? kmToDisplayDistance(distanceKm, tenantContext) : 0}
+                  onChange={(e) => setDistanceKm(displayDistanceToKm(Number(e.target.value), tenantContext))}
                   required
                   inputProps={{ min: 0, step: 0.01 }}
                 />
                 <TextField
                   type="number"
                   fullWidth
-                  label="Rate per km (€)"
-                  value={ratePerKm}
-                  onChange={(e) => setRatePerKm(Number(e.target.value))}
+                  label={`Rate per ${getTenantDistanceUnit(tenantContext)} (${tenantContext?.currency_symbol || '$'})`}
+                  value={Number.isFinite(ratePerKm) ? ratePerKmToDisplayRate(ratePerKm, tenantContext) : 0}
+                  onChange={(e) => setRatePerKm(displayRateToRatePerKm(Number(e.target.value), tenantContext))}
                   required
                   inputProps={{ min: 0, step: 0.01 }}
+                  helperText={formatTenantMoneyPerDistanceKm(ratePerKm, tenantContext)}
                 />
                 <TextField
                   select
@@ -877,14 +895,14 @@ export const ExpenseManager: React.FC = () => {
                   <MenuItem value="bicycle">Bicycle</MenuItem>
                 </TextField>
                 <Typography color="info.main">
-                  Calculated amount: €{(distanceKm * ratePerKm).toFixed(2)}
+                  Calculated amount: {formatTenantMoney(distanceKm * ratePerKm, tenantContext)}
                 </Typography>
               </>
             ) : (
               <TextField
                 type="number"
                 fullWidth
-                label="Amount (€)"
+                label={`Amount (${tenantContext?.currency_symbol || '$'})`}
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
                 required

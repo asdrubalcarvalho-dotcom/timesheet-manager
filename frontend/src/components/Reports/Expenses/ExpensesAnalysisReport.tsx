@@ -36,7 +36,7 @@ import { useAuth } from '../../Auth/AuthContext';
 import { useBilling } from '../../../contexts/BillingContext';
 import { getTenantAiState } from '../../Common/aiState';
 import { API_URL, fetchWithAuth } from '../../../services/api';
-import { formatTenantMoney } from '../../../utils/tenantFormatting';
+import { formatTenantDate, formatTenantMoney, formatTenantMonth, getTenantDatePickerFormat } from '../../../utils/tenantFormatting';
 
 type ExpenseEntry = {
   id?: number;
@@ -148,6 +148,7 @@ const quantile = (sortedAsc: number[], q: number): number | null => {
 const ExpensesAnalysisReport: React.FC = () => {
   const theme = useTheme();
   const { tenantContext } = useAuth();
+  const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
   const aiState = getTenantAiState(billingSummary, tenantAiEnabled);
 
@@ -173,6 +174,14 @@ const ExpensesAnalysisReport: React.FC = () => {
   const [status, setStatus] = useState<string>(baselineFilters.status);
   const [category, setCategory] = useState<string>(baselineFilters.category);
   const [projectId, setProjectId] = useState<'all' | number>(baselineFilters.projectId);
+
+  const rangeDisplay = useMemo(
+    () => ({
+      from: formatTenantDate(from, tenantContext),
+      to: formatTenantDate(to, tenantContext),
+    }),
+    [from, tenantContext, to]
+  );
 
   const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>('week');
 
@@ -363,14 +372,14 @@ const ExpensesAnalysisReport: React.FC = () => {
       let label: string;
       if (trendGranularity === 'day') {
         key = d.format('YYYY-MM-DD');
-        label = d.format('YYYY-MM-DD');
+        label = formatTenantDate(key, tenantContext);
       } else if (trendGranularity === 'month') {
         key = d.format('YYYY-MM');
-        label = d.format('YYYY-MM');
+        label = formatTenantMonth(key, tenantContext);
       } else {
         const start = startOfWeekMonday(d);
         key = start.format('YYYY-MM-DD');
-        label = start.format('YYYY-MM-DD');
+        label = formatTenantDate(key, tenantContext);
       }
 
       const existing = pointsMap.get(key);
@@ -415,7 +424,7 @@ const ExpensesAnalysisReport: React.FC = () => {
         volatility: cov,
       },
     };
-  }, [filteredExpenses, trendGranularity]);
+  }, [filteredExpenses, tenantContext, trendGranularity]);
 
   const breakdownByCategory = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
@@ -747,18 +756,18 @@ const ExpensesAnalysisReport: React.FC = () => {
     const q = question.trim().toLowerCase();
 
     if (q.includes('total') || q.includes('value') || q.includes('amount')) {
-      return `Total value is ${formatMoney(kpis.totalValue)} across ${kpis.count} expenses (range ${from} → ${to}).`;
+      return `Total value is ${formatMoney(kpis.totalValue)} across ${kpis.count} expenses (range ${rangeDisplay.from} → ${rangeDisplay.to}).`;
     }
 
     if (q.includes('status') || q.includes('pending') || q.includes('finance') || q.includes('paid') || q.includes('approved')) {
-      return `Statuses (range ${from} → ${to}): Pending Review ${kpis.pendingReview}, Finance Review ${kpis.financeReview}, Approved ${kpis.approved}, Paid ${kpis.paid}.`;
+      return `Statuses (range ${rangeDisplay.from} → ${rangeDisplay.to}): Pending Review ${kpis.pendingReview}, Finance Review ${kpis.financeReview}, Approved ${kpis.approved}, Paid ${kpis.paid}.`;
     }
 
     if (q.includes('category')) {
       const top = breakdownByCategory.slice(0, 5);
       if (top.length === 0) return 'No expenses match the current filters.';
       return [
-        `Top categories (range ${from} → ${to}):`,
+        `Top categories (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
         ...top.map((c) => `- ${c.key}: ${formatMoney(c.total)} (${c.count})`),
       ].join('\n');
     }
@@ -767,7 +776,7 @@ const ExpensesAnalysisReport: React.FC = () => {
       const top = breakdownByProject.slice(0, 5);
       if (top.length === 0) return 'No expenses match the current filters.';
       return [
-        `Top projects (range ${from} → ${to}):`,
+        `Top projects (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
         ...top.map((p) => `- ${p.name}: ${formatMoney(p.total)} (${p.count})`),
       ].join('\n');
     }
@@ -782,18 +791,20 @@ const ExpensesAnalysisReport: React.FC = () => {
           const name = exp.project?.name ? String(exp.project.name) : `Project #${exp.project_id}`;
           const cat = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
           const ymd = typeof exp.date === 'string' ? exp.date.slice(0, 10) : '';
-          return `- ${formatMoney(amount)} · ${name} · ${cat} · ${ymd}`;
+          return `- ${formatMoney(amount)} · ${name} · ${cat} · ${formatTenantDate(ymd, tenantContext)}`;
         }),
       ].join('\n');
     }
 
     if (q.includes('what changed') || q.includes('changed') || q.includes('compare') || q.includes('previous')) {
       if (!previousRange) return 'Select a valid date range to compare.';
-      const totalLine = `Total: ${formatMoney(comparison.current.total)} vs ${formatMoney(comparison.previous.total)} (${previousRange.from} → ${previousRange.to})`;
+      const previousFrom = formatTenantDate(previousRange.from, tenantContext);
+      const previousTo = formatTenantDate(previousRange.to, tenantContext);
+      const totalLine = `Total: ${formatMoney(comparison.current.total)} vs ${formatMoney(comparison.previous.total)} (${previousFrom} → ${previousTo})`;
       const pct = typeof comparison.pct.total === 'number' ? `${comparison.pct.total >= 0 ? '+' : ''}${comparison.pct.total.toFixed(1)}%` : '—';
       const countPct = typeof comparison.pct.count === 'number' ? `${comparison.pct.count >= 0 ? '+' : ''}${comparison.pct.count.toFixed(1)}%` : '—';
       return [
-        `Change vs previous period (${previousRange.from} → ${previousRange.to}):`,
+        `Change vs previous period (${previousFrom} → ${previousTo}):`,
         `- ${totalLine} · Δ ${formatMoney(comparison.delta.total)} · ${pct}`,
         `- Count: ${comparison.current.count} vs ${comparison.previous.count} · Δ ${comparison.delta.count} · ${countPct}`,
       ].join('\n');
@@ -809,7 +820,7 @@ const ExpensesAnalysisReport: React.FC = () => {
           ? `${statusFunnel.rates.financeReviewToFinanceApproved.toFixed(1)}%`
           : '—';
       return [
-        `Status funnel (range ${from} → ${to}):`,
+        `Status funnel (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
         ...lines,
         `Key rates: submitted→paid ${r1} · finance_review→finance_approved ${r2}`,
       ].join('\n');
@@ -818,7 +829,7 @@ const ExpensesAnalysisReport: React.FC = () => {
     if (q.includes('data quality') || q.includes('missing') || q.includes('coverage')) {
       if (filteredExpenses.length === 0) return 'No expenses match the current filters.';
       return [
-        `Data quality (range ${from} → ${to}):`,
+        `Data quality (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
         `- Results: ${dataQuality.total}`,
         `- Missing category: ${dataQuality.missingCategory}`,
         `- Missing project name: ${dataQuality.missingProjectName}`,
@@ -833,8 +844,10 @@ const ExpensesAnalysisReport: React.FC = () => {
       const projUp = moversByProject?.increases?.filter((r) => r.deltaTotal > 0).slice(0, 3) ?? [];
       const projDown = moversByProject?.decreases?.filter((r) => r.deltaTotal < 0).slice(0, 3) ?? [];
 
+      const previousFrom = formatTenantDate(previousRange.from, tenantContext);
+      const previousTo = formatTenantDate(previousRange.to, tenantContext);
       return [
-        `Top movers vs previous period (${previousRange.from} → ${previousRange.to}):`,
+        `Top movers vs previous period (${previousFrom} → ${previousTo}):`,
         catUp.length ? 'Category increases:' : 'Category increases: —',
         ...catUp.map((r) => `- ${r.key}: +${formatMoney(r.deltaTotal)} (Δ ${r.deltaCount})`),
         catDown.length ? 'Category decreases:' : 'Category decreases: —',
@@ -854,7 +867,7 @@ const ExpensesAnalysisReport: React.FC = () => {
       const topStatuses = spendMix.statuses.slice(0, 5);
 
       return [
-        `Spend mix (range ${from} → ${to}): total ${formatMoney(spendMix.totalSpend)}`,
+        `Spend mix (range ${rangeDisplay.from} → ${rangeDisplay.to}): total ${formatMoney(spendMix.totalSpend)}`,
         'Top categories:',
         ...topCats.map((r) => `- ${r.key}: ${r.share.toFixed(1)}% (${formatMoney(r.total)})`),
         'Top statuses:',
@@ -863,7 +876,7 @@ const ExpensesAnalysisReport: React.FC = () => {
     }
 
     return [
-      `Expenses analysis (range ${from} → ${to}):`,
+      `Expenses analysis (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
       `- Total: ${formatMoney(kpis.totalValue)} (${kpis.count} expenses)`,
       `- Pending Review: ${kpis.pendingReview}`,
       `- Finance Review: ${kpis.financeReview}`,
@@ -896,6 +909,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                   if (!v || !v.isValid()) return;
                   setFrom(v.format('YYYY-MM-DD'));
                 }}
+                format={datePickerFormat}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
@@ -908,6 +922,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                   if (!v || !v.isValid()) return;
                   setTo(v.format('YYYY-MM-DD'));
                 }}
+                format={datePickerFormat}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
@@ -1371,13 +1386,14 @@ const ExpensesAnalysisReport: React.FC = () => {
                           const name = exp.project?.name ? String(exp.project.name) : `Project #${exp.project_id}`;
                           const cat = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
                           const ymd = typeof exp.date === 'string' ? exp.date.slice(0, 10) : '';
+                          const ymdLabel = ymd ? formatTenantDate(ymd, tenantContext) : '—';
                           return (
                             <Box key={String(exp.id ?? `${exp.project_id}-${ymd}-${amount}`)} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                               <Typography variant="body2" color="text.primary">
                                 {formatMoney(amount)}
                               </Typography>
                               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>
-                                {name} · {cat} · {ymd}
+                                {name} · {cat} · {ymdLabel}
                               </Typography>
                             </Box>
                           );
@@ -1396,7 +1412,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                     </Typography>
                     {previousRange ? (
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Comparison vs previous period {previousRange.from} → {previousRange.to}
+                        Comparison vs previous period {formatTenantDate(previousRange.from, tenantContext)} → {formatTenantDate(previousRange.to, tenantContext)}
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -1637,7 +1653,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                 ) : (
                   <>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Biggest spend deltas vs previous period {previousRange.from} → {previousRange.to}
+                      Biggest spend deltas vs previous period {formatTenantDate(previousRange.from, tenantContext)} → {formatTenantDate(previousRange.to, tenantContext)}
                     </Typography>
 
                     <Grid container spacing={2}>

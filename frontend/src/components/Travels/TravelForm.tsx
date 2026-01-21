@@ -20,6 +20,8 @@ import dayjs, { Dayjs } from 'dayjs';
 import { AutoAwesome as AIIcon } from '@mui/icons-material';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useFeatures } from '../../contexts/FeatureContext';
+import { useAuth } from '../Auth/AuthContext';
+import { getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 import { travelsApi } from '../../services/travels';
 import type { TravelSegment } from '../../services/travels';
 import { projectsApi, techniciansApi } from '../../services/api';
@@ -66,6 +68,8 @@ interface Country {
 const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingTravel, selectedTechnicianId }) => {
   const { showSuccess, showError, showInfo, showWarning } = useNotification();
   const { hasAI } = useFeatures();
+  const { tenantContext } = useAuth();
+  const datePickerFormat = useMemo(() => getTenantDatePickerFormat(tenantContext), [tenantContext]);
   const [loading, setLoading] = useState(false);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -456,7 +460,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 label="Start Date"
                 value={formData.start_at}
                 onChange={(newValue) => setFormData({ ...formData, start_at: newValue })}
-                format="DD/MM/YYYY"
+                format={datePickerFormat}
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -471,7 +475,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 label="End Date"
                 value={formData.end_at}
                 onChange={(newValue) => setFormData({ ...formData, end_at: newValue })}
-                format="DD/MM/YYYY"
+                format={datePickerFormat}
                 slotProps={{
                   textField: {
                     fullWidth: true,

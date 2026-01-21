@@ -29,6 +29,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../Auth/AuthContext';
 import { useBilling } from '../../contexts/BillingContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { formatTenantMoney } from '../../utils/tenantFormatting';
 
 interface UserRecord {
   id: number;
@@ -56,7 +57,7 @@ const extractRows = (payload: any): UserRecord[] => {
 
 const UsersManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, tenantContext } = useAuth();
   const { billingSummary, loading: billingLoading } = useBilling();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-users');
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -347,7 +348,8 @@ const UsersManager: React.FC = () => {
       width: 130,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => {
         const value = row?.hourly_rate;
-        return <span>{value ? `€${value}/hr` : '-'}</span>;
+        const amount = Number(value);
+        return <span>{Number.isFinite(amount) ? `${formatTenantMoney(amount, tenantContext)}/hr` : '-'}</span>;
       }
     },
     {

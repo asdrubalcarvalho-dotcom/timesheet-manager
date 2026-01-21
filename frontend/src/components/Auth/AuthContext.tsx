@@ -52,6 +52,7 @@ export interface TenantContext {
   policy_key?: string | null;
   timezone: string;
   locale: string;
+  ui_locale?: string | null;
   date_format: string;
   currency: string;
   currency_symbol: string;

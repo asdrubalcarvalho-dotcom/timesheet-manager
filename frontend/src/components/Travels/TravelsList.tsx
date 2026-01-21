@@ -25,9 +25,12 @@ import ConfirmationDialog from '../Common/ConfirmationDialog';
 import EmptyState from '../Common/EmptyState';
 import PageHeader from '../Common/PageHeader';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDateTime } from '../../utils/tenantFormatting';
 
 const TravelsList: React.FC = () => {
   const { showSuccess, showError } = useNotification();
+  const { tenantContext } = useAuth();
   const { isReadOnly, ensureWritable, warn } = useReadOnlyGuard('travels');
   const [travels, setTravels] = useState<TravelSegment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,14 +128,14 @@ const TravelsList: React.FC = () => {
       headerName: 'Start',
       width: 160,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => 
-        row.start_at ? new Date(row.start_at).toLocaleString() : '-',
+        row.start_at ? formatTenantDateTime(row.start_at, tenantContext) : '-',
     },
     {
       field: 'end_at',
       headerName: 'End',
       width: 160,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => 
-        row.end_at ? new Date(row.end_at).toLocaleString() : '-',
+        row.end_at ? formatTenantDateTime(row.end_at, tenantContext) : '-',
     },
     {
       field: 'duration_minutes',

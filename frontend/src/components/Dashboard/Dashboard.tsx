@@ -41,6 +41,7 @@ import { useAuth } from '../Auth/AuthContext';
 import PageHeader from '../Common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { getPolicyAlertModel } from '../../utils/policyAlert';
+import { formatTenantDate, formatTenantMoney, formatTenantNumber } from '../../utils/tenantFormatting';
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
@@ -62,14 +63,7 @@ const Dashboard: React.FC = () => {
     return label.substring(0, maxLength - 3) + '...';
   };
 
-  // Helper function to format date from YYYY-MM-DD to DD/MM
-  const formatDate = (dateString: string): string => {
-    if (!dateString) return '';
-    // Remove time part if exists (2025-11-10T00:00:00.000Z -> 2025-11-10)
-    const datePart = dateString.split('T')[0];
-    const [, month, day] = datePart.split('-');
-    return `${day}/${month}`;
-  };
+  const formatChartDate = (value: string): string => formatTenantDate(value, tenantContext);
 
   const loadStatistics = async () => {
     try {
@@ -181,7 +175,7 @@ const Dashboard: React.FC = () => {
                 <AccessTime sx={{ fontSize: 40, mr: 2 }} />
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                    {stats.summary.total_hours.toFixed(1)}
+                    {formatTenantNumber(stats.summary.total_hours, tenantContext, 1)}
                   </Typography>
                   <Typography variant="body2">Total Hours</Typography>
                 </Box>
@@ -202,7 +196,7 @@ const Dashboard: React.FC = () => {
                 <AttachMoney sx={{ fontSize: 40, mr: 2 }} />
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                    €{stats.summary.total_expenses.toFixed(2)}
+                    {formatTenantMoney(stats.summary.total_expenses, tenantContext)}
                   </Typography>
                   <Typography variant="body2">Total Expenses</Typography>
                 </Box>
@@ -223,10 +217,10 @@ const Dashboard: React.FC = () => {
                 <PendingActions sx={{ fontSize: 40, mr: 2 }} />
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                    {stats.summary.pending_timesheets + stats.summary.pending_expenses}
+                    {formatTenantNumber(stats.summary.pending_timesheets + stats.summary.pending_expenses, tenantContext, 0)}
                   </Typography>
                   <Typography variant="body2">
-                    Pending ({stats.summary.pending_timesheets}T + {stats.summary.pending_expenses}E)
+                    Pending ({formatTenantNumber(stats.summary.pending_timesheets, tenantContext, 0)}T + {formatTenantNumber(stats.summary.pending_expenses, tenantContext, 0)}E)
                   </Typography>
                 </Box>
               </Box>
@@ -246,10 +240,10 @@ const Dashboard: React.FC = () => {
                 <CheckCircle sx={{ fontSize: 40, mr: 2 }} />
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                    {stats.summary.approved_timesheets + stats.summary.approved_expenses}
+                    {formatTenantNumber(stats.summary.approved_timesheets + stats.summary.approved_expenses, tenantContext, 0)}
                   </Typography>
                   <Typography variant="body2">
-                    Approved ({stats.summary.approved_timesheets}T + {stats.summary.approved_expenses}E)
+                    Approved ({formatTenantNumber(stats.summary.approved_timesheets, tenantContext, 0)}T + {formatTenantNumber(stats.summary.approved_expenses, tenantContext, 0)}E)
                   </Typography>
                 </Box>
               </Box>
@@ -290,7 +284,7 @@ const Dashboard: React.FC = () => {
                             {payload[0].payload.project_name}
                           </Typography>
                           <Typography variant="body2" color="primary">
-                            Hours: {payload[0].value}
+                            Hours: {formatTenantNumber(Number(payload[0].value), tenantContext, 1)}
                           </Typography>
                         </Paper>
                       );
@@ -341,7 +335,7 @@ const Dashboard: React.FC = () => {
                             {payload[0].payload.project_name}
                           </Typography>
                           <Typography variant="body2" color="success.main">
-                            Amount: €{Number(payload[0].value).toFixed(2)}
+                            Amount: {formatTenantMoney(Number(payload[0].value), tenantContext)}
                           </Typography>
                         </Paper>
                       );
@@ -350,7 +344,7 @@ const Dashboard: React.FC = () => {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="total_amount" fill={COLORS.success} name="Amount (€)" />
+                <Bar dataKey="total_amount" fill={COLORS.success} name="Amount" />
               </BarChart>
             </ResponsiveContainer>
             </Box>
@@ -382,7 +376,12 @@ const Dashboard: React.FC = () => {
                   cx="50%"
                   cy="50%"
                   outerRadius={100}
-                  label={(entry) => `${entry.status}: ${entry.count}`}
+                  label={(entry) => {
+                    const payload = (entry as any)?.payload;
+                    const status = payload?.status ?? '';
+                    const count = payload?.count ?? '';
+                    return `${status}: ${count}`;
+                  }}
                 >
                   {stats.hours_by_status.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.status] || CHART_COLORS[index % CHART_COLORS.length]} />
@@ -418,7 +417,12 @@ const Dashboard: React.FC = () => {
                   cx="50%"
                   cy="50%"
                   outerRadius={100}
-                  label={(entry) => `${entry.status}: ${entry.count}`}
+                  label={(entry) => {
+                    const payload = (entry as any)?.payload;
+                    const status = payload?.status ?? '';
+                    const count = payload?.count ?? '';
+                    return `${status}: ${count}`;
+                  }}
                 >
                   {stats.expenses_by_status.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.status] || CHART_COLORS[index % CHART_COLORS.length]} />
@@ -456,12 +460,12 @@ const Dashboard: React.FC = () => {
                   angle={-45}
                   textAnchor="end"
                   height={80}
-                  tickFormatter={(value) => formatDate(value)}
+                  tickFormatter={(value) => formatChartDate(value)}
                 />
                 <YAxis />
                 <Tooltip 
-                  labelFormatter={(value) => formatDate(value)}
-                  formatter={(value) => [`${value} hours`, 'Hours']}
+                  labelFormatter={(value) => formatChartDate(String(value))}
+                  formatter={(value) => [`${formatTenantNumber(Number(value), tenantContext, 1)} hours`, 'Hours']}
                 />
                 <Legend />
                 <Line 
@@ -499,12 +503,12 @@ const Dashboard: React.FC = () => {
                   angle={-45}
                   textAnchor="end"
                   height={80}
-                  tickFormatter={(value) => formatDate(value)}
+                  tickFormatter={(value) => formatChartDate(value)}
                 />
                 <YAxis />
                 <Tooltip 
-                  labelFormatter={(value) => formatDate(value)}
-                  formatter={(value) => [`€${Number(value).toFixed(2)}`, 'Amount']}
+                  labelFormatter={(value) => formatChartDate(String(value))}
+                  formatter={(value) => [formatTenantMoney(Number(value), tenantContext), 'Amount']}
                 />
                 <Legend />
                 <Line 
@@ -512,7 +516,7 @@ const Dashboard: React.FC = () => {
                   dataKey="amount" 
                   stroke={COLORS.success} 
                   strokeWidth={2}
-                  name="Amount (€)"
+                  name="Amount"
                   dot={{ fill: COLORS.success }}
                 />
               </LineChart>
