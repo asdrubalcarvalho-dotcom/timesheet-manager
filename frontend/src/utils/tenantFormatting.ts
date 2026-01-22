@@ -1,4 +1,8 @@
 import type { TenantContext } from '../components/Auth/AuthContext';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+
+dayjs.extend(customParseFormat);
 
 const KM_PER_MILE = 1.609344;
 
@@ -236,4 +240,32 @@ export const formatTenantMoneyPerDistanceKm = (
   const unit = getTenantDistanceUnit(tenantContext);
   const displayRate = ratePerKmToDisplayRate(ratePerKm, tenantContext);
   return `${formatTenantMoney(displayRate, tenantContext)}/${unit}`;
+};
+
+// ----------------------
+// Time-only (UI display)
+// ----------------------
+
+export const getTenantHourCycle = (tenantContext: TenantContext | null | undefined): 12 | 24 =>
+  isUsStyle(tenantContext) ? 12 : 24;
+
+export const getTenantTimeFormat = (tenantContext: TenantContext | null | undefined): 'hh:mm A' | 'HH:mm' =>
+  getTenantHourCycle(tenantContext) === 12 ? 'hh:mm A' : 'HH:mm';
+
+export const formatTenantTime = (
+  value: dayjs.Dayjs | Date | string | null | undefined,
+  tenantContext: TenantContext | null | undefined
+): string => {
+  if (!value) return '-';
+
+  const format = getTenantTimeFormat(tenantContext);
+
+  const parsed = dayjs.isDayjs(value)
+    ? value
+    : value instanceof Date
+      ? dayjs(value)
+      : dayjs(String(value).trim(), ['HH:mm', 'H:mm', 'HH:mm:ss', 'YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm'], true);
+
+  if (!parsed.isValid()) return '-';
+  return parsed.format(format);
 };

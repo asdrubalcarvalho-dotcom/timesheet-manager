@@ -18,7 +18,10 @@ import {
   formatTenantDate,
   formatTenantDateTime,
   formatTenantNumber,
+  formatTenantTime,
   getTenantDatePickerFormat,
+  getTenantHourCycle,
+  getTenantTimeFormat,
   getTenantUiLocale,
 } from '../../utils/tenantFormatting';
 import { getPolicyAlertModel } from '../../utils/policyAlert';
@@ -179,6 +182,8 @@ const TimesheetCalendar: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const datePickerFormat = useMemo(() => getTenantDatePickerFormat(tenantContext), [tenantContext]);
+  const timePickerAmpm = useMemo(() => getTenantHourCycle(tenantContext) === 12, [tenantContext]);
+  const timePickerFormat = useMemo(() => getTenantTimeFormat(tenantContext), [tenantContext]);
 
   const policyAlert = useMemo(() => getPolicyAlertModel(tenantContext), [tenantContext]);
 
@@ -1143,7 +1148,7 @@ const TimesheetCalendar: React.FC = () => {
                                error.response?.data?.errors?.time_overlap;
         
         if (isOverlapError) {
-          const timeRange = `${timeToString(startTimeObj)} - ${timeToString(endTimeObj)}`;
+          const timeRange = `${formatTenantTime(startTimeObj, tenantContext)} - ${formatTenantTime(endTimeObj, tenantContext)}`;
           showError(
             `⚠️ Time conflict detected for ${timeRange}. ` +
             `There is already an entry in this time period. ` +
@@ -2630,12 +2635,12 @@ const TimesheetCalendar: React.FC = () => {
           slotLabelFormat={{
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false // Formato 24 horas (HH:mm)
+            hour12: timePickerAmpm
           }}
           eventTimeFormat={{
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false
+            hour12: timePickerAmpm
           }}
           displayEventTime={true}
           displayEventEnd={true}
@@ -2918,8 +2923,8 @@ const TimesheetCalendar: React.FC = () => {
                                 setEndTimeObj(newEndTime);
                               }
                             }}
-                            ampm={false}
-                            format="HH:mm"
+                            ampm={timePickerAmpm}
+                            format={timePickerFormat}
                             minutesStep={15}
                             slotProps={{
                               textField: {
@@ -2936,8 +2941,8 @@ const TimesheetCalendar: React.FC = () => {
                             label="End Time"
                             value={endTimeObj}
                             onChange={(newTime) => setEndTimeObj(newTime)}
-                            ampm={false}
-                            format="HH:mm"
+                            ampm={timePickerAmpm}
+                            format={timePickerFormat}
                             minutesStep={15}
                             slotProps={{
                               textField: {
