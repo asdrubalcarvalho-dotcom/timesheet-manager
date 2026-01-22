@@ -110,9 +110,10 @@ const startOfWeek = (date: Date, firstDay: 0 | 1): Date => {
 
 const ApprovalHeatmapReport: React.FC = () => {
   const theme = useTheme();
-  const { tenantContext } = useAuth();
+  const { tenant, tenantContext } = useAuth();
   const rawWeekStart: unknown =
     (tenantContext as any)?.week_start ??
+    (tenant as any)?.week_start ??
     (tenantContext as any)?.tenant?.week_start ??
     (tenantContext as any)?.tenant?.settings?.week_start ??
     (tenantContext as any)?.weekStart ??
@@ -261,7 +262,7 @@ const ApprovalHeatmapReport: React.FC = () => {
       d.setUTCDate(d.getUTCDate() + i);
       return new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(d);
     });
-  }, [firstDay, tenantContext?.locale, tenantContext?.ui_locale, tenantContext?.region]);
+  }, [firstDay, tenant?.week_start, tenantContext?.locale, tenantContext?.ui_locale, tenantContext?.region]);
 
   const totals = useMemo(() => {
     const days = data?.days ?? {};
