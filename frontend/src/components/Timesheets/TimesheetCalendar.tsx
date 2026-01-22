@@ -19,7 +19,7 @@ import {
   formatTenantDateTime,
   formatTenantNumber,
   getTenantDatePickerFormat,
-  getTenantUiLocale,
+  getTenantDayjsUiLocale,
 } from '../../utils/tenantFormatting';
 import { getPolicyAlertModel } from '../../utils/policyAlert';
 import { computeCaDailyOt2Candidates } from '../../utils/computeCaDailyOt2Candidates';
@@ -2671,7 +2671,7 @@ const TimesheetCalendar: React.FC = () => {
       </Paper>
 
       {/* Enhanced Timesheet Entry Dialog */}
-      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={getTenantUiLocale(tenantContext)}>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={getTenantDayjsUiLocale(tenantContext)}>
         <Dialog
           open={dialogOpen}
           onClose={handleDialogClose}

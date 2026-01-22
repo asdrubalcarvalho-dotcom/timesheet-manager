@@ -25,7 +25,7 @@ const isIsoDateOnly = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(val
 const isIsoYearMonth = (value: string): boolean => /^\d{4}-\d{2}$/.test(value);
 
 export const getTenantDayjsLocale = (tenantLocale?: string | null): string => {
-  const locale = (tenantLocale || '').toLowerCase().replace('_', '-');
+  const locale = (tenantLocale || '').toLowerCase().replace(/_/g, '-');
 
   // Deterministic mapping from tenant locale -> dayjs locale key.
   // Never rely on browser defaults (navigator.language).
@@ -39,18 +39,107 @@ export const getTenantDayjsLocale = (tenantLocale?: string | null): string => {
   return 'en';
 };
 
+const normalizeIetfLocaleTag = (value: string): string => {
+  const raw = value.trim();
+  if (raw === '') return 'en-US';
+
+  const normalized = raw.replace(/_/g, '-');
+  const [languageRaw, regionRaw] = normalized.split('-');
+
+  const language = (languageRaw || '').toLowerCase();
+  if (language === '') return 'en-US';
+
+  // If only a language is provided, prefer a reasonable default region.
+  if (!regionRaw || regionRaw.trim() === '') {
+    if (language === 'en') return 'en-GB';
+    if (language === 'pt') return 'pt-PT';
+    return language;
+  }
+
+  const region = regionRaw.length === 2 ? regionRaw.toUpperCase() : regionRaw;
+  return `${language}-${region}`;
+};
+
+/**
+ * UI language locale for Intl-based labels (e.g., weekday/month names).
+ * Does NOT change numeric formatting rules.
+ */
 export const getTenantUiLocale = (tenantContext: TenantContext | null | undefined): string => {
   const override = (tenantContext?.ui_locale ?? '').toString().trim();
   if (override !== '') {
-    return getTenantDayjsLocale(override);
+    return normalizeIetfLocaleTag(override);
   }
 
-  const region = (tenantContext?.region ?? '').toString().trim().toUpperCase();
-  if (region === 'EU') {
-    return 'en';
+  // Soft default: EU-style tenants display UI labels in English.
+  if (isEuStyle(tenantContext)) {
+    return 'en-GB';
   }
 
-  return getTenantDayjsLocale(tenantContext?.locale);
+  return normalizeIetfLocaleTag((tenantContext?.locale ?? '').toString() || 'en-US');
+};
+
+/**
+ * Dayjs locale key used by MUI AdapterDayjs (e.g., 'en', 'pt').
+ */
+export const getTenantDayjsUiLocale = (tenantContext: TenantContext | null | undefined): string =>
+  getTenantDayjsLocale(getTenantUiLocale(tenantContext));
+
+export const normalizeWeekStartIndex = (
+  weekStart: unknown,
+  fallback: 0 | 1 | 2 | 3 | 4 | 5 | 6 = 1
+): 0 | 1 | 2 | 3 | 4 | 5 | 6 => {
+  if (typeof weekStart === 'number' && Number.isInteger(weekStart) && weekStart >= 0 && weekStart <= 6) {
+    return weekStart as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  }
+
+  const raw = (weekStart ?? '').toString().trim().toLowerCase();
+  if (raw === '') return fallback;
+
+  // Numeric strings: '0'..'6'
+  if (/^[0-6]$/.test(raw)) {
+    return Number(raw) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  }
+
+  const map: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
+    sun: 0,
+    sunday: 0,
+    mon: 1,
+    monday: 1,
+    tue: 2,
+    tuesday: 2,
+    wed: 3,
+    wednesday: 3,
+    thu: 4,
+    thursday: 4,
+    fri: 5,
+    friday: 5,
+    sat: 6,
+    saturday: 6,
+  };
+
+  if (raw in map) return map[raw];
+  const three = raw.slice(0, 3);
+  if (three in map) return map[three];
+
+  return fallback;
+};
+
+export const getTenantWeekStartIndex = (
+  tenantContext: TenantContext | null | undefined
+): 0 | 1 | 2 | 3 | 4 | 5 | 6 => normalizeWeekStartIndex(tenantContext?.week_start, 1);
+
+export const getTenantWeekStartIndexRobust = (
+  tenantContext: TenantContext | null | undefined,
+  fallbackWeekStart?: unknown
+): 0 | 1 | 2 | 3 | 4 | 5 | 6 => {
+  const tc = tenantContext as unknown as {
+    week_start?: unknown;
+    weekStart?: unknown;
+    week_start_day?: unknown;
+  };
+
+  const rawWeekStart = tc?.week_start ?? tc?.weekStart ?? tc?.week_start_day ?? fallbackWeekStart ?? null;
+  return normalizeWeekStartIndex(rawWeekStart, 1);
 };
 
 export const getTenantDatePickerFormat = (tenantContext: TenantContext | null | undefined): string =>
