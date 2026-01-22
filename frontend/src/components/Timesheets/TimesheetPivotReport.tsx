@@ -86,34 +86,93 @@ type PivotResponseApi = {
   };
   rows: Array<{ id: string; label: string }>;
   columns: Array<{ id: string; label: string }>;
-  cells: Record<string, number>;
+  // Backend can return cells as a record keyed by "row:col" (or "row|col")
+  // OR as an array of {row_id, column_id, hours}. We normalize to Record<string, number>.
+  cells:
+    | Record<string, number | string>
+    | Array<{ row_id: string | number; column_id: string | number; hours: number | string }>
+    | null;
   totals?: {
-    rows?: Array<{ row_id: string; hours: number }>;
-    columns?: Array<{ column_id: string; hours: number }>;
-    grand?: { hours: number } | null;
+    rows?: Array<{ row_id: string | number; hours: number | string }>;
+    columns?: Array<{ column_id: string | number; hours: number | string }>;
+    grand?: { hours: number | string } | null;
   };
 };
 
+const parseHoursValue = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value !== 'string') return 0;
+
+  const raw = value.trim();
+  if (raw === '') return 0;
+
+  // Only support comma-decimal normalization if the API returns strings.
+  // Examples: "12,50" -> 12.5, "12.50" -> 12.5
+  const normalized = raw.includes(',') && !raw.includes('.') ? raw.replace(',', '.') : raw;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const splitPivotCellKey = (rawKey: string): { rowKey: string; colKey: string } | null => {
+  const key = rawKey.trim();
+  if (key === '') return null;
+
+  const colon = key.lastIndexOf(':');
+  const pipe = key.lastIndexOf('|');
+  const sepIndex = Math.max(colon, pipe);
+  if (sepIndex <= 0 || sepIndex >= key.length - 1) return null;
+
+  const rowKey = key.slice(0, sepIndex).trim();
+  const colKey = key.slice(sepIndex + 1).trim();
+  if (rowKey === '' || colKey === '') return null;
+  return { rowKey, colKey };
+};
+
 const normalizePivotResponse = (apiData: PivotResponseApi): PivotResponse => {
+  const rows = (apiData.rows ?? []).map((r) => ({ key: String(r.id).trim(), label: String(r.label) }));
+  const columns = (apiData.columns ?? []).map((c) => ({ key: String(c.id).trim(), label: String(c.label) }));
+
+  const cells: Record<string, number> = {};
+  const rawCells = apiData.cells;
+  if (Array.isArray(rawCells)) {
+    for (const cell of rawCells) {
+      const rowKey = String((cell as any)?.row_id ?? '').trim();
+      const colKey = String((cell as any)?.column_id ?? '').trim();
+      if (!rowKey || !colKey) continue;
+      const canonicalCellKey = `${rowKey}:${colKey}`;
+      cells[canonicalCellKey] = parseHoursValue((cell as any)?.hours);
+    }
+  } else if (rawCells && typeof rawCells === 'object') {
+    for (const [k, v] of Object.entries(rawCells as Record<string, unknown>)) {
+      const parts = splitPivotCellKey(k);
+      if (!parts) continue;
+      const canonicalCellKey = `${parts.rowKey}:${parts.colKey}`;
+      cells[canonicalCellKey] = parseHoursValue(v);
+    }
+  }
+
   const rowTotals: Record<string, number> = {};
   const colTotals: Record<string, number> = {};
 
   for (const r of apiData.totals?.rows ?? []) {
-    rowTotals[String(r.row_id)] = typeof r.hours === 'number' ? r.hours : 0;
+    rowTotals[String(r.row_id).trim()] = parseHoursValue(r.hours);
   }
   for (const c of apiData.totals?.columns ?? []) {
-    colTotals[String(c.column_id)] = typeof c.hours === 'number' ? c.hours : 0;
+    colTotals[String(c.column_id).trim()] = parseHoursValue(c.hours);
   }
 
   return {
     meta: apiData.meta,
-    rows: (apiData.rows ?? []).map((r) => ({ key: String(r.id), label: String(r.label) })),
-    columns: (apiData.columns ?? []).map((c) => ({ key: String(c.id), label: String(c.label) })),
-    cells: apiData.cells ?? {},
+    rows,
+    columns,
+    cells,
     totals: {
       rows: rowTotals,
       columns: colTotals,
-      grand: typeof apiData.totals?.grand?.hours === 'number' ? apiData.totals.grand.hours : undefined,
+      grand:
+        apiData.totals?.grand && apiData.totals.grand.hours !== null && apiData.totals.grand.hours !== undefined
+          ? parseHoursValue(apiData.totals.grand.hours)
+          : undefined,
     },
   };
 };
@@ -148,10 +207,10 @@ const answerPivotQuestionDeterministically = (
   for (const [k, v] of Object.entries(data.cells ?? {})) {
     const hours = typeof v === 'number' ? v : 0;
     if (hours <= 0) continue;
-    const [rowKey, colKey] = k.split(':');
-    if (!rowKey || !colKey) continue;
+    const parts = splitPivotCellKey(k);
+    if (!parts) continue;
     if (!peak || hours > peak.hours) {
-      peak = { rowKey, colKey, hours };
+      peak = { rowKey: parts.rowKey, colKey: parts.colKey, hours };
     }
   }
 
@@ -327,6 +386,40 @@ const TimesheetPivotReport: React.FC = () => {
       mounted = false;
     };
   }, [canQuery, payload]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!data) return;
+    const grand = typeof data.totals?.grand === 'number' ? data.totals.grand : 0;
+    if (!(grand > 0)) return;
+
+    const sampleRowKey = data.rows?.[0]?.key ?? '';
+    const sampleColKey = data.columns?.[0]?.key ?? '';
+    const sampleCanonicalKey = sampleRowKey && sampleColKey ? `${sampleRowKey}:${sampleColKey}` : '';
+
+    let anyNonZero = false;
+    for (const r of data.rows ?? []) {
+      for (const c of data.columns ?? []) {
+        const canonicalCellKey = `${r.key}:${c.key}`;
+        const value = typeof data.cells?.[canonicalCellKey] === 'number' ? data.cells[canonicalCellKey] : 0;
+        if (value !== 0) {
+          anyNonZero = true;
+          break;
+        }
+      }
+      if (anyNonZero) break;
+    }
+
+    if (!anyNonZero) {
+      const firstKeys = Object.keys(data.cells ?? {}).slice(0, 5);
+      console.warn('[TimesheetPivotReport] grand>0 but all displayed cells are 0', {
+        sampleRowKey,
+        sampleColKey,
+        sampleCanonicalKey,
+        firstCellKeys: firstKeys,
+      });
+    }
+  }, [data]);
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
     if (!canQuery) return;
