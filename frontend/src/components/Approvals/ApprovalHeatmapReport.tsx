@@ -23,8 +23,13 @@ import { getTenantAiState } from '../Common/aiState';
 import ReportFiltersCard from '../Common/ReportFiltersCard';
 import ReportAISideTab from '../Common/ReportAISideTab';
 import { useAuth } from '../Auth/AuthContext';
-import { formatTenantDate, formatTenantDayMonth, getTenantDatePickerFormat, getTenantUiLocale } from '../../utils/tenantFormatting';
-import { weekStartToFirstDay } from '../../utils/weekStartToFirstDay';
+import {
+  formatTenantDate,
+  formatTenantDayMonth,
+  getTenantDatePickerFormat,
+  getTenantUiLocale,
+  getTenantWeekStartIndexRobust,
+} from '../../utils/tenantFormatting';
 
 type HeatmapRequestPayload = {
   range: {
@@ -99,19 +104,22 @@ const diffDaysInclusive = (from: Date, to: Date): number => {
   return diff + 1;
 };
 
-const startOfWeek = (date: Date, firstDay: 0 | 1): Date => {
-  const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 1=Mon
-  const delta = firstDay === 1 ? (day + 6) % 7 : day; // days since week start
-  d.setDate(d.getDate() - delta);
-  d.setHours(0, 0, 0, 0);
-  return d;
+type HeatmapCalendarCell = {
+  ymd: string;
+  rowIndex: number; // 0-based, excludes header row
+  colIndex: number; // 0=Sun..6=Sat (rotated by weekStartIndex)
 };
 
 const ApprovalHeatmapReport: React.FC = () => {
   const theme = useTheme();
-  const { tenantContext } = useAuth();
-  const firstDay = weekStartToFirstDay(tenantContext?.week_start);
+  const { tenant, tenantContext } = useAuth();
+  const rawWeekStart =
+    (tenantContext as any)?.week_start ??
+    (tenantContext as any)?.weekStart ??
+    (tenantContext as any)?.week_start_day ??
+    (tenant as any)?.week_start ??
+    null;
+  const weekStartIndex = getTenantWeekStartIndexRobust(tenantContext, tenant?.week_start);
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
 
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
@@ -137,24 +145,53 @@ const ApprovalHeatmapReport: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const gridRange = useMemo(() => {
+    const fromD = dayjs(from);
+    const toD = dayjs(to);
+    if (!fromD.isValid() || !toD.isValid()) return null as null | { from: string; to: string };
+
+    // gridStart: subtract offset so first cell lands on weekStartIndex
+    const startDay = fromD.day();
+    const startOffset = (startDay - weekStartIndex + 7) % 7;
+    const gridStart = fromD.subtract(startOffset, 'day');
+
+    // gridEnd: add offset so last cell lands on weekStartIndex+6
+    const endDay = toD.day();
+    const endOffset = (weekStartIndex + 6 - endDay + 7) % 7;
+    const gridEnd = toD.add(endOffset, 'day');
+
+    if (gridEnd.isBefore(gridStart)) return null;
+
+    return {
+      from: gridStart.format('YYYY-MM-DD'),
+      to: gridEnd.format('YYYY-MM-DD'),
+    };
+  }, [from, to, weekStartIndex]);
+
   const payload: HeatmapRequestPayload = useMemo(
     () => ({
-      range: { from, to },
+      range: { from: gridRange?.from ?? from, to: gridRange?.to ?? to },
       include: { timesheets: includeTimesheets, expenses: includeExpenses },
     }),
-    [from, to, includeTimesheets, includeExpenses]
+    [from, to, gridRange, includeTimesheets, includeExpenses]
   );
 
   const fromDate = useMemo(() => ymdToDate(from), [from]);
   const toDate = useMemo(() => ymdToDate(to), [to]);
 
+  const gridFromDate = useMemo(() => (gridRange?.from ? ymdToDate(gridRange.from) : null), [gridRange]);
+  const gridToDate = useMemo(() => (gridRange?.to ? ymdToDate(gridRange.to) : null), [gridRange]);
+
   const canQuery = useMemo(() => {
     if (!fromDate || !toDate) return false;
     if (fromDate.getTime() > toDate.getTime()) return false;
     if (!includeTimesheets && !includeExpenses) return false;
-    const days = diffDaysInclusive(fromDate, toDate);
+
+    // Enforce max window based on the actual grid range we request.
+    if (!gridFromDate || !gridToDate) return false;
+    const days = diffDaysInclusive(gridFromDate, gridToDate);
     return days >= 1 && days <= 62;
-  }, [fromDate, toDate, includeTimesheets, includeExpenses]);
+  }, [fromDate, toDate, gridFromDate, gridToDate, includeTimesheets, includeExpenses]);
 
   useEffect(() => {
     let mounted = true;
@@ -206,42 +243,49 @@ const ApprovalHeatmapReport: React.FC = () => {
     return res;
   }, [fromDate, toDate]);
 
-  const calendarStart = useMemo(() => {
-    if (!fromDate) return null;
-    return startOfWeek(fromDate, firstDay);
-  }, [fromDate, firstDay]);
-
   const calendarCells = useMemo(() => {
-    if (!calendarStart || !toDate) return [] as string[];
-    const end = new Date(toDate);
-    end.setHours(0, 0, 0, 0);
+    if (!canQuery) return [] as HeatmapCalendarCell[];
 
-    // End the grid at the end of the last displayed week.
-    // Monday-start -> end on Sunday. Sunday-start -> end on Saturday.
-    const endDay = end.getDay();
-    const targetEndDay = firstDay === 1 ? 0 : 6;
-    const addDays = (targetEndDay - endDay + 7) % 7;
-    end.setDate(end.getDate() + addDays);
+    const fromD = dayjs(gridRange?.from ?? from);
+    const toD = dayjs(gridRange?.to ?? to);
+    if (!fromD.isValid() || !toD.isValid()) return [] as HeatmapCalendarCell[];
 
-    const res: string[] = [];
-    const d = new Date(calendarStart);
-    while (d.getTime() <= end.getTime()) {
-      res.push(formatYmd(d));
-      d.setDate(d.getDate() + 1);
+    const gridStart = fromD;
+    const gridEnd = toD;
+
+    const totalDays = gridEnd.diff(gridStart, 'day');
+    if (!Number.isFinite(totalDays) || totalDays < 0) return [] as HeatmapCalendarCell[];
+
+    const res: HeatmapCalendarCell[] = [];
+    for (let i = 0; i <= totalDays; i++) {
+      const current = gridStart.add(i, 'day');
+      const ymd = current.format('YYYY-MM-DD');
+      const day = current.day(); // 0=Sun..6=Sat
+      const colIndex = (day - weekStartIndex + 7) % 7;
+      const rowIndex = Math.floor(i / 7);
+      res.push({ ymd, colIndex, rowIndex });
     }
+
     return res;
-  }, [calendarStart, toDate, firstDay]);
+  }, [canQuery, from, to, gridRange, weekStartIndex]);
 
   const weekdayLabels = useMemo(() => {
     const locale = getTenantUiLocale(tenantContext);
-    // Known Sunday: 2020-08-02, Monday: 2020-08-03
-    const base = firstDay === 0 ? new Date(Date.UTC(2020, 7, 2)) : new Date(Date.UTC(2020, 7, 3));
+    // Known Sunday: 2020-08-02
+    const base = new Date(Date.UTC(2020, 7, 2));
+    base.setUTCDate(base.getUTCDate() + weekStartIndex);
     return Array.from({ length: 7 }, (_v, i) => {
       const d = new Date(base);
       d.setUTCDate(d.getUTCDate() + i);
       return new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(d);
     });
-  }, [firstDay, tenantContext?.locale, tenantContext?.ui_locale, tenantContext?.region]);
+  }, [tenantContext, weekStartIndex]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (weekdayLabels.length !== 7) return;
+    console.log('[heatmap] rawWeekStart=%o weekStartIndex=%d labels=%o', rawWeekStart, weekStartIndex, weekdayLabels);
+  }, [rawWeekStart, weekStartIndex, weekdayLabels]);
 
   const totals = useMemo(() => {
     const days = data?.days ?? {};
@@ -477,7 +521,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                 </Typography>
               ))}
 
-              {calendarCells.map((ymd) => {
+              {calendarCells.map(({ ymd, colIndex, rowIndex }) => {
                 const inRange = allDates.includes(ymd);
                 const day = data.days?.[ymd];
                 const pending = inRange && day ? day.total_pending : 0;
@@ -520,6 +564,8 @@ const ApprovalHeatmapReport: React.FC = () => {
                 const cell = (
                   <Box
                     sx={{
+                      gridColumnStart: colIndex + 1,
+                      gridRowStart: rowIndex + 2,
                       borderRadius: 1.5,
                       bgcolor: bg,
                       minHeight: 60,

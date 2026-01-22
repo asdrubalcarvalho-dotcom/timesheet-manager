@@ -193,7 +193,7 @@ const Dashboard: React.FC = () => {
           >
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AttachMoney sx={{ fontSize: 40, mr: 2 }} />
+                <TrendingUp sx={{ fontSize: 40, mr: 2 }} />
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                     {formatTenantMoney(stats.summary.total_expenses, tenantContext)}

@@ -12,7 +12,7 @@ import 'dayjs/locale/es';
 import 'dayjs/locale/fr';
 import 'dayjs/locale/de';
 
-import { getTenantUiLocale } from './utils/tenantFormatting';
+import { getTenantDayjsUiLocale } from './utils/tenantFormatting';
 
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -44,7 +44,7 @@ const UsersManager = React.lazy(() => import('./components/Admin/UsersManager'))
 
 const TenantDateLocalizationProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { tenantContext } = useAuth();
-  const adapterLocale = getTenantUiLocale(tenantContext);
+  const adapterLocale = getTenantDayjsUiLocale(tenantContext);
 
   useEffect(() => {
     dayjs.locale(adapterLocale);

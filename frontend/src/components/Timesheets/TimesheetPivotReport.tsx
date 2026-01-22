@@ -86,7 +86,9 @@ type PivotResponseApi = {
   };
   rows: Array<{ id: string; label: string }>;
   columns: Array<{ id: string; label: string }>;
-  cells: Record<string, number>;
+  cells:
+    | Array<{ row_id: string | number; column_id: string | number; hours: number | string }>
+    | Record<string, number | string>;
   totals?: {
     rows?: Array<{ row_id: string; hours: number }>;
     columns?: Array<{ column_id: string; hours: number }>;
@@ -94,22 +96,81 @@ type PivotResponseApi = {
   };
 };
 
+const normalizePivotKey = (value: unknown): string => String(value ?? '').trim();
+
+const splitPivotCellKey = (raw: string): { rowKey: string; colKey: string } | null => {
+  const s = normalizePivotKey(raw);
+  if (s === '') return null;
+
+  const separators = [':', '|', ';'] as const;
+  for (const sepChar of separators) {
+    const sep = s.lastIndexOf(sepChar);
+    if (sep > 0 && sep < s.length - 1) {
+      return {
+        rowKey: normalizePivotKey(s.slice(0, sep)),
+        colKey: normalizePivotKey(s.slice(sep + 1)),
+      };
+    }
+  }
+
+  return null;
+};
+
+const parsePivotCellNumber = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value !== 'string') return 0;
+
+  const raw = value.trim();
+  if (raw === '') return 0;
+
+  // Accept "12.5" or "12,5" (no thousands separators).
+  if (/^-?\d+(?:[\.,]\d+)?$/.test(raw)) {
+    const normalized = raw.includes(',') && !raw.includes('.') ? raw.replace(',', '.') : raw;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+};
+
 const normalizePivotResponse = (apiData: PivotResponseApi): PivotResponse => {
   const rowTotals: Record<string, number> = {};
   const colTotals: Record<string, number> = {};
+  const cells: Record<string, number> = {};
 
   for (const r of apiData.totals?.rows ?? []) {
-    rowTotals[String(r.row_id)] = typeof r.hours === 'number' ? r.hours : 0;
+    rowTotals[normalizePivotKey(r.row_id)] = typeof r.hours === 'number' ? r.hours : 0;
   }
   for (const c of apiData.totals?.columns ?? []) {
-    colTotals[String(c.column_id)] = typeof c.hours === 'number' ? c.hours : 0;
+    colTotals[normalizePivotKey(c.column_id)] = typeof c.hours === 'number' ? c.hours : 0;
+  }
+
+  const apiCellsAny: any = (apiData as any)?.cells;
+  if (Array.isArray(apiCellsAny)) {
+    for (const cell of apiCellsAny) {
+      const rowKey = normalizePivotKey(cell?.row_id);
+      const colKey = normalizePivotKey(cell?.column_id);
+      if (!rowKey || !colKey) continue;
+      const canonicalKey = `${rowKey}:${colKey}`;
+      cells[canonicalKey] = parsePivotCellNumber(cell?.hours);
+    }
+  } else {
+    for (const [k, v] of Object.entries((apiData as any).cells ?? {})) {
+      const parts = splitPivotCellKey(k);
+      if (!parts) {
+        continue;
+      }
+
+      const canonicalKey = `${parts.rowKey}:${parts.colKey}`;
+      cells[canonicalKey] = parsePivotCellNumber(v);
+    }
   }
 
   return {
     meta: apiData.meta,
-    rows: (apiData.rows ?? []).map((r) => ({ key: String(r.id), label: String(r.label) })),
-    columns: (apiData.columns ?? []).map((c) => ({ key: String(c.id), label: String(c.label) })),
-    cells: apiData.cells ?? {},
+    rows: (apiData.rows ?? []).map((r) => ({ key: normalizePivotKey(r.id), label: String(r.label) })),
+    columns: (apiData.columns ?? []).map((c) => ({ key: normalizePivotKey(c.id), label: String(c.label) })),
+    cells,
     totals: {
       rows: rowTotals,
       columns: colTotals,
@@ -148,7 +209,9 @@ const answerPivotQuestionDeterministically = (
   for (const [k, v] of Object.entries(data.cells ?? {})) {
     const hours = typeof v === 'number' ? v : 0;
     if (hours <= 0) continue;
-    const [rowKey, colKey] = k.split(':');
+    const sep = k.lastIndexOf(':');
+    const rowKey = sep > 0 ? k.slice(0, sep) : '';
+    const colKey = sep > 0 ? k.slice(sep + 1) : '';
     if (!rowKey || !colKey) continue;
     if (!peak || hours > peak.hours) {
       peak = { rowKey, colKey, hours };
@@ -327,6 +390,26 @@ const TimesheetPivotReport: React.FC = () => {
       mounted = false;
     };
   }, [canQuery, payload]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (!data) return;
+
+    const grand = typeof data.totals?.grand === 'number' ? data.totals.grand : 0;
+    if (grand <= 0) return;
+
+    const hasNonZeroCell = Object.values(data.cells ?? {}).some((v) => typeof v === 'number' && v > 0);
+    if (hasNonZeroCell) return;
+
+    console.warn('[TimesheetPivotReport] totals > 0 but all cells are 0; check pivot key normalization', {
+      sampleRowKey: data.rows?.[0]?.key,
+      sampleColKey: data.columns?.[0]?.key,
+      sampleCellKey:
+        data.rows?.[0]?.key && data.columns?.[0]?.key ? `${data.rows[0].key}:${data.columns[0].key}` : null,
+      grand,
+      cellsKeysSample: Object.keys(data.cells ?? {}).slice(0, 5),
+    });
+  }, [data]);
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
     if (!canQuery) return;

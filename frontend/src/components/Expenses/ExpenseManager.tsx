@@ -35,7 +35,7 @@ import {
   formatTenantMoney,
   formatTenantMoneyPerDistanceKm,
   getTenantDatePickerFormat,
-  getTenantUiLocale,
+  getTenantDayjsUiLocale,
   getTenantDistanceUnit,
   kmToDisplayDistance,
   ratePerKmToDisplayRate,
@@ -704,7 +704,7 @@ export const ExpenseManager: React.FC = () => {
       )}
 
       {/* Expense Entry Dialog */}
-      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={getTenantUiLocale(tenantContext)}>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={getTenantDayjsUiLocale(tenantContext)}>
         <Dialog 
           open={dialogOpen} 
           onClose={() => setDialogOpen(false)} 
