@@ -48,7 +48,7 @@ import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import api, { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth, API_URL } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
-import { formatTenantDate, formatTenantDateTime, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
+import { formatTenantDate, formatTenantDateTime, formatTenantTime, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 import TimesheetEditDialog from '../Timesheets/TimesheetEditDialog';
 import PageHeader from '../Common/PageHeader';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
@@ -684,14 +684,24 @@ const ApprovalManager: React.FC = () => {
       field: 'start_time',
       headerName: 'Start',
       width: 80,
-      valueGetter: (value: any) => value ?? '—',
+      valueGetter: (value: any) => value ?? null,
+      renderCell: ({ value }) => {
+        if (!value) return <Typography variant="body2">—</Typography>;
+        const formatted = formatTenantTime(value, tenantContext);
+        return <Typography variant="body2">{formatted === '-' ? '—' : formatted}</Typography>;
+      },
       filterable: true,
     },
     {
       field: 'end_time',
       headerName: 'End',
       width: 80,
-      valueGetter: (value: any) => value ?? '—',
+      valueGetter: (value: any) => value ?? null,
+      renderCell: ({ value }) => {
+        if (!value) return <Typography variant="body2">—</Typography>;
+        const formatted = formatTenantTime(value, tenantContext);
+        return <Typography variant="body2">{formatted === '-' ? '—' : formatted}</Typography>;
+      },
       filterable: true,
     },
     {
