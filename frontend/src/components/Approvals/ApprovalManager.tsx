@@ -48,6 +48,7 @@ import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import api, { timesheetsApi, projectsApi, tasksApi, locationsApi, fetchWithAuth, API_URL } from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
+import { formatTenantDate, formatTenantDateTime, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 import TimesheetEditDialog from '../Timesheets/TimesheetEditDialog';
 import PageHeader from '../Common/PageHeader';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
@@ -61,9 +62,11 @@ type TabKey = 'timesheets' | 'expenses';
 const formatDate = (value: Dayjs) => value.format('YYYY-MM-DD');
 
 const ApprovalManager: React.FC = () => {
-  const { isManager, isAdmin, user } = useAuth();
+  const { isManager, isAdmin, user, tenantContext } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para counts
   useTenantGuard(); // Ensure tenant_slug exists
+
+  const datePickerFormat = useMemo(() => getTenantDatePickerFormat(tenantContext), [tenantContext]);
   // Use permission first (owners may not be in Manager/Admin role but still can approve).
   const canManageTimesheets =
     isManager() ||
@@ -670,6 +673,11 @@ const ApprovalManager: React.FC = () => {
       headerName: 'Date',
       width: 100,
       valueGetter: (value: any) => value ?? '',
+      renderCell: ({ value }) => {
+        const ymd = typeof value === 'string' ? value.slice(0, 10) : '';
+        const label = ymd ? formatTenantDate(ymd, tenantContext) : '—';
+        return <Typography variant="body2">{label}</Typography>;
+      },
       filterable: true,
     },
     {
@@ -918,7 +926,7 @@ const ApprovalManager: React.FC = () => {
                 label="From Date"
                 value={dateFrom}
                 onChange={(newValue) => newValue && setDateFrom(newValue)}
-                format="DD/MM/YYYY"
+                format={datePickerFormat}
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -932,7 +940,7 @@ const ApprovalManager: React.FC = () => {
                 label="To Date"
                 value={dateTo}
                 onChange={(newValue) => newValue && setDateTo(newValue)}
-                format="DD/MM/YYYY"
+                format={datePickerFormat}
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -1273,7 +1281,7 @@ const ApprovalManager: React.FC = () => {
                       </Typography>
                       <Typography variant="body1">
                         {travel.start_at 
-                          ? dayjs(travel.start_at).format('DD/MM/YYYY HH:mm')
+                          ? formatTenantDateTime(travel.start_at, tenantContext)
                           : 'N/A'}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -1286,7 +1294,7 @@ const ApprovalManager: React.FC = () => {
                       </Typography>
                       <Typography variant="body1">
                         {travel.end_at 
-                          ? dayjs(travel.end_at).format('DD/MM/YYYY HH:mm')
+                          ? formatTenantDateTime(travel.end_at, tenantContext)
                           : 'N/A'}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">

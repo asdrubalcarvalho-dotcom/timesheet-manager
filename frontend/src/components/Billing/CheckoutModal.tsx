@@ -24,6 +24,8 @@ import type { Stripe } from '@stripe/stripe-js';
 import { useBilling } from '../../contexts/BillingContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantMoney } from '../../utils/tenantFormatting';
 
 /**
  * Gateway Configuration Response
@@ -62,6 +64,7 @@ const StripeCheckoutForm: React.FC<{
   const stripe = useStripe();
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
+  const { tenantContext } = useAuth();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -124,7 +127,7 @@ const StripeCheckoutForm: React.FC<{
     <form onSubmit={handleSubmit}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#667eea' }}>
-          Amount to charge: €{amount.toFixed(2)}
+          Amount to charge: {formatTenantMoney(amount, tenantContext)}
         </Typography>
         <Divider sx={{ my: 2 }} />
         <PaymentElement />
@@ -150,7 +153,7 @@ const StripeCheckoutForm: React.FC<{
             },
           }}
         >
-          {processing ? 'Processing...' : `Pay €${amount.toFixed(2)}`}
+          {processing ? 'Processing...' : `Pay ${formatTenantMoney(amount, tenantContext)}`}
         </Button>
       </DialogActions>
     </form>
@@ -170,6 +173,7 @@ const FakeCheckoutForm: React.FC<{
 }> = ({ paymentId, amount, onSuccess, onError, onCancel }) => {
   const [cardNumber, setCardNumber] = useState('4242424242424242');
   const [processing, setProcessing] = useState(false);
+  const { tenantContext } = useAuth();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -260,7 +264,7 @@ const FakeCheckoutForm: React.FC<{
             },
           }}
         >
-          {processing ? 'Processing...' : `Pay €${amount.toFixed(2)}`}
+          {processing ? 'Processing...' : `Pay ${formatTenantMoney(amount, tenantContext)}`}
         </Button>
       </DialogActions>
     </form>
@@ -290,6 +294,7 @@ const CheckoutModal: React.FC = () => {
     refreshSummary,
   } = useBilling();
   const { showSuccess, showError } = useNotification();
+  const { tenantContext } = useAuth();
 
   const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | null>(null);
   const [checkoutData, setCheckoutData] = useState<CheckoutStartResponse | null>(null);
@@ -598,7 +603,7 @@ const CheckoutModal: React.FC = () => {
                     Amount to charge now
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#f57c00' }}>
-                    €{checkoutData?.amount.toFixed(2) || details.data.priceDifference?.toFixed(2) || '0.00'}
+                    {formatTenantMoney(checkoutData?.amount ?? details.data.priceDifference ?? 0, tenantContext)}
                   </Typography>
                 </Box>
               </Box>
@@ -624,7 +629,7 @@ const CheckoutModal: React.FC = () => {
                     Amount to charge now
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-                    €0.00
+                    {formatTenantMoney(0, tenantContext)}
                   </Typography>
                 </Box>
               </Box>
@@ -643,7 +648,7 @@ const CheckoutModal: React.FC = () => {
                       (already paid for this billing cycle)
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.disabled', fontWeight: 500 }}>
-                      €{details.data.basePrice?.toFixed(2) || '0.00'}
+                      {formatTenantMoney(details.data.basePrice ?? 0, tenantContext)}
                     </Typography>
                   </Box>
                 </Box>
@@ -661,7 +666,7 @@ const CheckoutModal: React.FC = () => {
                             • {addon.name}
                           </Typography>
                           <Typography variant="body2" sx={{ color: 'text.disabled', fontWeight: 500 }}>
-                            €{addon.price.toFixed(2)}
+                            {formatTenantMoney(addon.price, tenantContext)}
                           </Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 500, pl: 2 }}>
@@ -690,7 +695,7 @@ const CheckoutModal: React.FC = () => {
                         )}
                       </Box>
                       <Typography variant="body2" sx={{ fontWeight: 500, color: '#667eea' }}>
-                        €{checkoutData?.amount.toFixed(2) || details.data.newAddon.price.toFixed(2)}
+                        {formatTenantMoney(checkoutData?.amount ?? details.data.newAddon.price, tenantContext)}
                       </Typography>
                     </Box>
                   </Box>
@@ -704,7 +709,7 @@ const CheckoutModal: React.FC = () => {
                     Amount to charge now
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#f57c00' }}>
-                    €{checkoutData?.amount.toFixed(2) || '0.00'}
+                    {formatTenantMoney(checkoutData?.amount ?? 0, tenantContext)}
                   </Typography>
                 </Box>
               </Box>
@@ -743,7 +748,7 @@ const CheckoutModal: React.FC = () => {
                     Amount to charge now
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#f57c00' }}>
-                    €{checkoutData?.amount.toFixed(2) || '0.00'}
+                    {formatTenantMoney(checkoutData?.amount ?? 0, tenantContext)}
                   </Typography>
                 </Box>
               </Box>

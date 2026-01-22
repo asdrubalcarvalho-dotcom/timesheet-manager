@@ -12,6 +12,8 @@ import {
 } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import type { Timesheet, Project, Task, Location } from '../../types';
+import { useAuth } from '../Auth/AuthContext';
+import { getTenantDatePickerFormat, getTenantHourCycle, getTenantTimeFormat } from '../../utils/tenantFormatting';
 
 interface TimesheetEditDialogProps {
   open: boolean;
@@ -38,7 +40,12 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
   locations,
   readOnly = false
 }) => {
+  const { tenantContext } = useAuth();
   const [loading, setLoading] = useState(false);
+
+  const datePickerFormat = useMemo(() => getTenantDatePickerFormat(tenantContext), [tenantContext]);
+  const timePickerAmpm = useMemo(() => getTenantHourCycle(tenantContext) === 12, [tenantContext]);
+  const timePickerFormat = useMemo(() => getTenantTimeFormat(tenantContext), [tenantContext]);
   
   // Form state
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
@@ -256,7 +263,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                         label="Date"
                         value={selectedDate}
                         onChange={(newDate) => setSelectedDate(newDate)}
-                        format="DD/MM/YYYY"
+                        format={datePickerFormat}
                         disabled={!isEditable}
                         slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                       />
@@ -273,8 +280,8 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                             setEndTimeObj(newEndTime);
                           }
                         }}
-                        ampm={false}
-                        format="HH:mm"
+                        ampm={timePickerAmpm}
+                        format={timePickerFormat}
                         minutesStep={15}
                         disabled={!isEditable}
                         slotProps={{ textField: { fullWidth: true, size: 'small' } }}
@@ -286,8 +293,8 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                         label="End Time"
                         value={endTimeObj}
                         onChange={(newTime) => setEndTimeObj(newTime)}
-                        ampm={false}
-                        format="HH:mm"
+                        ampm={timePickerAmpm}
+                        format={timePickerFormat}
                         minutesStep={15}
                         disabled={!isEditable}
                         slotProps={{ textField: { fullWidth: true, size: 'small' } }}

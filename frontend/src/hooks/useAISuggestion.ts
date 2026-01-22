@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { aiService } from '../services/aiService';
 import type { AISuggestion, SuggestionRequest } from '../services/aiService';
 import { useFeatures } from '../contexts/FeatureContext';
+import { useAuth } from '../components/Auth/AuthContext';
 
 export interface UseAISuggestionOptions {
   autoLoad?: boolean;
@@ -135,6 +136,7 @@ export const useAISuggestion = (
 // Hook specifically for timesheet form integration
 export const useTimesheetAISuggestion = (projectId: number, targetDate: string) => {
   const aiHook = useAISuggestion({ autoLoad: false, minConfidence: 0.4 });
+  const { tenantContext } = useAuth();
   
   useEffect(() => {
     if (projectId > 0 && targetDate) {
@@ -142,7 +144,7 @@ export const useTimesheetAISuggestion = (projectId: number, targetDate: string) 
         project_id: projectId,
         target_date: targetDate,
         context: {
-          day_of_week: new Date(targetDate).toLocaleDateString('en-US', { weekday: 'long' }),
+          day_of_week: new Date(targetDate).toLocaleDateString(tenantContext?.locale || 'en-US', { weekday: 'long' }),
           recent_entries: 5
         }
       };

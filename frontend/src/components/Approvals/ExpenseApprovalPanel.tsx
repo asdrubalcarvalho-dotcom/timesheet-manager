@@ -63,6 +63,14 @@ import isBetween from 'dayjs/plugin/isBetween';
 import type { Expense } from '../../types';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useAuth } from '../Auth/AuthContext';
+import {
+  formatTenantDate,
+  formatTenantDistanceKm,
+  formatTenantMoney,
+  formatTenantMoneyPerDistanceKm,
+  getTenantDatePickerFormat,
+} from '../../utils/tenantFormatting';
 
 dayjs.extend(isBetween);
 
@@ -91,6 +99,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
   userRole
 }) => {
   const { showSuccess, showError } = useNotification();
+  const { tenantContext } = useAuth();
+  const datePickerFormat = getTenantDatePickerFormat(tenantContext);
+  const currencySymbol = tenantContext?.currency_symbol || '$';
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('approvals-expenses');
   const [selectedExpenses, setSelectedExpenses] = useState<Set<number>>(new Set());
   const [dateFrom, setDateFrom] = useState<Dayjs>(dayjs().subtract(1, 'month'));
@@ -440,7 +451,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               </Box>
 
               <Typography variant="subtitle1" fontWeight={700} color={getStatusColor(expense.status)} fontSize="1rem">
-                €{(parseFloat(String(expense.amount)) || 0).toFixed(2)}
+                {formatTenantMoney(parseFloat(String(expense.amount)) || 0, tenantContext)}
               </Typography>
             </Stack>
 
@@ -452,7 +463,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <CalendarToday sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
-                    {dayjs(expense.date).format('DD MMM YYYY')}
+                    {formatTenantDate(expense.date, tenantContext)}
                   </Typography>
                 </Stack>
               </Grid>
@@ -478,7 +489,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {expense.expense_type === 'mileage' && (
                 <Grid item xs={12}>
                   <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
-                    🛣️ {expense.distance_km} km × €{expense.rate_per_km}/km ({expense.vehicle_type})
+                    🛣️ {formatTenantDistanceKm(Number(expense.distance_km ?? 0), tenantContext, 2)} × {formatTenantMoneyPerDistanceKm(Number(expense.rate_per_km ?? 0), tenantContext)} ({expense.vehicle_type})
                   </Typography>
                 </Grid>
               )}
@@ -641,7 +652,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 </Typography>
               </Box>
               <Typography variant="h6" fontWeight={700} color={color} fontSize="1.1rem">
-                €{totalAmount.toFixed(2)}
+                {formatTenantMoney(totalAmount, tenantContext)}
               </Typography>
             </Stack>
 
@@ -690,7 +701,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   TOTAL VALUE
                 </Typography>
                 <Typography variant="h5" fontWeight={700} color="white">
-                  €{stats.total.toFixed(2)}
+                  {formatTenantMoney(stats.total, tenantContext)}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
                   {stats.count} expenses
@@ -706,7 +717,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                       SELECTED
                     </Typography>
                     <Typography variant="h6" fontWeight={600} color="white">
-                      €{stats.selected.toFixed(2)}
+                      {formatTenantMoney(stats.selected, tenantContext)}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
                       {stats.selectedCount} selected
@@ -881,6 +892,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   label="From Date"
                   value={dateFrom}
                   onChange={(val) => val && setDateFrom(val)}
+                  format={datePickerFormat}
                   slotProps={{ textField: { size: 'small', fullWidth: true } }}
                 />
               </Grid>
@@ -889,6 +901,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   label="To Date"
                   value={dateTo}
                   onChange={(val) => val && setDateTo(val)}
+                  format={datePickerFormat}
                   slotProps={{ textField: { size: 'small', fullWidth: true } }}
                 />
               </Grid>
@@ -903,7 +916,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   value={minAmount}
                   onChange={(e) => setMinAmount(e.target.value ? parseFloat(e.target.value) : '')}
                   InputProps={{
-                    startAdornment: <InputAdornment position="start">€</InputAdornment>
+                    startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment>
                   }}
                 />
               </Grid>
@@ -916,7 +929,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   value={maxAmount}
                   onChange={(e) => setMaxAmount(e.target.value ? parseFloat(e.target.value) : '')}
                   InputProps={{
-                    startAdornment: <InputAdornment position="start">€</InputAdornment>
+                    startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment>
                   }}
                 />
               </Grid>
@@ -1111,7 +1124,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               <Typography variant="h6">Receipt Attachment</Typography>
               {selectedExpense && (
                 <Typography variant="caption" color="text.secondary">
-                  {selectedExpense.category?.replace('_', ' ').toUpperCase()} - €{(parseFloat(String(selectedExpense.amount)) || 0).toFixed(2)}
+                  {selectedExpense.category?.replace('_', ' ').toUpperCase()} - {formatTenantMoney(parseFloat(String(selectedExpense.amount)) || 0, tenantContext)}
                 </Typography>
               )}
             </Box>
@@ -1177,7 +1190,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 </Box>
               )}
               <Stack direction="row" spacing={2} sx={{ mt: 3, justifyContent: 'center' }}>
-                <Chip icon={<CalendarToday />} label={dayjs(selectedExpense.date).format('DD MMM YYYY')} />
+                <Chip icon={<CalendarToday />} label={formatTenantDate(selectedExpense.date, tenantContext)} />
                 <Chip icon={<Person />} label={selectedExpense.technician?.name || '—'} />
                 <Chip icon={<Business />} label={selectedExpense.project?.name || '—'} />
               </Stack>

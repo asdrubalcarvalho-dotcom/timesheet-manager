@@ -18,6 +18,8 @@ import {
   Group as TeamIcon,
   Person as StarterIcon,
 } from '@mui/icons-material';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, formatTenantMoney } from '../../utils/tenantFormatting';
 
 interface PlanCardProps {
   plan: 'starter' | 'team' | 'enterprise';
@@ -44,11 +46,13 @@ const PlanCard: React.FC<PlanCardProps> = ({
   hasPendingDowngrade = false,
   downgradeEffectiveDate = null
 }) => {
+  const { tenantContext } = useAuth();
+
   // Static plan prices (fixed rates, not multiplied by user count)
   const PLAN_PRICES = {
     starter: { price: 'Free', description: 'Up to 2 users' },
-    team: { price: '€44/month', description: 'Per user pricing' },
-    enterprise: { price: '€59/month', description: 'Per user pricing' },
+    team: { price: `${formatTenantMoney(44, tenantContext)}/month`, description: 'Per user pricing' },
+    enterprise: { price: `${formatTenantMoney(59, tenantContext)}/month`, description: 'Per user pricing' },
   };
 
   const planPrice = PLAN_PRICES[plan];
@@ -251,7 +255,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
                   fontStyle: 'italic'
                 }}
               >
-                Effective on: {new Date(downgradeEffectiveDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                Effective on: {formatTenantDate(downgradeEffectiveDate, tenantContext)}
               </Typography>
             )}
           </Box>

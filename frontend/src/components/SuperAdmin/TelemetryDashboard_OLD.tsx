@@ -214,6 +214,8 @@ import {
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import api from '../../services/api';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, formatTenantMoney } from '../../utils/tenantFormatting';
 
 interface SystemInfo {
   app_name: string;
@@ -267,6 +269,7 @@ interface ErrorLogEntry {
 }
 
 const TelemetryDashboard: React.FC = () => {
+  const { tenantContext } = useAuth();
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [billing, setBilling] = useState<BillingData | null>(null);
@@ -385,7 +388,7 @@ const TelemetryDashboard: React.FC = () => {
                   <Typography variant="body2"><strong>Subscriptions:</strong> {billing.subscriptions.total}</Typography>
                   <Typography variant="body2"><strong>Active:</strong> {billing.subscriptions.active}</Typography>
                   <Typography variant="body2"><strong>Payments:</strong> {billing.payments.total}</Typography>
-                  <Typography variant="body2"><strong>Revenue:</strong> €{billing.payments.total_revenue.toFixed(2)}</Typography>
+                  <Typography variant="body2"><strong>Revenue:</strong> {formatTenantMoney(billing.payments.total_revenue, tenantContext)}</Typography>
                 </Box>
               )}
             </CardContent>
@@ -507,9 +510,9 @@ const TelemetryDashboard: React.FC = () => {
                         <TableCell>
                           <Chip label={tenant.plan} color="primary" size="small" />
                         </TableCell>
-                        <TableCell>{new Date(tenant.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>{formatTenantDate(tenant.created_at, tenantContext)}</TableCell>
                         <TableCell>
-                          {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString() : '-'}
+                          {tenant.trial_ends_at ? formatTenantDate(tenant.trial_ends_at, tenantContext) : '-'}
                         </TableCell>
                       </TableRow>
                     ))}

@@ -36,6 +36,8 @@ import EmptyState from '../Common/EmptyState';
 import api from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 
 interface Project {
   id: number;
@@ -72,6 +74,8 @@ const formatDateForInput = (value?: string | null) => {
 };
 
 const ProjectsManager: React.FC = () => {
+  const { tenantContext } = useAuth();
+  const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { showSuccess, showError } = useNotification();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-projects');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -423,14 +427,14 @@ const ProjectsManager: React.FC = () => {
       headerName: 'Start Date',
       width: 130,
       renderCell: ({ value }: GridRenderCellParams) => 
-        value ? dayjs(value).format('DD/MM/YYYY') : '-'
+        value ? formatTenantDate(value, tenantContext) : '-'
     },
     {
       field: 'end_date',
       headerName: 'End Date',
       width: 130,
       renderCell: ({ value }: GridRenderCellParams) => 
-        value ? dayjs(value).format('DD/MM/YYYY') : '-'
+        value ? formatTenantDate(value, tenantContext) : '-'
     },
     {
       field: 'status',
@@ -608,6 +612,7 @@ const ProjectsManager: React.FC = () => {
               label="Start Date"
               value={formData.start_date ? dayjs(formData.start_date) : null}
               onChange={(newValue) => setFormData({ ...formData, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
+              format={datePickerFormat}
               slotProps={{ 
                 textField: { 
                   fullWidth: true,
@@ -619,6 +624,7 @@ const ProjectsManager: React.FC = () => {
               label="End Date"
               value={formData.end_date ? dayjs(formData.end_date) : null}
               onChange={(newValue) => setFormData({ ...formData, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
+              format={datePickerFormat}
               slotProps={{ 
                 textField: { 
                   fullWidth: true,
@@ -680,8 +686,8 @@ const ProjectsManager: React.FC = () => {
                       projectTasks.map((t) => (
                         <TableRow key={t.id} hover>
                           <TableCell>{t.name}</TableCell>
-                          <TableCell>{t.start_date ? dayjs(t.start_date).format('DD/MM/YYYY') : '-'}</TableCell>
-                          <TableCell>{t.end_date ? dayjs(t.end_date).format('DD/MM/YYYY') : '-'}</TableCell>
+                          <TableCell>{t.start_date ? formatTenantDate(t.start_date, tenantContext) : '-'}</TableCell>
+                          <TableCell>{t.end_date ? formatTenantDate(t.end_date, tenantContext) : '-'}</TableCell>
                           <TableCell align="right">{t.progress != null ? `${t.progress}%` : '0%'}</TableCell>
                           <TableCell align="right">
                             <IconButton size="small" onClick={() => openEditTask(t)} disabled={isReadOnly} sx={{ color: '#667eea' }}>
@@ -734,6 +740,7 @@ const ProjectsManager: React.FC = () => {
               label="Start Date"
               value={taskForm.start_date ? dayjs(taskForm.start_date) : null}
               onChange={(newValue) => setTaskForm((p) => ({ ...p, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' }))}
+              format={datePickerFormat}
               slotProps={{
                 textField: {
                   fullWidth: true,
@@ -745,6 +752,7 @@ const ProjectsManager: React.FC = () => {
               label="End Date"
               value={taskForm.end_date ? dayjs(taskForm.end_date) : null}
               onChange={(newValue) => setTaskForm((p) => ({ ...p, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' }))}
+              format={datePickerFormat}
               slotProps={{
                 textField: {
                   fullWidth: true,

@@ -26,6 +26,11 @@ final readonly class TenantContext
          * IETF locale tag for frontend Intl APIs (e.g. en-US, pt-PT).
          */
         public string $presentationLocale,
+        /**
+         * Optional UI locale override for frontend-only language.
+         * Example values: en, en-GB, pt, pt-PT.
+         */
+        public ?string $uiLocale,
         public string $locale,
         public string $timezone,
         /**
@@ -65,6 +70,9 @@ final readonly class TenantContext
 
         $locale = (string) $localeConfig['app_locale'];
         $presentationLocale = (string) $localeConfig['locale'];
+
+        $uiLocaleRaw = (string) data_get($tenant->settings ?? [], 'ui_locale', '');
+        $uiLocale = trim($uiLocaleRaw) !== '' ? trim($uiLocaleRaw) : null;
         $numberLocale = (string) $localeConfig['number_locale'];
 
         $currency = (string) $localeConfig['currency'];
@@ -84,6 +92,7 @@ final readonly class TenantContext
             state: $state,
             policyKey: $policyKey,
             presentationLocale: $presentationLocale,
+            uiLocale: $uiLocale,
             locale: $locale,
             timezone: $timezone,
             weekStart: $weekStart,
@@ -108,6 +117,7 @@ final readonly class TenantContext
             'policy_key' => $this->policyKey,
             'timezone' => $this->timezone,
             'locale' => $this->presentationLocale,
+            'ui_locale' => $this->uiLocale,
             'date_format' => $this->dateFormat,
             'currency' => $this->currency,
             'currency_symbol' => $this->currencySymbol,

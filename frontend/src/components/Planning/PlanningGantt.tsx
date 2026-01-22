@@ -110,6 +110,7 @@ import api from '../../services/api';
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 import TaskLocationsDialog from '../Common/TaskLocationsDialog';
 import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate } from '../../utils/tenantFormatting';
 
 interface Project {
   id: number;
@@ -236,7 +237,8 @@ const ensureDhtmlxGanttAssets = (): Promise<void> => {
 const buildColumns = (
   visibleColumns: VisibleColumnsState,
   planningView: 'projects' | 'locations' = 'projects',
-  resolveProjectName?: (projectId: number) => string
+  resolveProjectName?: (projectId: number) => string,
+  formatGridDate?: (value: unknown) => string
 ) => {
   const cols: any[] = [];
 
@@ -282,11 +284,29 @@ const buildColumns = (
   }
 
   if (visibleColumns.start_date) {
-    cols.push({ name: 'start_date', label: 'Start', width: 100, align: 'center' });
+    cols.push({
+      name: 'start_date',
+      label: 'Start',
+      width: 100,
+      align: 'center',
+      template: (task: any) => {
+        if (!formatGridDate) return String(task?.start_date ?? '');
+        return formatGridDate(task?.start_date);
+      },
+    });
   }
 
   if (visibleColumns.end_date) {
-    cols.push({ name: 'end_date', label: 'End', width: 100, align: 'center' });
+    cols.push({
+      name: 'end_date',
+      label: 'End',
+      width: 100,
+      align: 'center',
+      template: (task: any) => {
+        if (!formatGridDate) return String(task?.end_date ?? '');
+        return formatGridDate(task?.end_date);
+      },
+    });
   }
 
   if (visibleColumns.progress) {
@@ -375,8 +395,26 @@ interface PlanningGanttProps {
 
 const PlanningGantt: React.FC<PlanningGanttProps> = ({ initialView = 'projects' }) => {
   useTenantGuard();
-  const { hasPermission } = useAuth();
+  const { hasPermission, tenantContext } = useAuth();
   const canCreatePlanning = hasPermission('create-planning');
+
+  const formatGridDate = useMemo(() => {
+    const toYmd = (value: unknown): string | null => {
+      if (value instanceof Date) {
+        return dayjs(value).isValid() ? dayjs(value).format('YYYY-MM-DD') : null;
+      }
+      if (typeof value === 'string') {
+        const s = value.trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      }
+      return null;
+    };
+
+    return (value: unknown): string => {
+      const ymd = toYmd(value);
+      return ymd ? formatTenantDate(ymd, tenantContext) : '';
+    };
+  }, [tenantContext]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
@@ -659,7 +697,12 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
           gantt.config.show_progress = true;
           gantt.config.row_height = 34;
 
-          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, planningView, resolveProjectName);
+          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, planningView, resolveProjectName, formatGridDate);
+
+          gantt.templates.tooltip_date_format = (date: Date) => {
+            const ymd = dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DD') : '';
+            return ymd ? formatTenantDate(ymd, tenantContext) : '';
+          };
 
           // Task classes and colors
           let selectedTaskId: string | number | null = null;
@@ -757,7 +800,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
         window.gantt.clearAll();
       }
     };
-  }, [dhtmlxLoaded, ganttInitialized, viewMode, gridVisible, planningView]);
+  }, [dhtmlxLoaded, ganttInitialized, viewMode, gridVisible, planningView, formatGridDate, tenantContext]);
 
   // Update columns and layout when visibility/grid/view changes
   useEffect(() => {
@@ -766,7 +809,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
     
     // Ensure grid width matches gridVisible state
     gantt.config.grid_width = gridVisible ? 300 : 0;
-    gantt.config.columns = buildColumns(visibleColumns, planningView, resolveProjectName);
+    gantt.config.columns = buildColumns(visibleColumns, planningView, resolveProjectName, formatGridDate);
     gantt.render();
     
     // Fix column squeezing after view switches
@@ -775,7 +818,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
     } catch (e) {
       // no-op
     }
-  }, [visibleColumns, gridVisible, ganttInitialized, resolveProjectName, planningView]);
+  }, [visibleColumns, gridVisible, ganttInitialized, resolveProjectName, planningView, formatGridDate]);
 
   // Parse tasks into Gantt when tasks array changes
   useEffect(() => {

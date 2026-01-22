@@ -28,6 +28,8 @@ import { useBilling } from '../../contexts/BillingContext';
 import { getTenantAiState } from '../Common/aiState';
 import ReportFiltersCard from '../Common/ReportFiltersCard';
 import ReportAISideTab from '../Common/ReportAISideTab';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate, formatTenantNumber, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 
 type Period = 'day' | 'week' | 'month';
 type Dimension = 'user' | 'project';
@@ -235,6 +237,8 @@ const getFilenameFromContentDisposition = (headerValue: string | undefined): str
 };
 
 const TimesheetPivotReport: React.FC = () => {
+  const { tenantContext } = useAuth();
+  const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
   const aiState = getTenantAiState(billingSummary, tenantAiEnabled);
 
@@ -456,6 +460,7 @@ const TimesheetPivotReport: React.FC = () => {
                 label="From"
                 value={fromPickerValue}
                 onChange={(val) => val && setFrom(val.format('YYYY-MM-DD'))}
+                format={datePickerFormat}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
@@ -465,6 +470,7 @@ const TimesheetPivotReport: React.FC = () => {
                 label="To"
                 value={toPickerValue}
                 onChange={(val) => val && setTo(val.format('YYYY-MM-DD'))}
+                format={datePickerFormat}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
@@ -548,7 +554,7 @@ const TimesheetPivotReport: React.FC = () => {
                         RANGE
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
-                        {from} → {to}
+                        {formatTenantDate(from, tenantContext)} → {formatTenantDate(to, tenantContext)}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -558,7 +564,9 @@ const TimesheetPivotReport: React.FC = () => {
                         GRAND TOTAL
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
-                        {deterministicInsights.grand !== null ? `${deterministicInsights.grand}h` : '—'}
+                        {deterministicInsights.grand !== null
+                          ? `${formatTenantNumber(deterministicInsights.grand, tenantContext, 2)}h`
+                          : '—'}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -641,13 +649,17 @@ const TimesheetPivotReport: React.FC = () => {
                         const value = typeof data.cells?.[cellKey] === 'number' ? data.cells[cellKey] : 0;
                         return (
                           <TableCell key={c.key} align="right">
-                            {value}
+                            {formatTenantNumber(value, tenantContext, 2)}
                           </TableCell>
                         );
                       })}
                       {showRowTotals && (
                         <TableCell align="right" sx={{ fontWeight: 700 }}>
-                          {typeof data.totals?.rows?.[r.key] === 'number' ? data.totals.rows[r.key] : 0}
+                          {formatTenantNumber(
+                            typeof data.totals?.rows?.[r.key] === 'number' ? data.totals.rows[r.key] : 0,
+                            tenantContext,
+                            2
+                          )}
                         </TableCell>
                       )}
                     </TableRow>
@@ -658,12 +670,18 @@ const TimesheetPivotReport: React.FC = () => {
                       <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
                       {data.columns.map((c) => (
                         <TableCell key={c.key} align="right" sx={{ fontWeight: 700 }}>
-                          {typeof data.totals?.columns?.[c.key] === 'number' ? data.totals.columns[c.key] : 0}
+                          {formatTenantNumber(
+                            typeof data.totals?.columns?.[c.key] === 'number' ? data.totals.columns[c.key] : 0,
+                            tenantContext,
+                            2
+                          )}
                         </TableCell>
                       ))}
                       {showRowTotals && (
                         <TableCell align="right" sx={{ fontWeight: 800 }}>
-                          {showGrandTotal ? data.totals?.grand : ''}
+                          {showGrandTotal
+                            ? formatTenantNumber(typeof data.totals?.grand === 'number' ? data.totals.grand : 0, tenantContext, 2)
+                            : ''}
                         </TableCell>
                       )}
                     </TableRow>

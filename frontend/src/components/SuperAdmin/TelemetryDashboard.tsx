@@ -38,6 +38,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import ErrorLogTable from './ErrorLogTable';
 import PerformanceMonitor from './PerformanceMonitor';
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDate } from '../../utils/tenantFormatting';
 
 interface SystemInfo {
   app_name: string;
@@ -96,6 +98,7 @@ interface ErrorLogEntry {
 
 const TelemetryDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { tenantContext } = useAuth();
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [billing, setBilling] = useState<BillingData | null>(null);
@@ -438,9 +441,9 @@ const TelemetryDashboard: React.FC = () => {
                         <TableCell>
                           <Chip label={tenant.plan} color="primary" size="small" />
                         </TableCell>
-                        <TableCell>{new Date(tenant.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>{formatTenantDate(tenant.created_at, tenantContext)}</TableCell>
                         <TableCell>
-                          {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString() : '-'}
+                          {tenant.trial_ends_at ? formatTenantDate(tenant.trial_ends_at, tenantContext) : '-'}
                         </TableCell>
                       </TableRow>
                     ))}

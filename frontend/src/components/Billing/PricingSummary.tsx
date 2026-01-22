@@ -34,9 +34,9 @@ interface PricingSummaryProps {
  * PricingSummary - Displays detailed pricing breakdown and checkout button
  * 
  * Shows:
- * - Base Plan: €X/user × N users = €Y
+ * - Base Plan: {currency}X/user × N users = {currency}Y
  * - Individual addons: Planning (+18%), AI (+18%)
- * - Total Monthly: €Z
+ * - Total Monthly: {currency}Z
  * 
  * All pricing values from BillingContext (backend source of truth)
  */
@@ -86,12 +86,12 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>Base Plan × {displayLicenses} licenses</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  €{safeBaseSubtotal.toFixed(2)}
+                  {formatTenantMoney(safeBaseSubtotal, tenantContext)}
                 </Typography>
               </Box>
               {displayLicenses > 0 && safePricePerUser > 0 && (
                 <Typography variant="caption" sx={{ opacity: 0.9, mt: 0.5, display: 'block' }}>
-                  €{safePricePerUser.toFixed(2)}/user × {displayLicenses} license{displayLicenses !== 1 ? 's' : ''}
+                  {formatTenantMoney(safePricePerUser, tenantContext)}/user × {displayLicenses} license{displayLicenses !== 1 ? 's' : ''}
                 </Typography>
               )}
             </Box>
@@ -109,7 +109,7 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
                       • Planning (+18%)
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      €{planningAddon.toFixed(2)}
+                      {formatTenantMoney(planningAddon, tenantContext)}
                     </Typography>
                   </Box>
                 )}
@@ -119,7 +119,7 @@ const PricingSummary: React.FC<PricingSummaryProps> = ({
                       • AI Assistant (+18%)
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      €{aiAddon.toFixed(2)}
+                      {formatTenantMoney(aiAddon, tenantContext)}
                     </Typography>
                   </Box>
                 )}

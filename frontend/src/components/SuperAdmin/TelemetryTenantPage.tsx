@@ -26,6 +26,8 @@ import { ArrowBack } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
+import { useAuth } from '../Auth/AuthContext';
+import { formatTenantDateTime } from '../../utils/tenantFormatting';
 interface Tenant {
   id: string;
   slug: string;
@@ -61,6 +63,7 @@ interface UsageData {
 const TelemetryTenantPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { tenantContext } = useAuth();
   
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [billing, setBilling] = useState<BillingData | null>(null);
@@ -164,11 +167,11 @@ const TelemetryTenantPage: React.FC = () => {
                   <Chip label={tenant.plan} color="primary" size="small" />
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Created:</strong> {new Date(tenant.created_at).toLocaleString()}
+                  <strong>Created:</strong> {formatTenantDateTime(tenant.created_at, tenantContext)}
                 </Typography>
                 <Typography variant="body2">
                   <strong>Trial Ends:</strong>{' '}
-                  {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleString() : 'N/A'}
+                  {tenant.trial_ends_at ? formatTenantDateTime(tenant.trial_ends_at, tenantContext) : 'N/A'}
                 </Typography>
               </Box>
             </CardContent>
@@ -201,7 +204,7 @@ const TelemetryTenantPage: React.FC = () => {
                   <Typography variant="body2">
                     <strong>Total Revenue:</strong> {billing.payments.currency}{billing.payments.total_revenue.toFixed(2)}
                   </Typography>
-                  
+
                   {/* Plans breakdown */}
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="subtitle2" gutterBottom>Subscriptions by Plan:</Typography>
@@ -241,7 +244,7 @@ const TelemetryTenantPage: React.FC = () => {
                       </Typography>
                     </Paper>
                   </Grid>
-                  
+
                   <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 2, bgcolor: 'secondary.light', textAlign: 'center' }}>
                       <Typography variant="h4" color="secondary.contrastText">
@@ -255,7 +258,7 @@ const TelemetryTenantPage: React.FC = () => {
                       </Typography>
                     </Paper>
                   </Grid>
-                  
+
                   <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 2, bgcolor: 'success.light', textAlign: 'center' }}>
                       <Typography variant="h4" color="success.contrastText">
