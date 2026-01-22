@@ -111,7 +111,27 @@ const startOfWeek = (date: Date, firstDay: 0 | 1): Date => {
 const ApprovalHeatmapReport: React.FC = () => {
   const theme = useTheme();
   const { tenantContext } = useAuth();
-  const firstDay = weekStartToFirstDay(tenantContext?.week_start);
+  const rawWeekStart: unknown =
+    (tenantContext as any)?.week_start ??
+    (tenantContext as any)?.tenant?.week_start ??
+    (tenantContext as any)?.tenant?.settings?.week_start ??
+    (tenantContext as any)?.weekStart ??
+    null;
+
+  const firstDay = useMemo((): 0 | 1 => {
+    // Normalize to the existing helper's accepted values.
+    const raw = rawWeekStart;
+    if (typeof raw === 'number') {
+      if (raw === 0 || raw === 7) return 0;
+      if (raw === 1) return 1;
+    }
+
+    const s = (raw ?? '').toString().trim().toLowerCase();
+    if (s === '0' || s === '7' || s === 'sun' || s === 'sunday') return 0;
+    if (s === '1' || s === 'mon' || s === 'monday') return 1;
+
+    return weekStartToFirstDay(typeof raw === 'string' ? raw : null);
+  }, [rawWeekStart]);
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
 
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
