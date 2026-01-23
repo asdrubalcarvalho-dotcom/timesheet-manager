@@ -8,7 +8,6 @@ use App\Models\Expense;
 use App\Models\Timesheet;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Facades\DB;
 
 final class ApprovalReports
 {
@@ -110,16 +109,16 @@ final class ApprovalReports
     private function timesheetPendingCountsByDay(User $actor, string $from, string $to): array
     {
         $query = Timesheet::query()
-            ->selectRaw('DATE(created_at) as day')
+            ->selectRaw('date as day')
             ->selectRaw('COUNT(*) as c')
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to)
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
             ->where('status', '=', 'submitted');
 
         $this->applyTimesheetApprovalScoping($query, $actor);
 
         return $query
-            ->groupBy(DB::raw('DATE(created_at)'))
+            ->groupBy('date')
             ->pluck('c', 'day')
             ->map(fn ($v) => (int) $v)
             ->all();
@@ -131,16 +130,16 @@ final class ApprovalReports
     private function timesheetApprovedCountsByDay(User $actor, string $from, string $to): array
     {
         $query = Timesheet::query()
-            ->selectRaw('DATE(created_at) as day')
+            ->selectRaw('date as day')
             ->selectRaw('COUNT(*) as c')
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to)
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
             ->whereIn('status', ['approved', 'closed']);
 
         $this->applyTimesheetApprovalScoping($query, $actor);
 
         return $query
-            ->groupBy(DB::raw('DATE(created_at)'))
+            ->groupBy('date')
             ->pluck('c', 'day')
             ->map(fn ($v) => (int) $v)
             ->all();
@@ -171,16 +170,16 @@ final class ApprovalReports
     {
         // Contract uses the label "pending"; in the current workflow, manager-pending expenses are status=submitted.
         $query = Expense::query()
-            ->selectRaw('DATE(created_at) as day')
+            ->selectRaw('date as day')
             ->selectRaw('COUNT(*) as c')
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to)
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
             ->where('status', '=', 'submitted');
 
         $this->applyExpenseApprovalScoping($query, $actor);
 
         return $query
-            ->groupBy(DB::raw('DATE(created_at)'))
+            ->groupBy('date')
             ->pluck('c', 'day')
             ->map(fn ($v) => (int) $v)
             ->all();
@@ -195,16 +194,16 @@ final class ApprovalReports
         $approvedStatuses = ['approved', 'finance_review', 'finance_approved', 'paid'];
 
         $query = Expense::query()
-            ->selectRaw('DATE(created_at) as day')
+            ->selectRaw('date as day')
             ->selectRaw('COUNT(*) as c')
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to)
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
             ->whereIn('status', $approvedStatuses);
 
         $this->applyExpenseApprovalScoping($query, $actor);
 
         return $query
-            ->groupBy(DB::raw('DATE(created_at)'))
+            ->groupBy('date')
             ->pluck('c', 'day')
             ->map(fn ($v) => (int) $v)
             ->all();

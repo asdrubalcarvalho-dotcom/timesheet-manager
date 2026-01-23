@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
 import api from '../../services/api';
 import PageHeader from '../Common/PageHeader';
 import { useBilling } from '../../contexts/BillingContext';
@@ -25,6 +26,8 @@ import ReportAISideTab from '../Common/ReportAISideTab';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate, formatTenantDayMonth, getTenantDatePickerFormat, getTenantUiLocale } from '../../utils/tenantFormatting';
 import { weekStartToFirstDay } from '../../utils/weekStartToFirstDay';
+
+dayjs.extend(customParseFormat);
 
 type HeatmapRequestPayload = {
   range: {
@@ -56,6 +59,11 @@ type HeatmapResponse = {
     [key: string]: unknown;
   };
   days: Record<string, HeatmapDay>;
+};
+
+const toStrictYmdKey = (dayStr: string): string => {
+  const parsed = dayjs(dayStr, 'YYYY-MM-DD', true);
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : dayStr;
 };
 
 const todayAsYmd = (): string => {
@@ -111,6 +119,8 @@ const startOfWeek = (date: Date, firstDay: 0 | 1): Date => {
 const ApprovalHeatmapReport: React.FC = () => {
   const theme = useTheme();
   const { tenant, tenantContext } = useAuth();
+  const debugLoggedRef = useRef(false);
+  const debugHeatmap = import.meta.env.DEV && localStorage.getItem('debug_approvals_heatmap') === '1';
   const rawWeekStart: unknown =
     (tenantContext as any)?.week_start ??
     (tenant as any)?.week_start ??
@@ -301,12 +311,12 @@ const ApprovalHeatmapReport: React.FC = () => {
   };
 
   const fromPickerValue = useMemo(() => {
-    const parsed = dayjs(from);
+    const parsed = dayjs(from, 'YYYY-MM-DD', true);
     return parsed.isValid() ? parsed : null;
   }, [from]);
 
   const toPickerValue = useMemo(() => {
-    const parsed = dayjs(to);
+    const parsed = dayjs(to, 'YYYY-MM-DD', true);
     return parsed.isValid() ? parsed : null;
   }, [to]);
 
@@ -499,9 +509,16 @@ const ApprovalHeatmapReport: React.FC = () => {
               ))}
 
               {calendarCells.map((ymd) => {
-                const inRange = allDates.includes(ymd);
-                const day = data.days?.[ymd];
+                const cellKey = toStrictYmdKey(ymd);
+                const inRange = allDates.includes(cellKey);
+                const day = data.days?.[cellKey];
                 const pending = inRange && day ? day.total_pending : 0;
+
+                if (debugHeatmap && !debugLoggedRef.current && inRange && pending > 0) {
+                  debugLoggedRef.current = true;
+                  // eslint-disable-next-line no-console
+                  console.debug('[ApprovalHeatmap] cell data', { cellKey, hasData: !!data.days?.[cellKey], pending });
+                }
 
                 const bg = (() => {
                   if (!inRange) return alpha(theme.palette.common.white, 0.02);
@@ -517,13 +534,12 @@ const ApprovalHeatmapReport: React.FC = () => {
                   return alpha(theme.palette.error.main, 0.35);
                 })();
 
-                const dayNumber = Number(ymd.slice(8, 10)).toString();
+                const dayNumber = Number(cellKey.slice(8, 10)).toString();
 
                 const tooltip = (() => {
                   if (!inRange) return null;
 
-                  const dateObj = ymdToDate(ymd);
-                  const header = dateObj ? formatTenantDayMonth(ymd, tenantContext) : ymd;
+                  const header = dayjs(cellKey, 'YYYY-MM-DD', true).isValid() ? formatTenantDayMonth(cellKey, tenantContext) : cellKey;
 
                   const tsPending = day?.timesheets?.pending ?? 0;
                   const exPending = day?.expenses?.pending ?? 0;
@@ -564,11 +580,11 @@ const ApprovalHeatmapReport: React.FC = () => {
                   </Box>
                 );
 
-                if (!tooltip) return <Box key={ymd}>{cell}</Box>;
+                if (!tooltip) return <Box key={cellKey}>{cell}</Box>;
 
                 return (
                   <Tooltip
-                    key={ymd}
+                    key={cellKey}
                     title={<span style={{ whiteSpace: 'pre-line' }}>{tooltip}</span>}
                     placement="top"
                     arrow
