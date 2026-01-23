@@ -114,7 +114,7 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
             'task_id' => $task->id,
             'location_id' => $loc->id,
             // Avoid unique constraint (technician_id, project_id, date).
-            // Heatmap groups by created_at day, so we keep created_at on 2026-01-02.
+            // Heatmap groups by business date, not created_at.
             'date' => '2026-01-03',
             'hours_worked' => 2,
             'status' => 'approved',
@@ -148,10 +148,18 @@ final class ApprovalHeatmapReportTest extends TenantTestCase
         $day = $res->json('days.2026-01-02');
         $this->assertIsArray($day);
         $this->assertSame(1, $day['timesheets']['pending']);
-        $this->assertSame(1, $day['timesheets']['approved']);
+        $this->assertSame(0, $day['timesheets']['approved']);
         $this->assertSame(1, $day['expenses']['pending']);
         $this->assertSame(0, $day['expenses']['approved']);
         $this->assertSame(2, $day['total_pending']);
+
+        $day2 = $res->json('days.2026-01-03');
+        $this->assertIsArray($day2);
+        $this->assertSame(0, $day2['timesheets']['pending']);
+        $this->assertSame(1, $day2['timesheets']['approved']);
+        $this->assertSame(0, $day2['expenses']['pending']);
+        $this->assertSame(0, $day2['expenses']['approved']);
+        $this->assertSame(0, $day2['total_pending']);
     }
 
     public function test_owner_sees_heatmap_data_tenant_wide(): void
