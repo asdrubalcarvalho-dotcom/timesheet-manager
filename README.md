@@ -723,10 +723,24 @@ Pages
 	•	/expenses — DataGrid with double-click modal + bulk actions
 	•	/masters/projects, /masters/tasks — basic CRUD
 
+
 Development Notes
 	•	Use PSR-12 (PHP) and ESLint/Prettier (TS).
 	•	Prefer async/await and React Query for data fetching.
 	•	Approved records must be blocked server-side (Policy/Middleware) and disabled in the UI.
+
+## ✅ Timesheets day-uniqueness rule (do not change)
+
+We **allow multiple timesheet entries on the same day** for the same technician and project **as long as time ranges do not overlap**.
+
+**Do not** add (or reintroduce) a database unique index on:
+- `(technician_id, project_id, date)`
+
+The system enforces correctness like this:
+- **App-level validation**: blocks **overlapping** time ranges for the same technician on the same date.
+- **DB-level protection**: keeps only the “no exact duplicates” unique index (technician_id + date + start_time + end_time) to prevent accidental duplicate submits.
+
+If an existing tenant database still has the unique index `timesheets_technician_id_project_id_date_unique`, remove it via a **tenant migration** (not a central migration).
 
 CI
 
