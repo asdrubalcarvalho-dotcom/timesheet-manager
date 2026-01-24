@@ -85,6 +85,28 @@ const normalizeApiResponse = <T,>(payload: any): T[] => {
   return [];
 };
 
+const getTaskProgressRaw = (task: any): unknown => {
+  if (!task || typeof task !== 'object') return undefined;
+  return (
+    task.progress ??
+    task.progress_percent ??
+    task.progress_percentage ??
+    task.completion ??
+    task.completion_percent
+  );
+};
+
+const normalizeProgressToPercent = (raw: unknown): number => {
+  if (raw == null) return 0;
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  if (!Number.isFinite(n)) return 0;
+
+  const percent = n >= 0 && n <= 1 ? n * 100 : n;
+  if (!Number.isFinite(percent)) return 0;
+
+  return Math.max(0, Math.min(100, Math.round(percent)));
+};
+
 const TasksManager: React.FC = () => {
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
@@ -379,9 +401,11 @@ const TasksManager: React.FC = () => {
       field: 'progress',
       headerName: 'Progress',
       width: 120,
-      valueFormatter: (params?: { value?: number | null }) => {
-        const value = params?.value ?? 0;
-        return `${value}%`;
+      type: 'number',
+      valueGetter: (params: any) => normalizeProgressToPercent(getTaskProgressRaw(params?.row)),
+      renderCell: (params: GridRenderCellParams) => {
+        const value = normalizeProgressToPercent(getTaskProgressRaw(params.row));
+        return <span>{value}%</span>;
       }
     },
     {
