@@ -45,6 +45,8 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'owner_email',
         'trial_ends_at',
         'deactivated_at',
+        'data_retention_until',
+        'scheduled_for_deletion_at',
         'settings',
         'data',
         // Stripe Tax fields
@@ -62,6 +64,8 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'subscription_renews_at' => 'datetime',
         'subscription_last_status_change_at' => 'datetime',
         'deactivated_at' => 'datetime',
+        'data_retention_until' => 'datetime',
+        'scheduled_for_deletion_at' => 'datetime',
         'is_paused' => 'boolean',
         'ai_enabled' => 'boolean',
         'require_sso' => 'boolean',

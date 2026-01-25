@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TimePerk — Acceptable Use Policy</title>
+
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <style>
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: #0b1220;
+        color: #e5e7eb;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 56px 20px;
+      }
+      a {
+        color: #93c5fd;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 34px;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        margin: 28px 0 10px;
+        font-size: 18px;
+      }
+      p,
+      li {
+        color: #cbd5e1;
+        line-height: 1.6;
+      }
+      .meta {
+        color: #94a3b8;
+        font-size: 13px;
+        margin-bottom: 22px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .card {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 14px;
+        padding: 22px;
+        background: rgba(15, 23, 42, 0.7);
+      }
+      .footer {
+        margin-top: 24px;
+        color: #94a3b8;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <a href="/">← Back to TimePerk</a>
+        <div class="meta">Last updated: 2026-01-25</div>
+      </div>
+
+      <div class="card">
+        <h1>Acceptable Use Policy</h1>
+        <p>This Acceptable Use Policy ("AUP") describes prohibited behavior when using TimePerk.</p>
+
+        <h2>You must not</h2>
+        <ul>
+          <li>Use the Service for unlawful, harmful, or fraudulent activities.</li>
+          <li>Upload malware, attempt to exploit vulnerabilities, or disrupt the Service.</li>
+          <li>Attempt unauthorized access to accounts, systems, or data.</li>
+          <li>Abuse rate limits, probe the API, or perform excessive automated requests.</li>
+          <li>Infringe intellectual property or privacy rights of others.</li>
+        </ul>
+
+        <h2>Enforcement</h2>
+        <p>
+          We may investigate suspected violations and may suspend or terminate access to protect the Service,
+          other customers, or comply with law.
+        </p>
+
+        <h2>Contact</h2>
+        <p>Report abuse or security concerns: <a href="mailto:hello@upg2ai.com">hello@upg2ai.com</a></p>
+      </div>
+
+      <div class="footer">© <span id="year"></span> TimePerk · UPG2AI</div>
+    </div>
+
+    <script>
+      document.getElementById('year').textContent = new Date().getFullYear();
+    </script>
+  </body>
+</html>

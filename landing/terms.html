@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TimePerk — Terms of Service</title>
+
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+        background: #0b1220;
+        color: #e5e7eb;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 56px 20px;
+      }
+      a {
+        color: #93c5fd;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 34px;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        margin: 28px 0 10px;
+        font-size: 18px;
+      }
+      p,
+      li {
+        color: #cbd5e1;
+        line-height: 1.6;
+      }
+      .meta {
+        color: #94a3b8;
+        font-size: 13px;
+        margin-bottom: 22px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .card {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 14px;
+        padding: 22px;
+        background: rgba(15, 23, 42, 0.7);
+      }
+      .footer {
+        margin-top: 24px;
+        color: #94a3b8;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <a href="/">← Back to TimePerk</a>
+        <div class="meta">Last updated: 2026-01-25</div>
+      </div>
+
+      <div class="card">
+        <h1>Terms of Service</h1>
+        <p>
+          These Terms of Service ("Terms") govern your use of TimePerk (the "Service") provided by UPG2AI
+          ("we", "us", "our") for business customers ("Customer", "you"). By using the Service, you agree to
+          these Terms.
+        </p>
+
+        <h2>1. Accounts and access</h2>
+        <p>You are responsible for all activity under your account and for keeping credentials secure.</p>
+
+        <h2>2. Subscription, billing, and taxes</h2>
+        <p>
+          The Service is provided on a subscription basis. Payments may be processed by Stripe. Taxes may apply
+          depending on your location; where applicable, VAT may be charged. For EU B2B customers, reverse-charge
+          may apply when a valid VAT ID is provided.
+        </p>
+
+        <h2>3. Upgrades, cancellations, refunds</h2>
+        <p>
+          You can upgrade or cancel your subscription from the billing area (or by contacting support if that
+          option is not available). Unless required by law, fees are non-refundable, and cancellations take
+          effect at the end of the current billing period.
+        </p>
+
+        <h2>4. Acceptable use</h2>
+        <p>You must follow the Acceptable Use Policy and must not misuse or disrupt the Service.</p>
+
+        <h2>5. Availability and changes</h2>
+        <p>
+          We aim to keep the Service available, but it may be unavailable due to maintenance or factors outside
+          our control. We may update the Service and these Terms from time to time.
+        </p>
+
+        <h2>6. Disclaimers and limitation of liability</h2>
+        <p>
+          The Service is provided on an "as is" and "as available" basis. To the maximum extent permitted by
+          law, we disclaim all warranties and will not be liable for indirect, incidental, special,
+          consequential, or punitive damages, or any loss of profits, revenue, data, or goodwill.
+        </p>
+
+        <h2>7. Contact</h2>
+        <p>Questions about these Terms: <a href="mailto:hello@upg2ai.com">hello@upg2ai.com</a></p>
+      </div>
+
+      <div class="footer">© <span id="year"></span> TimePerk · UPG2AI</div>
+    </div>
+
+    <script>
+      document.getElementById('year').textContent = new Date().getFullYear();
+    </script>
+  </body>
+</html>

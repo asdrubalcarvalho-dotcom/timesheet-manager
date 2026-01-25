@@ -25,6 +25,7 @@ class PendingTenantSignup extends Model
         'country',
         'timezone',
         'settings',
+        'legal_accepted_at',
         'expires_at',
         'verified',
         'email_verified_at',
@@ -33,6 +34,7 @@ class PendingTenantSignup extends Model
 
     protected $casts = [
         'expires_at' => 'datetime',
+        'legal_accepted_at' => 'datetime',
         'verified' => 'boolean',
         'email_verified_at' => 'datetime',
         'completed_at' => 'datetime',

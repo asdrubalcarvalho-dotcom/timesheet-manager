@@ -12,6 +12,12 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        // Trial expiry: move expired trials into read-only mode
+        $schedule->command('billing:expire-trials')
+            ->dailyAt('02:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Phase 8: Automatic monthly renewals
         $schedule->command('billing:run-renewals')
             ->dailyAt('03:00')
@@ -21,6 +27,12 @@ class Kernel extends ConsoleKernel
         // Phase 9: Failed payment recovery (dunning)
         $schedule->command('billing:run-dunning')
             ->dailyAt('05:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // Tenant retention & purge
+        $schedule->command('tenants:purge-expired')
+            ->dailyAt('06:00')
             ->withoutOverlapping()
             ->onOneServer();
     }

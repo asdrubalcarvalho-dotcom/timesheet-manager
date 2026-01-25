@@ -912,6 +912,73 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
         borderColor: alpha(theme.palette.common.white, 0.1),
         flexShrink: 0 // Prevent footer from shrinking
       }}>
+        {!collapsed && (
+          <>
+            <Typography
+              variant="caption"
+              sx={{ display: 'block', color: 'grey.500', mb: 1, px: 1 }}
+            >
+              Legal
+            </Typography>
+
+            <Box sx={{ display: 'flex', gap: 1, mb: 1, px: 1, flexWrap: 'wrap' }}>
+              <Typography
+                component="button"
+                type="button"
+                onClick={() => onPageChange('legal-terms')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <Typography variant="caption" sx={{ color: 'grey.300', '&:hover': { color: 'common.white' } }}>
+                  Terms
+                </Typography>
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'grey.600' }}>
+                ·
+              </Typography>
+              <Typography
+                component="button"
+                type="button"
+                onClick={() => onPageChange('legal-privacy')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <Typography variant="caption" sx={{ color: 'grey.300', '&:hover': { color: 'common.white' } }}>
+                  Privacy
+                </Typography>
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'grey.600' }}>
+                ·
+              </Typography>
+              <Typography
+                component="button"
+                type="button"
+                onClick={() => onPageChange('legal-acceptable-use')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <Typography variant="caption" sx={{ color: 'grey.300', '&:hover': { color: 'common.white' } }}>
+                  Acceptable Use
+                </Typography>
+              </Typography>
+            </Box>
+
+            <Divider sx={{ borderColor: alpha(theme.palette.common.white, 0.08), mb: 1 }} />
+          </>
+        )}
+
         <ListItemButton
           onClick={logout}
           sx={{

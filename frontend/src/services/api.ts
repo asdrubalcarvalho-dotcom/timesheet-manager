@@ -437,6 +437,7 @@ export interface TenantRegistrationData {
   admin_email: string;
   admin_password: string;
   admin_password_confirmation: string;
+  legal_accepted: boolean;
   industry?: string;
   country?: string;
   timezone?: string;

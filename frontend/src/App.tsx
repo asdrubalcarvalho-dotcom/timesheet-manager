@@ -27,6 +27,9 @@ import TenantRegistration from './components/Auth/TenantRegistration';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import SuperAdminApp from './components/SuperAdmin/SuperAdminApp';
 import SsoCallback from './pages/SsoCallback';
+const TermsOfService = React.lazy(() => import('./pages/legal/TermsOfService'));
+const PrivacyPolicy = React.lazy(() => import('./pages/legal/PrivacyPolicy'));
+const AcceptableUsePolicy = React.lazy(() => import('./pages/legal/AcceptableUsePolicy'));
 const TimesheetCalendar = React.lazy(() => import('./components/Timesheets/TimesheetCalendar'));
 const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
 const PlanningGantt = React.lazy(() => import('./components/Planning/PlanningGantt'));
@@ -95,7 +98,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods';
+type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -115,6 +118,9 @@ const pageToPath: Record<Page, string> = {
   travels: '/travels',
   billing: '/billing',
   'payment-methods': '/settings/billing/payment-methods',
+  'legal-terms': '/legal/terms',
+  'legal-privacy': '/legal/privacy',
+  'legal-acceptable-use': '/legal/acceptable-use',
   admin: '/admin',
   'admin-projects': '/admin/projects',
   'admin-tasks': '/admin/tasks',
@@ -200,6 +206,19 @@ const AppContent: React.FC = () => {
   // Normal tenant app logic below
   const currentPage = pathToPage(location.pathname);
 
+  const renderPublicPage = () => {
+    switch (currentPage) {
+      case 'legal-terms':
+        return <TermsOfService />;
+      case 'legal-privacy':
+        return <PrivacyPolicy />;
+      case 'legal-acceptable-use':
+        return <AcceptableUsePolicy />;
+      default:
+        return null;
+    }
+  };
+
   // ✅ ALWAYS call hooks before any conditional returns (Rules of Hooks)
   useEffect(() => {
     if (location.pathname === '/' || location.pathname === '') {
@@ -222,6 +241,17 @@ const AppContent: React.FC = () => {
       );
     }
 
+    // Public legal pages
+    if (currentPage === 'legal-terms' || currentPage === 'legal-privacy' || currentPage === 'legal-acceptable-use') {
+      return (
+        <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
+          <Suspense fallback={<ModuleLoader label="Loading..." />}>
+            {renderPublicPage()}
+          </Suspense>
+        </Box>
+      );
+    }
+
     // Handle SSO browser handoff
     if (location.pathname === '/sso/callback') {
       return <SsoCallback />;
@@ -240,6 +270,12 @@ const AppContent: React.FC = () => {
 
   const renderPage = () => {
     switch (currentPage) {
+      case 'legal-terms':
+        return <TermsOfService />;
+      case 'legal-privacy':
+        return <PrivacyPolicy />;
+      case 'legal-acceptable-use':
+        return <AcceptableUsePolicy />;
       case 'timesheets':
         return <TimesheetCalendar />;
       case 'timesheets-pivot-report':

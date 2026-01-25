@@ -5,12 +5,15 @@ import {
   TextField,
   Typography,
   Paper,
+  Checkbox,
+  FormControlLabel,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   CircularProgress,
   InputAdornment,
+  Link,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -68,6 +71,7 @@ const TenantRegistration: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaStatus, setCaptchaStatus] = useState<CaptchaStatus>('idle');
   const [captchaWidgetKey, setCaptchaWidgetKey] = useState(0);
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   const resetCaptcha = useCallback(() => {
     setCaptcha(null);
@@ -99,6 +103,7 @@ const TenantRegistration: React.FC = () => {
       industry: formData.industry || undefined,
       country: formData.country || undefined,
       timezone: formData.timezone || 'UTC',
+      legal_accepted: legalAccepted,
       ...(token ? { captcha_token: token } : {}),
       },
       {
@@ -255,6 +260,8 @@ const TenantRegistration: React.FC = () => {
       newErrors.admin_password = ['Password must be at least 8 characters'];
     if (formData.admin_password !== formData.admin_password_confirmation)
       newErrors.admin_password_confirmation = ['Passwords do not match'];
+    if (!legalAccepted)
+      newErrors.legal_accepted = ['You must accept the Terms, Privacy Policy, and Acceptable Use Policy'];
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -609,12 +616,55 @@ const TenantRegistration: React.FC = () => {
             </>
           )}
 
+          <Box sx={{ mb: 2 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={legalAccepted}
+                  onChange={(e) => {
+                    setLegalAccepted(e.target.checked);
+                    if (errors.legal_accepted) {
+                      setErrors((prev) => {
+                        const updated = { ...prev };
+                        delete updated.legal_accepted;
+                        return updated;
+                      });
+                    }
+                  }}
+                />
+              }
+              label={
+                <Typography variant="body2" color="text.secondary">
+                  I agree to the{' '}
+                  <Link href="/legal/terms" target="_blank" rel="noopener noreferrer">
+                    Terms
+                  </Link>
+                  ,{' '}
+                  <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer">
+                    Privacy Policy
+                  </Link>
+                  , and{' '}
+                  <Link href="/legal/acceptable-use" target="_blank" rel="noopener noreferrer">
+                    Acceptable Use Policy
+                  </Link>
+                  .
+                </Typography>
+              }
+            />
+
+            {errors.legal_accepted?.[0] && (
+              <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+                {errors.legal_accepted[0]}
+              </Typography>
+            )}
+          </Box>
+
           <Button
             type="submit"
             fullWidth
             variant="contained"
             size="large"
-            disabled={loading || !slugAvailable || slugChecking || captchaStatus === 'verifying'}
+            disabled={loading || !slugAvailable || slugChecking || captchaStatus === 'verifying' || !legalAccepted}
             sx={{ mb: 2 }}
           >
             {loading ? (
