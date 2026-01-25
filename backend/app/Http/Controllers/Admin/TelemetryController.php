@@ -59,6 +59,8 @@ use Modules\Billing\Models\Subscription;
 use Modules\Billing\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Telemetry Controller
@@ -113,6 +115,7 @@ class TelemetryController extends Controller
             $tenants = Tenant::select([
                 'id',
                 'slug',
+                'name',
                 'owner_email',
                 'status',
                 'plan',
@@ -125,6 +128,7 @@ class TelemetryController extends Controller
                 return [
                     'id' => $tenant->id,
                     'slug' => $tenant->slug,
+                    'name' => $tenant->name,
                     'owner_email' => $tenant->owner_email,
                     'status' => $tenant->status,
                     'plan' => $tenant->plan,
@@ -156,22 +160,28 @@ class TelemetryController extends Controller
     public function billing(): JsonResponse
     {
         try {
-            // Subscription metrics
-            $totalSubscriptions = Subscription::count();
-            $activeSubscriptions = Subscription::where('status', 'active')->count();
-            $trialSubscriptions = Subscription::where('is_trial', true)->count();
-            
-            $subscriptionsByPlan = Subscription::selectRaw('plan, COUNT(*) as count')
-                ->groupBy('plan')
+            // IMPORTANT: Avoid inflated counts from orphaned records.
+            // Only count subscriptions/payments for tenants that still exist.
+            $subscriptionBase = Subscription::query()
+                ->join('tenants', 'subscriptions.tenant_id', '=', 'tenants.id');
+
+            $totalSubscriptions = (clone $subscriptionBase)->count();
+            $activeSubscriptions = (clone $subscriptionBase)->where('subscriptions.status', 'active')->count();
+            $trialSubscriptions = (clone $subscriptionBase)->where('subscriptions.is_trial', true)->count();
+
+            $subscriptionsByPlan = (clone $subscriptionBase)
+                ->selectRaw('subscriptions.plan, COUNT(*) as count')
+                ->groupBy('subscriptions.plan')
                 ->get()
                 ->pluck('count', 'plan')
                 ->toArray();
 
-            // Payment metrics
-            $totalPayments = Payment::count();
-            $completedPayments = Payment::where('status', 'completed')->count();
-            $totalRevenue = Payment::where('status', 'completed')
-                ->sum('amount');
+            $paymentBase = Payment::query()
+                ->join('tenants', 'payments.tenant_id', '=', 'tenants.id');
+
+            $totalPayments = (clone $paymentBase)->count();
+            $completedPayments = (clone $paymentBase)->where('payments.status', 'completed')->count();
+            $totalRevenue = (clone $paymentBase)->where('payments.status', 'completed')->sum('payments.amount');
 
             $data = [
                 'subscriptions' => [
@@ -209,25 +219,53 @@ class TelemetryController extends Controller
     public function usage(): JsonResponse
     {
         try {
+            if (!Schema::hasTable('tenant_metrics_daily')) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'timesheets' => ['total' => 0, 'today' => 0],
+                        'expenses' => ['total' => 0, 'today' => 0],
+                        'users' => ['total' => 0, 'active' => 0],
+                    ],
+                    'note' => 'Metrics table not available yet',
+                ]);
+            }
+
+            $today = now()->toDateString();
+
+            $row = DB::table('tenant_metrics_daily')
+                ->join('tenants', 'tenant_metrics_daily.tenant_id', '=', 'tenants.id')
+                ->where('tenant_metrics_daily.date', $today)
+                ->where('tenants.status', 'active')
+                ->selectRaw(
+                    'COALESCE(SUM(tenant_metrics_daily.timesheets_total), 0) as timesheets_total,
+                     COALESCE(SUM(tenant_metrics_daily.timesheets_today), 0) as timesheets_today,
+                     COALESCE(SUM(tenant_metrics_daily.expenses_total), 0) as expenses_total,
+                     COALESCE(SUM(tenant_metrics_daily.expenses_today), 0) as expenses_today,
+                     COALESCE(SUM(tenant_metrics_daily.users_total), 0) as users_total,
+                     COALESCE(SUM(tenant_metrics_daily.users_active_today), 0) as users_active_today'
+                )
+                ->first();
+
             $data = [
                 'timesheets' => [
-                    'total' => 0,
-                    'today' => 0,
+                    'total' => (int) ($row->timesheets_total ?? 0),
+                    'today' => (int) ($row->timesheets_today ?? 0),
                 ],
                 'expenses' => [
-                    'total' => 0,
-                    'today' => 0,
+                    'total' => (int) ($row->expenses_total ?? 0),
+                    'today' => (int) ($row->expenses_today ?? 0),
                 ],
                 'users' => [
-                    'total' => 0,
-                    'active' => 0,
+                    'total' => (int) ($row->users_total ?? 0),
+                    'active' => (int) ($row->users_active_today ?? 0),
                 ],
             ];
 
             return response()->json([
                 'success' => true,
                 'data' => $data,
-                'note' => 'Placeholder metrics - detailed usage tracking not implemented',
+                'note' => 'Metrics computed daily (tenant_metrics_daily)',
             ]);
         } catch (\Throwable $e) {
             return response()->json([
