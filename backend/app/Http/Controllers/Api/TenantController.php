@@ -483,6 +483,7 @@ class TenantController extends Controller
             'country' => 'nullable|string|size:2',
             'timezone' => 'nullable|string|max:50',
             'region' => 'nullable|in:EU,US',
+            'legal_accepted' => 'accepted',
         ]);
 
         if ($validator->fails()) {
@@ -577,6 +578,7 @@ class TenantController extends Controller
                     'industry' => $request->industry,
                     'country' => $request->country,
                     'timezone' => $request->timezone ?? 'UTC',
+                    'legal_accepted_at' => now(),
                     'expires_at' => Carbon::now()->addHours(24),
                 ]);
 
@@ -587,6 +589,12 @@ class TenantController extends Controller
                     [
                         'region' => $region,
                         'week_start' => $region === 'US' ? 'sunday' : 'monday',
+                        'legal' => [
+                            'accepted_at' => now()->toIso8601String(),
+                            'terms_path' => '/legal/terms',
+                            'privacy_path' => '/legal/privacy',
+                            'acceptable_use_path' => '/legal/acceptable-use',
+                        ],
                     ]
                 );
 
@@ -862,6 +870,13 @@ class TenantController extends Controller
                     'message' => 'Verification link has expired. Please start the registration process again.',
                     'error' => 'expired',
                 ], 400);
+            }
+
+            if (!$pendingSignup->legal_accepted_at) {
+                return response()->json([
+                    'message' => 'You must accept the Terms, Privacy Policy, and Acceptable Use Policy before creating your workspace.',
+                    'code' => 'legal_not_accepted',
+                ], 422);
             }
 
             $hasEmailVerifiedAt = (bool) $pendingSignup->email_verified_at;
