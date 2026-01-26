@@ -156,17 +156,33 @@ class SuperAdminTelemetryController extends Controller
             $response = Http::withHeaders([
                 'X-Internal-Api-Key' => config('telemetry.internal_key'),
                 'Accept' => 'application/json',
-            ])->get(rtrim(config('telemetry.internal_base_url'), '/') . '/errors');
+            ])->timeout(5)->get(rtrim(config('telemetry.internal_base_url'), '/') . '/errors');
+
+            if (!$response->successful()) {
+                $message = $response->json('message');
+                if (!$message) {
+                    $message = trim((string) $response->body());
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $message !== '' ? $message : 'Internal telemetry request failed',
+                ], $response->status());
+            }
+            $data = $response->json('data');
+            if ($data === null) {
+                $data = $response->json();
+            }
 
             return response()->json([
                 'success' => true,
-                'data' => $response->json('data', $response->json())
-            ], $response->status());
+                'data' => $data,
+            ], $response->status()); 
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -180,22 +196,36 @@ class SuperAdminTelemetryController extends Controller
     public function health(): JsonResponse
     {
         try {
-            $url = rtrim(config('telemetry.internal_base_url'), '/') . '/health';
-            
             $response = Http::withHeaders([
                 'X-Internal-Api-Key' => config('telemetry.internal_key'),
                 'Accept' => 'application/json',
-            ])->get($url);
+            ])->timeout(5)->get(rtrim(config('telemetry.internal_base_url'), '/') . '/health');
+
+            if (!$response->successful()) {
+                $message = $response->json('message');
+                if (!$message) {
+                    $message = trim((string) $response->body());
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $message !== '' ? $message : 'Internal telemetry request failed',
+                ], $response->status());
+            }
+            $data = $response->json('data');
+            if ($data === null) {
+                $data = $response->json();
+            }
 
             return response()->json([
                 'success' => true,
-                'data' => $response->json('data', $response->json())
+                'data' => $data,
             ], $response->status());
-
+            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -261,7 +291,7 @@ class SuperAdminTelemetryController extends Controller
                 ], 404);
             }
 
-            if (!Schema::hasTable('tenant_metrics_daily')) {
+            if (!Schema::connection('mysql')->hasTable('tenant_metrics_daily')) {
                 return response()->json([
                     'success' => true,
                     'data' => [
@@ -274,7 +304,7 @@ class SuperAdminTelemetryController extends Controller
             }
 
             $today = now()->toDateString();
-            $row = DB::table('tenant_metrics_daily')
+            $row = DB::connection('mysql')->table('tenant_metrics_daily')
                 ->where('tenant_id', $tenant->id)
                 ->where('date', $today)
                 ->first();
@@ -320,13 +350,13 @@ class SuperAdminTelemetryController extends Controller
                 ], 404);
             }
 
-            $subscription = DB::table('subscriptions')
+            $subscription = DB::connection('mysql')->table('subscriptions')
                 ->where('tenant_id', $tenant->id)
                 ->first();
 
             $planChangeHistory = [];
-            if (Schema::hasTable('plan_change_history')) {
-                $planChangeHistory = DB::table('plan_change_history')
+            if (Schema::connection('mysql')->hasTable('plan_change_history')) {
+                $planChangeHistory = DB::connection('mysql')->table('plan_change_history')
                     ->where('tenant_id', $tenant->id)
                     ->orderByDesc('created_at')
                     ->limit(100)
@@ -335,8 +365,8 @@ class SuperAdminTelemetryController extends Controller
             }
 
             $subscriptionPlanHistory = [];
-            if (Schema::hasTable('subscription_plan_history')) {
-                $subscriptionPlanHistory = DB::table('subscription_plan_history')
+            if (Schema::connection('mysql')->hasTable('subscription_plan_history')) {
+                $subscriptionPlanHistory = DB::connection('mysql')->table('subscription_plan_history')
                     ->where('tenant_id', $tenant->id)
                     ->orderByDesc('changed_at')
                     ->limit(100)
@@ -345,8 +375,8 @@ class SuperAdminTelemetryController extends Controller
             }
 
             $paymentFailures = [];
-            if (Schema::hasTable('billing_payment_failures')) {
-                $paymentFailures = DB::table('billing_payment_failures')
+            if (Schema::connection('mysql')->hasTable('billing_payment_failures')) {
+                $paymentFailures = DB::connection('mysql')->table('billing_payment_failures')
                     ->where('tenant_id', $tenant->id)
                     ->orderByDesc('failed_at')
                     ->limit(50)
@@ -409,7 +439,7 @@ class SuperAdminTelemetryController extends Controller
 
             $actor = $request->user();
 
-            DB::table('admin_actions')->insert([
+            DB::connection('mysql')->table('admin_actions')->insert([
                 'actor_user_id' => $actor?->id,
                 'actor_email' => $actor?->email,
                 'action' => 'tenant_delete_requested',
@@ -439,15 +469,15 @@ class SuperAdminTelemetryController extends Controller
                     throw new \RuntimeException('Invalid tenant database name');
                 }
 
-                $databases = DB::select('SHOW DATABASES LIKE ?', [$safeDbName]);
+                $databases = DB::connection('mysql')->select('SHOW DATABASES LIKE ?', [$safeDbName]);
                 if (!empty($databases)) {
-                    DB::statement("DROP DATABASE IF EXISTS `{$safeDbName}`");
+                    DB::connection('mysql')->statement("DROP DATABASE IF EXISTS `{$safeDbName}`");
                 }
             } catch (\Throwable $e) {
                 // Best effort.
             }
 
-            DB::table('admin_actions')->insert([
+            DB::connection('mysql')->table('admin_actions')->insert([
                 'actor_user_id' => $actor?->id,
                 'actor_email' => $actor?->email,
                 'action' => 'tenant_deleted',

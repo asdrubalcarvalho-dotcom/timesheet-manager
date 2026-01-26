@@ -219,7 +219,7 @@ class TelemetryController extends Controller
     public function usage(): JsonResponse
     {
         try {
-            if (!Schema::hasTable('tenant_metrics_daily')) {
+            if (!Schema::connection('mysql')->hasTable('tenant_metrics_daily')) {
                 return response()->json([
                     'success' => true,
                     'data' => [
@@ -233,7 +233,7 @@ class TelemetryController extends Controller
 
             $today = now()->toDateString();
 
-            $row = DB::table('tenant_metrics_daily')
+            $row = DB::connection('mysql')->table('tenant_metrics_daily')
                 ->join('tenants', 'tenant_metrics_daily.tenant_id', '=', 'tenants.id')
                 ->where('tenant_metrics_daily.date', $today)
                 ->where('tenants.status', 'active')

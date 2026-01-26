@@ -30,7 +30,7 @@ class ComputeTenantMetricsDaily extends Command
 
     public function handle(): int
     {
-        if (!Schema::hasTable('tenant_metrics_daily')) {
+        if (!Schema::connection('mysql')->hasTable('tenant_metrics_daily')) {
             $this->info('Metrics table not found, skipping.');
             return Command::SUCCESS;
         }
@@ -125,7 +125,7 @@ class ComputeTenantMetricsDaily extends Command
                     continue;
                 }
 
-                DB::table('tenant_metrics_daily')->upsert(
+                DB::connection('mysql')->table('tenant_metrics_daily')->upsert(
                     [
                         [
                             'tenant_id' => $tenant->id,
