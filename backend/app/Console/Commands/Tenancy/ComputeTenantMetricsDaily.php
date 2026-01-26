@@ -72,14 +72,25 @@ class ComputeTenantMetricsDaily extends Command
                 $metrics = $tenant->run(function () use ($asOfDate) {
                     $start = $asOfDate->copy();
 
-                    $timesheetsTotal = Schema::hasTable('timesheets') ? DB::table('timesheets')->count() : 0;
-                    $timesheetsToday = (Schema::hasTable('timesheets') && Schema::hasColumn('timesheets', 'created_at'))
-                        ? DB::table('timesheets')->where('created_at', '>=', $start)->count()
+                    // IMPORTANT: explicitly use the tenant connection inside the tenant run.
+                    // Relying on the default connection can intermittently point to central.
+                    $tenantSchema = Schema::connection('tenant');
+                    $tenantDb = DB::connection('tenant');
+
+                    $timesheetsTotal = $tenantSchema->hasTable('timesheets')
+                        ? $tenantDb->table('timesheets')->count()
                         : 0;
 
-                    $expensesTotal = Schema::hasTable('expenses') ? DB::table('expenses')->count() : 0;
-                    $expensesToday = (Schema::hasTable('expenses') && Schema::hasColumn('expenses', 'created_at'))
-                        ? DB::table('expenses')->where('created_at', '>=', $start)->count()
+                    $timesheetsToday = ($tenantSchema->hasTable('timesheets') && $tenantSchema->hasColumn('timesheets', 'created_at'))
+                        ? $tenantDb->table('timesheets')->where('created_at', '>=', $start)->count()
+                        : 0;
+
+                    $expensesTotal = $tenantSchema->hasTable('expenses')
+                        ? $tenantDb->table('expenses')->count()
+                        : 0;
+
+                    $expensesToday = ($tenantSchema->hasTable('expenses') && $tenantSchema->hasColumn('expenses', 'created_at'))
+                        ? $tenantDb->table('expenses')->where('created_at', '>=', $start)->count()
                         : 0;
 
                     // Users/Technicians: prefer users table if present; fallback to technicians.
@@ -87,25 +98,25 @@ class ComputeTenantMetricsDaily extends Command
                     $usersActiveToday = 0;
                     $lastLoginAt = null;
 
-                    if (Schema::hasTable('users')) {
-                        $usersTotal = DB::table('users')->count();
+                    if ($tenantSchema->hasTable('users')) {
+                        $usersTotal = $tenantDb->table('users')->count();
 
-                        if (Schema::hasColumn('users', 'last_seen_at')) {
-                            $usersActiveToday = DB::table('users')->where('last_seen_at', '>=', $start)->count();
-                            $lastLoginAt = DB::table('users')->max('last_seen_at');
-                        } elseif (Schema::hasColumn('users', 'last_login_at')) {
-                            $usersActiveToday = DB::table('users')->where('last_login_at', '>=', $start)->count();
-                            $lastLoginAt = DB::table('users')->max('last_login_at');
+                        if ($tenantSchema->hasColumn('users', 'last_seen_at')) {
+                            $usersActiveToday = $tenantDb->table('users')->where('last_seen_at', '>=', $start)->count();
+                            $lastLoginAt = $tenantDb->table('users')->max('last_seen_at');
+                        } elseif ($tenantSchema->hasColumn('users', 'last_login_at')) {
+                            $usersActiveToday = $tenantDb->table('users')->where('last_login_at', '>=', $start)->count();
+                            $lastLoginAt = $tenantDb->table('users')->max('last_login_at');
                         }
-                    } elseif (Schema::hasTable('technicians')) {
-                        $usersTotal = DB::table('technicians')->count();
+                    } elseif ($tenantSchema->hasTable('technicians')) {
+                        $usersTotal = $tenantDb->table('technicians')->count();
 
-                        if (Schema::hasColumn('technicians', 'last_seen_at')) {
-                            $usersActiveToday = DB::table('technicians')->where('last_seen_at', '>=', $start)->count();
-                            $lastLoginAt = DB::table('technicians')->max('last_seen_at');
-                        } elseif (Schema::hasColumn('technicians', 'last_login_at')) {
-                            $usersActiveToday = DB::table('technicians')->where('last_login_at', '>=', $start)->count();
-                            $lastLoginAt = DB::table('technicians')->max('last_login_at');
+                        if ($tenantSchema->hasColumn('technicians', 'last_seen_at')) {
+                            $usersActiveToday = $tenantDb->table('technicians')->where('last_seen_at', '>=', $start)->count();
+                            $lastLoginAt = $tenantDb->table('technicians')->max('last_seen_at');
+                        } elseif ($tenantSchema->hasColumn('technicians', 'last_login_at')) {
+                            $usersActiveToday = $tenantDb->table('technicians')->where('last_login_at', '>=', $start)->count();
+                            $lastLoginAt = $tenantDb->table('technicians')->max('last_login_at');
                         }
                     }
 
