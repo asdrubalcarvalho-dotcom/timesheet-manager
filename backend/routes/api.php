@@ -112,7 +112,7 @@ Route::middleware(['tenant.initialize', 'tenant.set-context'])->group(function (
 
     // Protected routes with tenant context and authentication
     // Note: SetSanctumTenantConnection runs globally via bootstrap/app.php prependToGroup('api')
-    Route::middleware(['auth:sanctum', 'tenant.auth', 'subscription.write'])->group(function () {
+    Route::middleware(['auth:sanctum', 'tenant.auth', 'subscription.write', 'user.last_seen'])->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('user', [AuthController::class, 'user']);
 
@@ -399,6 +399,9 @@ Route::match(['options'], 'superadmin/telemetry/usage', fn() => response('', 204
 Route::match(['options'], 'superadmin/telemetry/errors', fn() => response('', 204));
 Route::match(['options'], 'superadmin/telemetry/health', fn() => response('', 204));
 Route::match(['options'], 'superadmin/telemetry/ping', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/tenants/{slug}/usage', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/tenants/{slug}/billing-details', fn() => response('', 204));
+Route::match(['options'], 'superadmin/telemetry/tenants/{slug}/delete', fn() => response('', 204));
 
 Route::prefix('superadmin/telemetry')
     ->middleware(['telemetry.superadmin'])
@@ -410,6 +413,12 @@ Route::prefix('superadmin/telemetry')
         Route::get('errors', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'errors']);
         Route::get('health', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'health']);
         Route::get('ping', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'ping']);
+
+        // Management-only tenant drilldown/actions
+        Route::get('tenants/{slug}/usage', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'tenantUsage']);
+        Route::get('tenants/{slug}/billing-details', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'tenantBillingDetails']);
+        Route::post('tenants/{slug}/delete', [\App\Http\Controllers\Admin\SuperAdminTelemetryController::class, 'deleteTenant'])
+            ->middleware('throttle:5,1');
     });
 
 // CORS preflight and global headers

@@ -12,6 +12,14 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        // Daily tenant usage aggregation (central snapshot for management telemetry)
+        // Post-deploy note: after deploy + migrations, run `php artisan tenants:compute-metrics-daily`
+        // once to populate same-day "Usage Summary" before the first scheduled run.
+        $schedule->command('tenants:compute-metrics-daily')
+            ->dailyAt('01:30')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Trial expiry: move expired trials into read-only mode
         $schedule->command('billing:expire-trials')
             ->dailyAt('02:00')

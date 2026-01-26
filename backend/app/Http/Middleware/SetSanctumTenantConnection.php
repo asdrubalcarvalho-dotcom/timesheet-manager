@@ -20,16 +20,16 @@ class SetSanctumTenantConnection
     public function handle(Request $request, Closure $next): Response
     {
         try {
-            // Skip for SuperAdmin telemetry routes (use central DB for management tenant)
-            if ($request->is('api/superadmin/telemetry/*')) {
-                \Log::debug('[SetSanctumTenantConnection] Skipping for SuperAdmin route');
+            // Skip tenant connection switching for central routes and preflight requests.
+            if ($this->shouldSkipTenantSwitch($request)) {
+                // Optional minimal debug log
+                // \Log::debug('[SetSanctumTenantConnection] Skipping tenant switch for central/preflight route');
                 return $next($request);
             }
             
             $tenantSlug = $request->header('X-Tenant');
             
             if (!$tenantSlug) {
-                \Log::warning('[SetSanctumTenantConnection] No X-Tenant header found');
                 return $next($request);
             }
 
@@ -38,7 +38,8 @@ class SetSanctumTenantConnection
             $tenant = Tenant::where('slug', $tenantSlug)->first();
             
             if (!$tenant) {
-                \Log::warning("[SetSanctumTenantConnection] Tenant not found: {$tenantSlug}");
+                // Keep logging minimal; missing/invalid tenant headers can be common.
+                // \Log::debug("[SetSanctumTenantConnection] Tenant not found: {$tenantSlug}");
                 return $next($request);
             }
 
@@ -46,7 +47,7 @@ class SetSanctumTenantConnection
             $databaseName = $tenant->getInternal('db_name');
             
             if (!$databaseName) {
-                \Log::error("[SetSanctumTenantConnection] No database configured for tenant: {$tenantSlug}");
+                \Log::warning("[SetSanctumTenantConnection] No database configured for tenant: {$tenantSlug}");
                 return $next($request);
             }
 
@@ -74,12 +75,34 @@ class SetSanctumTenantConnection
             Config::set('database.default', 'tenant');
             Config::set('sanctum.connection', 'tenant');
             
-            \Log::info("[SetSanctumTenantConnection] Tenant connection set as default: {$databaseName}");
+            // \Log::debug("[SetSanctumTenantConnection] Tenant connection set as default: {$databaseName}");
             
         } catch (\Exception $e) {
             \Log::error('[SetSanctumTenantConnection] Failed to setup tenant connection: ' . $e->getMessage());
         }
 
         return $next($request);
+    }
+
+    private function shouldSkipTenantSwitch(Request $request): bool
+    {
+        if ($request->isMethod('OPTIONS')) {
+            return true;
+        }
+
+        // Central endpoints must always run on central DB.
+        if ($request->is('api/billing') || $request->is('api/billing/*')) {
+            return true;
+        }
+
+        // Telemetry endpoints (internal + superadmin proxy) are central.
+        if (
+            $request->is('api/superadmin/telemetry/*') ||
+            $request->is('api/admin/telemetry/*')
+        ) {
+            return true;
+        }
+
+        return false;
     }
 }
