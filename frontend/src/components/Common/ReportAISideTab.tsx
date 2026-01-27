@@ -1,20 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   Alert,
   Box,
   Button,
-  Divider,
-  Drawer,
-  IconButton,
   Stack,
-  Tooltip,
-  Typography,
-  useTheme,
 } from '@mui/material';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
-import CloseIcon from '@mui/icons-material/Close';
 import ReportAIChatPanel from './ReportAIChatPanel';
 import type { TenantAiState } from './aiState';
+import { useRegisterRightPanelTab } from '../RightPanel/useRegisterRightPanelTab';
+import { RightPanelTrigger } from '../RightPanel/RightPanelTrigger';
+import { useRightPanelTabToggle } from '../RightPanel/useRightPanelTabToggle';
 
 type Props = {
   aiState: TenantAiState;
@@ -26,62 +22,47 @@ type Props = {
 };
 
 const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onUpgrade, onOpenSettings, onAsk }) => {
-  const theme = useTheme();
-  const [open, setOpen] = useState(false);
-
   const canChat = useMemo(() => aiState === 'enabled' && typeof onAsk === 'function', [aiState, onAsk]);
 
-  return (
-    <>
-      <Box
-        sx={{
-          position: 'fixed',
-          right: 0,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          zIndex: theme.zIndex.drawer + 1,
-        }}
-      >
-        <Tooltip title="AI" placement="left">
-          <IconButton
-            aria-label={open ? 'Close AI' : 'Open AI'}
-            onClick={() => setOpen((prev) => !prev)}
-            sx={{
-              borderRadius: '8px 0 0 8px',
-              bgcolor: open ? 'primary.dark' : 'primary.main',
-              color: 'primary.contrastText',
-              boxShadow: open ? 6 : 3,
-              '&:hover': {
-                bgcolor: open ? 'primary.main' : 'primary.dark',
-              },
-            }}
-          >
-            <SmartToyIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
+  // Keep a stable Insights tab id per report page instance.
+  const insightsTabIdRef = useRef<string | null>(null);
+  if (!insightsTabIdRef.current) {
+    insightsTabIdRef.current = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? `report-insights-${crypto.randomUUID()}`
+      : `report-insights-${Math.random().toString(16).slice(2)}`;
+  }
+  const insightsTabId = insightsTabIdRef.current;
 
-      <Drawer
-        anchor="right"
-        open={open}
-        onClose={() => setOpen(false)}
-        PaperProps={{ sx: { width: { xs: '100%', sm: 420 } } }}
-      >
-        <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="subtitle1" sx={{ flex: 1, fontWeight: 700 }}>
-            {title}
-          </Typography>
-          <IconButton aria-label="Close" onClick={() => setOpen(false)}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
-
-        <Divider />
-
-        <Box sx={{ p: 2, overflow: 'auto' }}>
+  const insightsTab = useMemo(
+    () => ({
+      id: insightsTabId,
+      label: 'Insights',
+      order: -10,
+      render: () => (
+        <Box>
           <Stack spacing={2}>
             {insights ? <Box>{insights}</Box> : null}
+            {!insights ? (
+              <Alert severity="info" variant="outlined">
+                No insights available for this report.
+              </Alert>
+            ) : null}
+          </Stack>
+        </Box>
+      ),
+    }),
+    [insightsTabId, insights]
+  );
 
+  // Override the global AI tab while a report is mounted (stacked by id).
+  const aiTab = useMemo(
+    () => ({
+      id: 'ai-chat',
+      label: title,
+      order: 10,
+      render: () => (
+        <Box>
+          <Stack spacing={2}>
             {aiState === 'available_as_addon' ? (
               <Alert
                 severity="warning"
@@ -94,7 +75,7 @@ const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onU
                   ) : undefined
                 }
               >
-                AI Suggestions are available with the AI add-on. Upgrade in Billing to unlock automated planning insights.
+                AI is available with the AI add-on. Upgrade in Billing to unlock automated insights.
               </Alert>
             ) : null}
 
@@ -105,12 +86,12 @@ const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onU
                 action={
                   onOpenSettings ? (
                     <Button variant="outlined" size="small" onClick={onOpenSettings} sx={{ textTransform: 'none' }}>
-                      Manage AI preferences
+                      Billing → Tenant Settings
                     </Button>
                   ) : undefined
                 }
               >
-                AI add-on is active, but suggestions are disabled in tenant settings. Ask an administrator to re-enable the AI toggle in Billing → Tenant Settings.
+                AI add-on is active, but disabled in tenant settings.
               </Alert>
             ) : null}
 
@@ -123,8 +104,24 @@ const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onU
             {canChat ? <ReportAIChatPanel onAsk={onAsk!} /> : null}
           </Stack>
         </Box>
-      </Drawer>
-    </>
+      ),
+    }),
+    [title, aiState, onUpgrade, onOpenSettings, canChat, onAsk]
+  );
+
+  useRegisterRightPanelTab(insightsTab);
+  useRegisterRightPanelTab(aiTab);
+
+  const toggleInsights = useRightPanelTabToggle(insightsTabId);
+
+  return (
+    <RightPanelTrigger
+      tabId={insightsTabId}
+      tooltip="Insights / Help / AI"
+      icon={<SmartToyIcon fontSize="small" />}
+      ariaLabel={{ open: 'Open Insights', close: 'Close Insights' }}
+      onClick={toggleInsights}
+    />
   );
 };
 

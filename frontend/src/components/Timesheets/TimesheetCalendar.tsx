@@ -29,6 +29,11 @@ import { computeCaDailyOt2Candidates } from '../../utils/computeCaDailyOt2Candid
 import { getVisibleTimesheets } from '../../utils/getVisibleTimesheets';
 import { applyTimesheetUiFilters } from './timesheetUiFilters';
 import { weekStartToFirstDay } from '../../utils/weekStartToFirstDay';
+import { useRightPanel } from '../RightPanel/useRightPanel';
+import { useRegisterRightPanelTab } from '../RightPanel/useRegisterRightPanelTab';
+import { RightPanelTrigger } from '../RightPanel/RightPanelTrigger';
+import { useRightPanelTabToggle } from '../RightPanel/useRightPanelTabToggle';
+import { useTimesheetAlertsSummary } from './useTimesheetAlertsSummary';
 
 // API Response types
 interface ApiResponse<T> {
@@ -45,7 +50,6 @@ import {
   Button,
   Alert,
   AlertTitle,
-  Drawer,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -81,6 +85,7 @@ import {
   Edit as EditIcon,
   Add as AddIcon
 } from '@mui/icons-material';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
@@ -248,16 +253,8 @@ const TimesheetCalendar: React.FC = () => {
   const lastSummaryDateRef = useRef<string | null>(null);
 
   // Insights drawer (UI-only)
-  const [insightsOpen, setInsightsOpen] = useState(false);
   const [insightsTab, setInsightsTab] = useState<'alerts' | 'weekly'>('alerts');
-  const insightsButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  const handleCloseInsights = useCallback(() => {
-    setInsightsOpen(false);
-    window.setTimeout(() => {
-      insightsButtonRef.current?.focus();
-    }, 0);
-  }, []);
+  const { isOpen: isRightPanelOpen, activeTabId: rightPanelActiveTabId } = useRightPanel();
 
   const handleSwitchToWeekView = useCallback(() => {
     const api = calendarRef.current?.getApi();
@@ -1387,7 +1384,16 @@ const TimesheetCalendar: React.FC = () => {
     return count;
   }, [policyAlert, caOt2Alert]);
 
-  const handleOpenInsights = useCallback(() => {
+  const alertsSummary = useTimesheetAlertsSummary({
+    aiAlertsCount: validationSummary.aiFlagged,
+    hasPolicyAlert: Boolean(policyAlert),
+    hasCaOt2Alert: Boolean(caOt2Alert),
+  });
+
+  const handleToggleInsightsPanel = useRightPanelTabToggle('timesheet-insights', () => {
+    const isCurrentlyOpen = isRightPanelOpen && rightPanelActiveTabId === 'timesheet-insights';
+    if (isCurrentlyOpen) return;
+
     const defaultTab: 'alerts' | 'weekly' =
       insightsAlertsCount > 0
         ? 'alerts'
@@ -1396,8 +1402,187 @@ const TimesheetCalendar: React.FC = () => {
           : 'alerts';
 
     setInsightsTab(defaultTab);
-    setInsightsOpen(true);
-  }, [insightsAlertsCount, currentCalendarViewType, weekSummaryStatus, weekSummary]);
+  });
+
+  const timesheetInsightsTab = useMemo(
+    () => ({
+      id: 'timesheet-insights',
+      label: 'Insights',
+      order: -10,
+      render: () => (
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Tabs
+            value={insightsTab}
+            onChange={(_, next) => {
+              if (next === 'alerts' || next === 'weekly') {
+                setInsightsTab(next);
+              }
+            }}
+            variant="fullWidth"
+          >
+            <Tab value="alerts" label={alertsSummary.insightsAlertsCount ? `Alerts (${alertsSummary.insightsAlertsCount})` : 'Alerts'} />
+            <Tab value="weekly" label="Weekly breakdown" />
+          </Tabs>
+
+          <Box sx={{ pt: 2 }}>
+            {insightsTab === 'alerts' ? (
+              <Box>
+                {alertsSummary.aiAlertsCount > 0 && (
+                  <Alert
+                    severity="warning"
+                    variant="outlined"
+                    sx={{ mb: 1 }}
+                    action={
+                      <Button
+                        color="inherit"
+                        size="small"
+                        onClick={() => toggleValidationFilter('ai_flagged')}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Review AI insights ({alertsSummary.aiAlertsCount})
+                      </Button>
+                    }
+                  >
+                    <AlertTitle>AI insights available</AlertTitle>
+                    We found {alertsSummary.aiAlertsCount} entries that may need your attention. Review them before submitting.
+                  </Alert>
+                )}
+
+                {policyAlert && (
+                  <Alert
+                    severity={policyAlert.severity}
+                    sx={{ mb: 1 }}
+                    action={
+                      policyAlert.cta ? (
+                        <Button color="inherit" size="small" onClick={() => navigate(policyAlert.cta!.to)}>
+                          {policyAlert.cta.label}
+                        </Button>
+                      ) : null
+                    }
+                  >
+                    <AlertTitle>{policyAlert.title}</AlertTitle>
+                    {policyAlert.message}
+                  </Alert>
+                )}
+
+                {caOt2Alert && (
+                  <Alert severity={caOt2Alert.severity} sx={{ mb: 1 }}>
+                    <AlertTitle>{caOt2Alert.title}</AlertTitle>
+                    {'message' in caOt2Alert ? (
+                      <Typography variant="body2">{caOt2Alert.message}</Typography>
+                    ) : (
+                      <Box component="ul" sx={{ pl: 2, my: 0 }}>
+                        {caOt2Alert.rows.map((row) => {
+                          const dateLabel = formatTenantDate(row.date, tenantContext);
+                          const ot2Label = formatTenantNumber(row.ot2Hours, tenantContext, 2);
+                          const totalLabel = formatTenantNumber(row.totalHours, tenantContext, 2);
+                          return (
+                            <li key={row.date}>
+                              {dateLabel}: {ot2Label}h at 2.0x ({totalLabel}h worked)
+                            </li>
+                          );
+                        })}
+                      </Box>
+                    )}
+                  </Alert>
+                )}
+
+                {!policyAlert && !caOt2Alert && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No alerts
+                  </Typography>
+                )}
+              </Box>
+            ) : (
+              <Box>
+                {currentCalendarViewType !== 'timeGridWeek' ? (
+                  <Box>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                      Weekly breakdown is available in Week view.
+                    </Typography>
+                    <Button variant="outlined" size="small" onClick={handleSwitchToWeekView}>
+                      Switch to Week view
+                    </Button>
+                  </Box>
+                ) : (
+                  <Card sx={{ borderRadius: 2, boxShadow: 0, border: '1px solid', borderColor: 'grey.200' }}>
+                    <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          Weekly breakdown
+                        </Typography>
+                        {weekSummary?.policy_key && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Policy: {String(weekSummary.policy_key)}
+                          </Typography>
+                        )}
+                        {weekSummary?.workweek_start && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Workweek start: {formatTenantDate(weekSummary.workweek_start, tenantContext)}
+                          </Typography>
+                        )}
+                      </Box>
+
+                      {weekSummaryStatus === 'loading' && (
+                        <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                          Loading summary…
+                        </Typography>
+                      )}
+
+                      {weekSummaryStatus === 'error' && (
+                        <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                          Summary unavailable
+                        </Typography>
+                      )}
+
+                      {weekSummaryStatus === 'loaded' && weekSummary && (
+                        <Grid container spacing={1} sx={{ mt: 0.25 }}>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Regular</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2)} h
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              OT ({formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1)}x)
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2)} h
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>OT (2.0x)</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2)} h
+                            </Typography>
+                          </Grid>
+                        </Grid>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </Box>
+            )}
+          </Box>
+        </Box>
+      ),
+    }),
+    [
+      insightsTab,
+      insightsAlertsCount,
+      policyAlert,
+      caOt2Alert,
+      navigate,
+      tenantContext,
+      currentCalendarViewType,
+      handleSwitchToWeekView,
+      weekSummaryStatus,
+      weekSummary,
+    ]
+  );
+
+  useRegisterRightPanelTab(timesheetInsightsTab);
 
   // Filter tasks for selected project
   const filteredTasks = (tasks || []).filter(task => task.project_id === projectId);
@@ -2083,18 +2268,6 @@ const TimesheetCalendar: React.FC = () => {
         }}
       >
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-          <Tooltip title="Entries flagged by AI Cortex">
-            <span>
-              <Chip
-                label={`AI alerts (${validationSummary.aiFlagged})`}
-                color={validationFilter === 'ai_flagged' ? 'warning' : 'default'}
-                variant={validationSummary.aiFlagged ? 'filled' : 'outlined'}
-                onClick={() => toggleValidationFilter('ai_flagged')}
-                disabled={!validationSummary.aiFlagged}
-                sx={{ fontWeight: 600 }}
-              />
-            </span>
-          </Tooltip>
           <Tooltip title="Days where technician's total exceeds 12h">
             <span>
               <Chip
@@ -2124,200 +2297,24 @@ const TimesheetCalendar: React.FC = () => {
           {weeklySummaryPillLabel && (
             <Chip label={weeklySummaryPillLabel} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
           )}
-
-          <Badge
-            variant="dot"
-            color="warning"
-            invisible={insightsAlertsCount === 0}
-            overlap="rectangular"
-            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-            sx={{ '& .MuiBadge-badge': { right: 6, top: 6 } }}
-          >
-            <Button
-              ref={insightsButtonRef}
-              variant="contained"
-              size="small"
-              onClick={handleOpenInsights}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              Insights
-            </Button>
-          </Badge>
         </Box>
       </Box>
 
-      <Drawer
-        anchor={isMobile ? 'bottom' : 'right'}
-        open={insightsOpen}
-        onClose={handleCloseInsights}
-        ModalProps={{ keepMounted: true }}
-        PaperProps={{
-          sx: isMobile
-            ? { height: '80vh', borderTopLeftRadius: 12, borderTopRightRadius: 12 }
-            : { width: 420 },
-        }}
-      >
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Box
-            sx={{
-              px: 2,
-              py: 1,
-              display: 'flex',
-              alignItems: 'center',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              gap: 1,
-            }}
-          >
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, flex: 1 }}>
-              Insights
-            </Typography>
-            <IconButton aria-label="Close insights" onClick={handleCloseInsights}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-
-          <Tabs
-            value={insightsTab}
-            onChange={(_, next) => {
-              if (next === 'alerts' || next === 'weekly') {
-                setInsightsTab(next);
-              }
-            }}
-            variant="fullWidth"
-          >
-            <Tab value="alerts" label={insightsAlertsCount ? `Alerts (${insightsAlertsCount})` : 'Alerts'} />
-            <Tab value="weekly" label="Weekly breakdown" />
-          </Tabs>
-
-          <Box sx={{ p: 2, overflow: 'auto', flex: 1 }}>
-            {insightsTab === 'alerts' ? (
-              <Box>
-                {policyAlert && (
-                  <Alert
-                    severity={policyAlert.severity}
-                    sx={{ mb: 1 }}
-                    action={
-                      policyAlert.cta ? (
-                        <Button
-                          color="inherit"
-                          size="small"
-                          onClick={() => navigate(policyAlert.cta!.to)}
-                        >
-                          {policyAlert.cta.label}
-                        </Button>
-                      ) : null
-                    }
-                  >
-                    <AlertTitle>{policyAlert.title}</AlertTitle>
-                    {policyAlert.message}
-                  </Alert>
-                )}
-
-                {caOt2Alert && (
-                  <Alert severity={caOt2Alert.severity} sx={{ mb: 1 }}>
-                    <AlertTitle>{caOt2Alert.title}</AlertTitle>
-                    {'message' in caOt2Alert ? (
-                      <Typography variant="body2">{caOt2Alert.message}</Typography>
-                    ) : (
-                      <Box component="ul" sx={{ pl: 2, my: 0 }}>
-                        {caOt2Alert.rows.map((row) => {
-                          const dateLabel = formatTenantDate(row.date, tenantContext);
-                          const ot2Label = formatTenantNumber(row.ot2Hours, tenantContext, 2);
-                          const totalLabel = formatTenantNumber(row.totalHours, tenantContext, 2);
-                          return (
-                            <li key={row.date}>
-                              {dateLabel}: {ot2Label}h at 2.0x ({totalLabel}h worked)
-                            </li>
-                          );
-                        })}
-                      </Box>
-                    )}
-                  </Alert>
-                )}
-
-                {!policyAlert && !caOt2Alert && (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    No alerts
-                  </Typography>
-                )}
-              </Box>
-            ) : (
-              <Box>
-                {currentCalendarViewType !== 'timeGridWeek' ? (
-                  <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-                      Weekly breakdown is available in Week view.
-                    </Typography>
-                    <Button variant="outlined" size="small" onClick={handleSwitchToWeekView}>
-                      Switch to Week view
-                    </Button>
-                  </Box>
-                ) : (
-                  <Card sx={{ borderRadius: 2, boxShadow: 0, border: '1px solid', borderColor: 'grey.200' }}>
-                    <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          Weekly breakdown
-                        </Typography>
-                        {weekSummary?.policy_key && (
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Policy: {String(weekSummary.policy_key)}
-                          </Typography>
-                        )}
-                        {weekSummary?.workweek_start && (
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Workweek start: {formatTenantDate(weekSummary.workweek_start, tenantContext)}
-                          </Typography>
-                        )}
-                      </Box>
-
-                      {/* Manual QA (DevTools): switch to Week view => Network shows GET /api/timesheets/summary?date=YYYY-MM-DD */}
-
-                      {weekSummaryStatus === 'loading' && (
-                        <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                          Loading summary…
-                        </Typography>
-                      )}
-
-                      {weekSummaryStatus === 'error' && (
-                        <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                          Summary unavailable
-                        </Typography>
-                      )}
-
-                      {weekSummaryStatus === 'loaded' && weekSummary && (
-                        <Grid container spacing={1} sx={{ mt: 0.25 }}>
-                          <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Regular</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2)} h
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              OT ({formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1)}x)
-                            </Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2)} h
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>OT (2.0x)</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2)} h
-                            </Typography>
-                          </Grid>
-                        </Grid>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </Box>
-            )}
-          </Box>
-        </Box>
-      </Drawer>
+      <RightPanelTrigger
+        tabId="timesheet-insights"
+        tooltip="Insights / Help / AI"
+        icon={<SmartToyIcon fontSize="small" />}
+        ariaLabel={{ open: 'Open Insights', close: 'Close Insights' }}
+        onClick={handleToggleInsightsPanel}
+        badge={
+          alertsSummary.aiAlertsCount > 0
+            ? { variant: 'count', count: alertsSummary.aiAlertsCount }
+            : alertsSummary.insightsAlertsCount > 0
+              ? { variant: 'dot', show: true }
+              : undefined
+        }
+        sx={{ zIndex: theme.zIndex.drawer + 2 }}
+      />
 
       {/* Calendar Container - Scrollable */}
       <Paper 

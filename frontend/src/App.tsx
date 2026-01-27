@@ -22,11 +22,18 @@ import { FeatureProvider } from './contexts/FeatureContext';
 import RequireFeature from './components/Guards/RequireFeature';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SideMenu from './components/Layout/SideMenu';
+import { RightPanelProvider } from './components/RightPanel/RightPanelProvider';
+import { RightPanelEntrypointProvider } from './components/RightPanel/RightPanelEntrypointProvider';
+import { GlobalRightPanelTabs } from './components/RightPanel/GlobalRightPanelTabs';
+import { RightPanel } from './components/RightPanel/RightPanel';
+import { useRightPanel } from './components/RightPanel/useRightPanel';
+import { useRightPanelEntrypoint } from './components/RightPanel/useRightPanelEntrypoint';
 import { LoginForm } from './components/Auth/LoginForm';
 import TenantRegistration from './components/Auth/TenantRegistration';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import SuperAdminApp from './components/SuperAdmin/SuperAdminApp';
 import SsoCallback from './pages/SsoCallback';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 const TermsOfService = React.lazy(() => import('./pages/legal/TermsOfService'));
 const PrivacyPolicy = React.lazy(() => import('./pages/legal/PrivacyPolicy'));
 const AcceptableUsePolicy = React.lazy(() => import('./pages/legal/AcceptableUsePolicy'));
@@ -169,6 +176,8 @@ const AppContent: React.FC = () => {
   const { billingSummary } = useBilling();
   const location = useLocation();
   const navigate = useNavigate();
+  const { open: openRightPanel } = useRightPanel();
+  const { hasFloatingTrigger } = useRightPanelEntrypoint();
 
   const hasStoredSession = (() => {
     try {
@@ -376,6 +385,18 @@ const AppContent: React.FC = () => {
           overflowX: 'hidden'
         }}
       >
+        {!hasFloatingTrigger ? (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<HelpOutlineIcon />}
+              onClick={() => openRightPanel('help')}
+              sx={{ textTransform: 'none' }}
+            >
+              Help / AI
+            </Button>
+          </Box>
+        ) : null}
         {billingSummary?.read_only === true && !isTrialActive && (
           <Alert
             severity="warning"
@@ -408,7 +429,13 @@ const App: React.FC = () => {
             <NotificationProvider>
               <BillingProvider>
                 <FeatureProvider>
-                  <AppContent />
+                  <RightPanelProvider>
+                    <RightPanelEntrypointProvider>
+                      <GlobalRightPanelTabs />
+                      <AppContent />
+                      <RightPanel />
+                    </RightPanelEntrypointProvider>
+                  </RightPanelProvider>
                 </FeatureProvider>
               </BillingProvider>
             </NotificationProvider>
