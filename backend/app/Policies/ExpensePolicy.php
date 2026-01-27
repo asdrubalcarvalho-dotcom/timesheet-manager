@@ -191,11 +191,14 @@ class ExpensePolicy
      * REGRA: Expense Managers PODEM rejeitar as próprias expenses.
      *        Managers NÃO podem rejeitar expenses de OUTROS managers do mesmo projeto.
      */
-    public function reject(User $user, Expense $expense): bool
+    public function reject(User $user, Expense $expense): bool|Response
     {
-        // Verificar permissão básica
-        if (!$user->hasPermissionTo('approve-expenses') || !in_array($expense->status, ['submitted', 'approved'])) {
-            return false;
+        if (!$user->hasPermissionTo('approve-expenses')) {
+            return Response::deny('You do not have permission to reject expenses.');
+        }
+
+        if (!in_array($expense->status, ['submitted', 'approved'], true)) {
+            return Response::deny('Only submitted or approved expenses can be rejected.');
         }
 
         // Admins podem rejeitar todas
@@ -205,7 +208,7 @@ class ExpensePolicy
 
         // Verificar se o user é membro do projeto
         if (!$expense->project->isUserMember($user)) {
-            return false;
+            return Response::deny('You are not a member of this project.');
         }
 
         // Apenas Expense Managers podem rejeitar expenses
@@ -219,13 +222,15 @@ class ExpensePolicy
             // Pode rejeitar apenas expenses de members ou próprias
             if ($expense->technician && $expense->technician->user) {
                 $ownerExpenseRole = $expense->project->getUserExpenseRole($expense->technician->user);
-                return $ownerExpenseRole === 'member';
+                return $ownerExpenseRole === 'member'
+                    ? true
+                    : Response::deny('You cannot reject expenses submitted by other managers.');
             }
 
             return true;
         }
 
-        return false;
+        return Response::deny('Only expense managers can reject expenses for this project.');
     }
 
     public function submit(User $user, Expense $expense): bool
@@ -271,11 +276,14 @@ class ExpensePolicy
     /**
      * Determine whether the user can mark expense as paid (finance team only).
      */
-    public function markPaid(User $user, Expense $expense): bool
+    public function markPaid(User $user, Expense $expense): bool|Response
     {
-        // Must have permission and expense must be in finance_approved status
-        if (!$user->hasPermissionTo('mark-expenses-paid') || $expense->status !== 'finance_approved') {
-            return false;
+        if (!$user->hasPermissionTo('mark-expenses-paid')) {
+            return Response::deny('You do not have permission to mark expenses as paid.');
+        }
+
+        if ($expense->status !== 'finance_approved') {
+            return Response::deny('Only finance approved expenses can be marked as paid.');
         }
 
         // Admins can mark all as paid
@@ -288,7 +296,7 @@ class ExpensePolicy
             return true;
         }
 
-        return false;
+        return Response::deny('Marking expenses as paid requires Finance role.');
     }
 
     /**

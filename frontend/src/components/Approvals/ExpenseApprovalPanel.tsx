@@ -314,8 +314,8 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       setRejectDialogOpen(false);
       setRejectReason('');
       showSuccess(`${selectedExpenses.size} expense(s) rejected`);
-    } catch (error) {
-      showError('Failed to reject expenses');
+    } catch (err: any) {
+      showError(err?.response?.data?.message ?? 'Failed to reject expenses');
     }
   };
 
@@ -335,8 +335,8 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       setPaymentDialogOpen(false);
       setPaymentReference('');
       showSuccess(`${selectedExpenses.size} expense(s) marked as paid`);
-    } catch (error) {
-      showError('Failed to mark expenses as paid');
+    } catch (err: any) {
+      showError(err?.response?.data?.message ?? 'Failed to mark expenses as paid');
     }
   };
 
