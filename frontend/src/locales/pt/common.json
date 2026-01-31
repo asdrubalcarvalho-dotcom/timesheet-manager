@@ -1,0 +1,137 @@
+{
+  "rightPanel": {
+    "tabs": {
+      "insights": "Insights",
+      "help": "Ajuda",
+      "ai": "Chat IA"
+    },
+    "trigger": {
+      "tooltip": "Insights / Ajuda / IA",
+      "open": "Abrir {{tab}}",
+      "close": "Fechar {{tab}}"
+    },
+    "panelFallback": "Painel",
+    "closePanel": "Fechar painel",
+    "insights": {
+      "emptyValue": "—"
+    },
+    "help": {
+      "title": "Precisa de ajuda?",
+      "subtitle": "Consulte a documentação e dicas de IA para respostas mais rápidas.",
+      "tip": "Dica: use a aba de IA para resumos, anomalias e próximos passos.",
+      "docsTitle": "Documentação",
+      "terms": "Termos de serviço",
+      "privacy": "Política de privacidade",
+      "acceptableUse": "Uso aceitável"
+    },
+    "ai": {
+      "title": "Pergunte à IA TimePerk",
+      "subtitle": "Resuma anomalias, aprovações e tendências.",
+      "suggestions": {
+        "flags": "Quais lançamentos foram sinalizados?",
+        "overtime": "Onde as horas extras aumentaram?",
+        "approvals": "Quais aprovações estão pendentes?",
+        "projectCosts": "Quais projetos excederam as horas previstas?"
+      },
+      "placeholderResponse": "Ainda estou aprendendo. Por enquanto, posso resumir o relatório com base na sua pergunta.",
+      "errorFallback": "Algo deu errado. Tente novamente.",
+      "viewBilling": "Ver faturamento",
+      "addonNotice": "IA disponível como add-on no seu plano.",
+      "billingSettings": "Configurações de faturamento",
+      "disabledTitle": "IA desativada",
+      "disabledMessage": "Ative a IA nas configurações de faturamento do tenant para continuar.",
+      "disabledTenant": "A IA está desativada para este tenant.",
+      "unavailable": "A IA não está disponível para este tenant.",
+      "enabledNotice": "Faça uma pergunta para gerar insights.",
+      "errorLabel": "Erro: {{message}}",
+      "you": "Você",
+      "assistant": "Assistente",
+      "placeholder": "Nenhuma mensagem ainda.",
+      "inputLabel": "Pergunte à IA",
+      "inputPlaceholder": "Digite uma pergunta…",
+      "sending": "Enviando…",
+      "send": "Enviar"
+    },
+    "reports": {
+      "aiIntro": "Pergunte sobre este relatório ou escolha uma sugestão para começar.",
+      "noInsights": "Sem insights ainda. Execute o relatório para preencher os insights."
+    },
+    "timesheets": {
+      "tabs": {
+        "alerts": "Alertas ({{count}})",
+        "weekly": "Semanal"
+      },
+      "aiReview": "Revisar {{count}} sinalizados",
+      "aiAvailableTitle": "Alertas de IA disponíveis",
+      "aiAvailableBody": "{{count}} lançamentos foram sinalizados e estão prontos para revisão.",
+      "caOt2": {
+        "title": "Limite de OT2 atingido",
+        "noDays": "Nenhum dia excedeu o limite de OT2.",
+        "row": "{{date}} — OT2: {{ot2}}h (Total: {{total}}h)"
+      },
+      "noAlerts": "Sem alertas neste período.",
+      "alertExamples": {
+        "overtime": "Picos de horas extras",
+        "missingBreaks": "Pausas ausentes",
+        "policyDrift": "Desvio de política"
+      },
+      "weeklyOnlyInWeek": "O resumo semanal está disponível na vista Semana.",
+      "weeklyPreview": {
+        "regularHours": "Divisão entre horas regulares e extras",
+        "overtimeSplit": "Taxa de horas extras aplicada",
+        "policyKey": "Resumo da política"
+      },
+      "weeklyCta": "Mudar para a vista Semana",
+      "weeklyTitle": "Totais semanais",
+      "weeklyPolicy": "Política: {{policy}}",
+      "weeklyStart": "Semana de {{date}}",
+      "weeklyLoading": "Carregando totais semanais…",
+      "weeklyUnavailable": "Totais semanais indisponíveis.",
+      "weeklyRegular": "Horas regulares",
+      "weeklyOvertime": "Horas extras ({{rate}}x)",
+      "weeklyOvertime2": "Horas extras 2.0"
+    }
+  },
+  "timesheetPivot": {
+    "insights": {
+      "summaryTitle": "Destaques do pivô",
+      "summaryHint": "Resumo rápido dos principais contribuintes e combinações de pico.",
+      "totalHours": "Total de horas",
+      "topUser": "Usuário com mais horas",
+      "topProject": "Projeto com mais horas",
+      "peakCell": "Combinação de pico",
+      "suggestions": {
+        "topUsers": "Quem registrou mais horas?",
+        "topProjects": "Qual projeto teve mais horas?",
+        "peakCell": "Onde está a combinação mais movimentada?"
+      }
+    }
+  },
+  "approvalHeatmap": {
+    "insights": {
+      "summaryTitle": "Destaques de aprovações",
+      "summaryHint": "Visão geral do volume pendente e dos dias mais cheios.",
+      "pendingTotal": "Aprovações pendentes",
+      "approvedTimesheets": "Timesheets aprovados",
+      "approvedExpenses": "Despesas aprovadas",
+      "peakDay": "Dia mais carregado",
+      "suggestions": {
+        "backlog": "Onde as aprovações estão acumulando?",
+        "worstDays": "Quais dias foram os piores?",
+        "compareTypes": "Comparar timesheets vs despesas"
+      }
+    }
+  },
+  "reports": {
+    "ai": {
+      "openPanel": "Abrir IA"
+    }
+  },
+  "timesheets": {
+    "insights": {
+      "noAlerts": "Sem alertas",
+      "weeklyBreakdown": "Resumo semanal",
+      "weeklyBreakdownAvailableInWeekView": "O resumo semanal está disponível na vista Semana."
+    }
+  }
+}

@@ -196,9 +196,21 @@ const AppContent: React.FC = () => {
   })();
 
   // COPILOT GLOBAL RULES: Detect SuperAdmin host
-    const host = window.location.hostname;
-    const adminHosts = ['management.localhost', 'management.vendaslive.com'];
-    const isSuperAdminHost = adminHosts.includes(host);  // If SuperAdmin host, render SuperAdmin app ONLY
+  const host = window.location.hostname;
+  const adminHosts = ['management.localhost', 'management.vendaslive.com'];
+  const isSuperAdminHost = adminHosts.includes(host); // If SuperAdmin host, render SuperAdmin app ONLY
+
+  // ✅ ALWAYS call hooks before any conditional returns (Rules of Hooks)
+  useEffect(() => {
+    if (isSuperAdminHost) {
+      return;
+    }
+
+    if (location.pathname === '/' || location.pathname === '') {
+      navigate(pageToPath[DEFAULT_PAGE], { replace: true });
+    }
+  }, [isSuperAdminHost, location.pathname, navigate]);
+
   if (isSuperAdminHost) {
     if (!user) {
       return (
@@ -227,13 +239,6 @@ const AppContent: React.FC = () => {
         return null;
     }
   };
-
-  // ✅ ALWAYS call hooks before any conditional returns (Rules of Hooks)
-  useEffect(() => {
-    if (location.pathname === '/' || location.pathname === '') {
-      navigate(pageToPath[DEFAULT_PAGE], { replace: true });
-    }
-  }, [location.pathname, navigate]);
 
   // Handle authentication and routing
   if (!user) {

@@ -12,8 +12,10 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useRightPanel } from './useRightPanel';
+import { useTranslation } from 'react-i18next';
 
 export const RightPanel: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { isOpen, close, tabs, activeTabId, setActiveTab } = useRightPanel();
@@ -50,9 +52,9 @@ export const RightPanel: React.FC = () => {
           }}
         >
           <Typography variant="subtitle1" sx={{ fontWeight: 800, flex: 1 }}>
-            {activeTab?.label ?? 'Panel'}
+            {activeTab?.label ?? t('rightPanel.panelFallback')}
           </Typography>
-          <IconButton aria-label="Close panel" onClick={close}>
+          <IconButton aria-label={t('rightPanel.closePanel')} onClick={close}>
             <CloseIcon />
           </IconButton>
         </Box>

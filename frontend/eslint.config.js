@@ -20,4 +20,17 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Context/provider files often export both React components and non-component values.
+    // Disabling this rule here keeps Fast Refresh happy in dev without blocking lint.
+    files: [
+      'src/contexts/**/*.{ts,tsx}',
+      'src/components/RightPanel/**/*.{ts,tsx}',
+      'src/**/*Context.{ts,tsx}',
+      'src/**/*Provider.{ts,tsx}',
+    ],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

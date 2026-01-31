@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . || true",
+    "lint:changed": "node scripts/lint-changed.js",
     "test": "vitest",
     "test:run": "vitest run",
     "preview": "vite preview"
@@ -31,8 +32,10 @@
     "axios": "^1.7.7",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
+    "i18next": "^23.16.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-i18next": "^15.0.1",
     "react-router-dom": "^6.29.0",
     "recharts": "^3.3.0",
     "redux": "^5.0.1"

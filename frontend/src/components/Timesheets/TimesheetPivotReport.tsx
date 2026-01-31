@@ -28,6 +28,7 @@ import { useBilling } from '../../contexts/BillingContext';
 import { getTenantAiState } from '../Common/aiState';
 import ReportFiltersCard from '../Common/ReportFiltersCard';
 import ReportAISideTab from '../Common/ReportAISideTab';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate, formatTenantNumber, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 
@@ -97,6 +98,15 @@ type PivotResponseApi = {
     columns?: Array<{ column_id: string | number; hours: number | string }>;
     grand?: { hours: number | string } | null;
   };
+};
+
+type PivotInsightItem = { label: string; value: number };
+
+type PivotInsights = {
+  totalHours: number | null;
+  topUser: PivotInsightItem | null;
+  topProject: PivotInsightItem | null;
+  highestCell: PivotInsightItem | null;
 };
 
 const parseHoursValue = (value: unknown): number => {
@@ -296,6 +306,7 @@ const getFilenameFromContentDisposition = (headerValue: string | undefined): str
 };
 
 const TimesheetPivotReport: React.FC = () => {
+  const { t } = useTranslation();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
@@ -508,13 +519,121 @@ const TimesheetPivotReport: React.FC = () => {
     return parsed.isValid() ? parsed : null;
   }, [to]);
 
+  const pivotInsights = useMemo<PivotInsights>(() => {
+    const rowLabels = new Map(data?.rows?.map((r) => [r.key, r.label]) ?? []);
+    const columnLabels = new Map(data?.columns?.map((c) => [c.key, c.label]) ?? []);
+
+    const getTop = (totals: Record<string, number> | undefined, labels: Map<string, string>): PivotInsightItem | null => {
+      if (!totals) return null;
+      let bestKey: string | null = null;
+      let bestValue = -Infinity;
+      Object.entries(totals).forEach(([key, value]) => {
+        if (typeof value === 'number' && value > bestValue) {
+          bestValue = value;
+          bestKey = key;
+        }
+      });
+      if (!bestKey || !Number.isFinite(bestValue)) return null;
+      return { label: labels.get(bestKey) ?? bestKey, value: bestValue };
+    };
+
+    const topRow = getTop(data?.totals?.rows, rowLabels);
+    const topColumn = getTop(data?.totals?.columns, columnLabels);
+
+    const topUser = rowDimension === 'user' ? topRow : columnDimension === 'user' ? topColumn : null;
+    const topProject = rowDimension === 'project' ? topRow : columnDimension === 'project' ? topColumn : null;
+
+    let highestCell: { label: string; value: number } | null = null;
+    if (data?.cells) {
+      Object.entries(data.cells).forEach(([key, value]) => {
+        if (typeof value !== 'number') return;
+        if (!highestCell || value > highestCell.value) {
+          const [rowKey, columnKey] = key.split(':');
+          const rowLabel = rowLabels.get(rowKey) ?? rowKey;
+          const colLabel = columnLabels.get(columnKey) ?? columnKey;
+          highestCell = { label: `${rowLabel} × ${colLabel}`, value };
+        }
+      });
+    }
+
+    return {
+      totalHours: typeof data?.totals?.grand === 'number' ? data.totals.grand : null,
+      topUser,
+      topProject,
+      highestCell,
+    };
+  }, [data, rowDimension, columnDimension]);
+
+  const insightSuggestions = useMemo(
+    () => [
+      t('timesheetPivot.insights.suggestions.topUsers'),
+      t('timesheetPivot.insights.suggestions.topProjects'),
+      t('timesheetPivot.insights.suggestions.peakCell'),
+    ],
+    [t]
+  );
+
   const aiInsightsNode = useMemo(() => {
+    const emptyValue = t('rightPanel.insights.emptyValue');
+    const formatHours = (value: number | null) =>
+      value !== null ? `${formatTenantNumber(value, tenantContext, 2)}h` : emptyValue;
+
+    const metrics = [
+      {
+        key: 'total',
+        label: t('timesheetPivot.insights.totalHours'),
+        value: formatHours(pivotInsights.totalHours),
+      },
+      {
+        key: 'top-user',
+        label: t('timesheetPivot.insights.topUser'),
+        value: pivotInsights.topUser
+          ? `${pivotInsights.topUser.label} (${formatHours(pivotInsights.topUser.value)})`
+          : emptyValue,
+      },
+      {
+        key: 'top-project',
+        label: t('timesheetPivot.insights.topProject'),
+        value: pivotInsights.topProject
+          ? `${pivotInsights.topProject.label} (${formatHours(pivotInsights.topProject.value)})`
+          : emptyValue,
+      },
+      {
+        key: 'peak-cell',
+        label: t('timesheetPivot.insights.peakCell'),
+        value: pivotInsights.highestCell
+          ? `${pivotInsights.highestCell.label} (${formatHours(pivotInsights.highestCell.value)})`
+          : emptyValue,
+      },
+    ];
+
     return (
-      <Typography variant="body2" color="text.secondary">
-        Try: “grand total”, “top users/projects”, or “highest cell”.
-      </Typography>
+      <Stack spacing={2}>
+        <Box>
+          <Typography variant="subtitle2">{t('timesheetPivot.insights.summaryTitle')}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('timesheetPivot.insights.summaryHint')}
+          </Typography>
+        </Box>
+        <Grid container spacing={1.5}>
+          {metrics.map((metric) => (
+            <Grid key={metric.key} item xs={12} sm={6}>
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {metric.label}
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    {metric.value}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Stack>
     );
-  }, []);
+  }, [pivotInsights, tenantContext, t]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -788,8 +907,9 @@ const TimesheetPivotReport: React.FC = () => {
 
       <ReportAISideTab
         aiState={aiState}
-        title="AI"
+        title={t('rightPanel.tabs.ai')}
         insights={aiInsightsNode}
+        insightSuggestions={insightSuggestions}
         onUpgrade={() => void openCheckoutForAddon('ai')}
         onOpenSettings={() => {
           window.location.href = '/billing';

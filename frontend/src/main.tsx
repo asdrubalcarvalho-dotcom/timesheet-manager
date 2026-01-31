@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import App from './App.tsx';
+import './i18n';
 
 // Force clear cache version check
 const CACHE_VERSION = '2.0.1';

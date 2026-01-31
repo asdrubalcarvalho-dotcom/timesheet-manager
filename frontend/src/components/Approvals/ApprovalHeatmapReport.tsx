@@ -24,8 +24,9 @@ import { getTenantAiState } from '../Common/aiState';
 import ReportFiltersCard from '../Common/ReportFiltersCard';
 import ReportAISideTab from '../Common/ReportAISideTab';
 import { useAuth } from '../Auth/AuthContext';
-import { formatTenantDate, formatTenantDayMonth, getTenantDatePickerFormat, getTenantUiLocale } from '../../utils/tenantFormatting';
+import { formatTenantDate, formatTenantDayMonth, formatTenantNumber, getTenantDatePickerFormat, getTenantUiLocale } from '../../utils/tenantFormatting';
 import { weekStartToFirstDay } from '../../utils/weekStartToFirstDay';
+import { useTranslation } from 'react-i18next';
 
 dayjs.extend(customParseFormat);
 
@@ -117,6 +118,7 @@ const startOfWeek = (date: Date, firstDay: 0 | 1): Date => {
 };
 
 const ApprovalHeatmapReport: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const { tenant, tenantContext } = useAuth();
   const debugLoggedRef = useRef(false);
@@ -320,6 +322,37 @@ const ApprovalHeatmapReport: React.FC = () => {
     return parsed.isValid() ? parsed : null;
   }, [to]);
 
+  const heatmapInsights = useMemo(() => {
+    const days = data?.days ?? {};
+    let peakDate: string | null = null;
+    let peakCount = -Infinity;
+
+    Object.entries(days).forEach(([key, value]) => {
+      const totalPending = typeof value.total_pending === 'number' ? value.total_pending : 0;
+      if (totalPending > peakCount) {
+        peakCount = totalPending;
+        peakDate = key;
+      }
+    });
+
+    return {
+      totalPending: totals.totalPending,
+      totalApprovedTimesheets: totals.totalApprovedTimesheets,
+      totalApprovedExpenses: totals.totalApprovedExpenses,
+      peakDate,
+      peakCount: Number.isFinite(peakCount) ? peakCount : null,
+    };
+  }, [data, totals]);
+
+  const insightSuggestions = useMemo(
+    () => [
+      t('approvalHeatmap.insights.suggestions.backlog'),
+      t('approvalHeatmap.insights.suggestions.worstDays'),
+      t('approvalHeatmap.insights.suggestions.compareTypes'),
+    ],
+    [t]
+  );
+
   const handleAskAi = async (question: string): Promise<string> => {
     const response = await api.post<{ answer: string }>(
       '/api/ai/approvals/query',
@@ -339,12 +372,65 @@ const ApprovalHeatmapReport: React.FC = () => {
   };
 
   const aiInsightsNode = useMemo(() => {
+    const emptyValue = t('rightPanel.insights.emptyValue');
+    const formatCount = (value: number | null) =>
+      value !== null && Number.isFinite(value) ? formatTenantNumber(value, tenantContext, 0) : emptyValue;
+
+    const peakDateLabel = heatmapInsights.peakDate
+      ? formatTenantDate(heatmapInsights.peakDate, tenantContext)
+      : emptyValue;
+    const peakCountLabel = formatCount(heatmapInsights.peakCount);
+
+    const metrics = [
+      {
+        key: 'pending',
+        label: t('approvalHeatmap.insights.pendingTotal'),
+        value: formatCount(heatmapInsights.totalPending),
+      },
+      {
+        key: 'approved-timesheets',
+        label: t('approvalHeatmap.insights.approvedTimesheets'),
+        value: formatCount(heatmapInsights.totalApprovedTimesheets),
+      },
+      {
+        key: 'approved-expenses',
+        label: t('approvalHeatmap.insights.approvedExpenses'),
+        value: formatCount(heatmapInsights.totalApprovedExpenses),
+      },
+      {
+        key: 'peak-day',
+        label: t('approvalHeatmap.insights.peakDay'),
+        value: heatmapInsights.peakDate ? `${peakDateLabel} (${peakCountLabel})` : emptyValue,
+      },
+    ];
+
     return (
-      <Typography variant="body2" color="text.secondary">
-        Try: “Where are approvals piling up?”, “Which days were worst?”, or “Compare timesheets vs expenses”.
-      </Typography>
+      <Stack spacing={2}>
+        <Box>
+          <Typography variant="subtitle2">{t('approvalHeatmap.insights.summaryTitle')}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('approvalHeatmap.insights.summaryHint')}
+          </Typography>
+        </Box>
+        <Grid container spacing={1.5}>
+          {metrics.map((metric) => (
+            <Grid key={metric.key} item xs={12} sm={6}>
+              <Card variant="outlined" sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {metric.label}
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    {metric.value}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Stack>
     );
-  }, []);
+  }, [heatmapInsights, tenantContext, t]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -604,8 +690,9 @@ const ApprovalHeatmapReport: React.FC = () => {
 
       <ReportAISideTab
         aiState={aiState}
-        title="AI"
+        title={t('rightPanel.tabs.ai')}
         insights={aiInsightsNode}
+        insightSuggestions={insightSuggestions}
         onUpgrade={() => void openCheckoutForAddon('ai')}
         onOpenSettings={() => {
           window.location.href = '/billing';

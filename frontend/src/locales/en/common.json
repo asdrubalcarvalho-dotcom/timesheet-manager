@@ -1,0 +1,143 @@
+{
+  "rightPanel": {
+    "tabs": {
+      "insights": "Insights",
+      "help": "Help",
+      "ai": "AI Chat"
+    },
+    "trigger": {
+      "tooltip": "Insights / Help / AI",
+      "open": "Open {{tab}}",
+      "close": "Close {{tab}}"
+    },
+    "panelFallback": "Panel",
+    "closePanel": "Close panel",
+    "insights": {
+      "emptyValue": "—"
+    },
+    "help": {
+      "title": "Need help?",
+      "subtitle": "Browse docs and AI tips for faster answers.",
+      "tip": "Tip: Ask the AI tab for summaries, anomalies, and next steps.",
+      "docsTitle": "Documentation",
+      "terms": "Terms of service",
+      "privacy": "Privacy policy",
+      "acceptableUse": "Acceptable use"
+    },
+    "ai": {
+      "title": "Ask TimePerk AI",
+      "subtitle": "Summarize anomalies, approvals, and trends.",
+      "suggestions": {
+        "flags": "What entries were flagged?",
+        "overtime": "Where did overtime spike?",
+        "approvals": "Which approvals are pending?",
+        "projectCosts": "Which projects exceed budgeted hours?"
+      },
+      "placeholderResponse": "I'm still learning. For now, I can summarize the report based on your question.",
+      "errorFallback": "Something went wrong. Please try again.",
+      "viewBilling": "View billing",
+      "addonNotice": "AI is available as an add-on for your plan.",
+      "billingSettings": "Billing settings",
+      "disabledTitle": "AI is disabled",
+      "disabledMessage": "Enable AI in tenant billing settings to continue.",
+      "disabledTenant": "AI is disabled for this tenant.",
+      "unavailable": "AI is not available for this tenant.",
+      "enabledNotice": "Ask a question to generate insights.",
+      "errorLabel": "Error: {{message}}",
+      "you": "You",
+      "assistant": "Assistant",
+      "placeholder": "No messages yet.",
+      "inputLabel": "Ask AI",
+      "inputPlaceholder": "Type a question…",
+      "sending": "Sending…",
+      "send": "Send"
+    },
+    "reports": {
+      "aiIntro": "Ask about this report or pick a suggestion to start.",
+      "noInsights": "No insights yet. Run the report to populate insights."
+    },
+    "timesheets": {
+      "tabs": {
+        "alerts": "Alerts ({{count}})",
+        "weekly": "Weekly"
+      },
+      "aiReview": "Review {{count}} flagged",
+      "aiAvailableTitle": "AI alerts available",
+      "aiAvailableBody": "{{count}} entries were flagged and are ready for review.",
+      "caOt2": {
+        "title": "OT2 threshold reached",
+        "noDays": "No days exceeded the OT2 threshold.",
+        "row": "{{date}} — OT2: {{ot2}}h (Total: {{total}}h)"
+      },
+      "noAlerts": "No alerts in this range.",
+      "alertExamples": {
+        "overtime": "Overtime spikes",
+        "missingBreaks": "Missing breaks",
+        "policyDrift": "Policy drift"
+      },
+      "weeklyOnlyInWeek": "Weekly breakdown is available in Week view.",
+      "weeklyPreview": {
+        "regularHours": "Regular vs overtime split",
+        "overtimeSplit": "Overtime rate applied",
+        "policyKey": "Policy key summary"
+      },
+      "weeklyCta": "Switch to Week view",
+      "weeklyTitle": "Weekly totals",
+      "weeklyPolicy": "Policy: {{policy}}",
+      "weeklyStart": "Week of {{date}}",
+      "weeklyLoading": "Loading weekly totals…",
+      "weeklyUnavailable": "Weekly totals are unavailable.",
+      "weeklyRegular": "Regular hours",
+      "weeklyOvertime": "Overtime ({{rate}}x)",
+      "weeklyOvertime2": "Overtime 2.0"
+    }
+  },
+  "timesheets": {
+    "alerts": {
+      "viewFlaggedCta": "View flagged entries ({{count}})",
+      "aiFlaggedDetected": "AI flagged entries detected.",
+      "aiAlertsAvailableInInsights": "AI alerts are available inside Insights."
+    },
+    "insights": {
+      "noAlerts": "No alerts",
+      "weeklyBreakdown": "Weekly breakdown",
+      "weeklyBreakdownAvailableInWeekView": "Weekly breakdown is available in Week view."
+    }
+  },
+  "timesheetPivot": {
+    "insights": {
+      "summaryTitle": "Pivot highlights",
+      "summaryHint": "Quick summary of top contributors and peak combinations.",
+      "totalHours": "Total hours",
+      "topUser": "Top user",
+      "topProject": "Top project",
+      "peakCell": "Peak combination",
+      "suggestions": {
+        "topUsers": "Who logged the most hours?",
+        "topProjects": "Which project had the most hours?",
+        "peakCell": "Where is the busiest row/column?"
+      }
+    }
+  },
+  "approvalHeatmap": {
+    "insights": {
+      "summaryTitle": "Approval highlights",
+      "summaryHint": "Overview of pending volume and busiest days.",
+      "pendingTotal": "Pending approvals",
+      "approvedTimesheets": "Approved timesheets",
+      "approvedExpenses": "Approved expenses",
+      "peakDay": "Busiest day",
+      "suggestions": {
+        "backlog": "Where are approvals piling up?",
+        "worstDays": "Which days were worst?",
+        "compareTypes": "Compare timesheets vs expenses"
+      }
+    }
+  },
+  "reports": {
+    "ai": {
+      "openPanel": "Open AI",
+      "closePanel": "Close AI"
+    }
+  }
+}

@@ -1,8 +1,9 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
+  Chip,
   Stack,
 } from '@mui/material';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -11,18 +12,32 @@ import type { TenantAiState } from './aiState';
 import { useRegisterRightPanelTab } from '../RightPanel/useRegisterRightPanelTab';
 import { RightPanelTrigger } from '../RightPanel/RightPanelTrigger';
 import { useRightPanelTabToggle } from '../RightPanel/useRightPanelTabToggle';
+import { useRightPanel } from '../RightPanel/useRightPanel';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
   aiState: TenantAiState;
   insights?: React.ReactNode;
+  insightSuggestions?: string[];
   title?: string;
   onUpgrade?: () => void;
   onOpenSettings?: () => void;
   onAsk?: (question: string) => Promise<string>;
 };
 
-const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onUpgrade, onOpenSettings, onAsk }) => {
+const ReportAISideTab: React.FC<Props> = ({
+  aiState,
+  insights,
+  insightSuggestions = [],
+  title = 'AI',
+  onUpgrade,
+  onOpenSettings,
+  onAsk,
+}) => {
+  const { t } = useTranslation();
+  const { open } = useRightPanel();
   const canChat = useMemo(() => aiState === 'enabled' && typeof onAsk === 'function', [aiState, onAsk]);
+  const [draftQuestion, setDraftQuestion] = useState<string>('');
 
   // Keep a stable Insights tab id per report page instance.
   const insightsTabIdRef = useRef<string | null>(null);
@@ -36,22 +51,38 @@ const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onU
   const insightsTab = useMemo(
     () => ({
       id: insightsTabId,
-      label: 'Insights',
+      label: t('rightPanel.tabs.insights'),
       order: -10,
       render: () => (
         <Box>
           <Stack spacing={2}>
             {insights ? <Box>{insights}</Box> : null}
+            {insightSuggestions.length > 0 ? (
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                {insightSuggestions.map((label) => (
+                  <Chip
+                    key={label}
+                    label={label}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      setDraftQuestion(label);
+                      open('ai-chat');
+                    }}
+                  />
+                ))}
+              </Stack>
+            ) : null}
             {!insights ? (
               <Alert severity="info" variant="outlined">
-                No insights available for this report.
+                {t('rightPanel.reports.noInsights')}
               </Alert>
             ) : null}
           </Stack>
         </Box>
       ),
     }),
-    [insightsTabId, insights]
+    [insightsTabId, insights, insightSuggestions, open, t]
   );
 
   // Override the global AI tab while a report is mounted (stacked by id).
@@ -70,12 +101,12 @@ const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onU
                 action={
                   onUpgrade ? (
                     <Button variant="outlined" size="small" onClick={onUpgrade} sx={{ textTransform: 'none' }}>
-                      View billing options
+                      {t('rightPanel.ai.viewBilling')}
                     </Button>
                   ) : undefined
                 }
               >
-                AI is available with the AI add-on. Upgrade in Billing to unlock automated insights.
+                {t('rightPanel.ai.addonNotice')}
               </Alert>
             ) : null}
 
@@ -86,27 +117,33 @@ const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onU
                 action={
                   onOpenSettings ? (
                     <Button variant="outlined" size="small" onClick={onOpenSettings} sx={{ textTransform: 'none' }}>
-                      Billing → Tenant Settings
+                      {t('rightPanel.ai.billingSettings')}
                     </Button>
                   ) : undefined
                 }
               >
-                AI add-on is active, but disabled in tenant settings.
+                {t('rightPanel.ai.disabledTenant')}
               </Alert>
             ) : null}
 
             {aiState === 'not_available' ? (
               <Alert severity="info" variant="outlined">
-                AI is not available on your plan.
+                {t('rightPanel.ai.unavailable')}
               </Alert>
             ) : null}
 
-            {canChat ? <ReportAIChatPanel onAsk={onAsk!} /> : null}
+            {canChat ? (
+              <ReportAIChatPanel
+                onAsk={onAsk!}
+                suggestions={insightSuggestions}
+                prefill={draftQuestion}
+              />
+            ) : null}
           </Stack>
         </Box>
       ),
     }),
-    [title, aiState, onUpgrade, onOpenSettings, canChat, onAsk]
+    [title, aiState, onUpgrade, onOpenSettings, canChat, onAsk, insightSuggestions, draftQuestion, t]
   );
 
   useRegisterRightPanelTab(insightsTab);
@@ -117,9 +154,9 @@ const ReportAISideTab: React.FC<Props> = ({ aiState, insights, title = 'AI', onU
   return (
     <RightPanelTrigger
       tabId={insightsTabId}
-      tooltip="Insights / Help / AI"
+      tooltip={t('rightPanel.trigger.tooltip')}
       icon={<SmartToyIcon fontSize="small" />}
-      ariaLabel={{ open: 'Open Insights', close: 'Close Insights' }}
+      ariaLabel={{ open: t('rightPanel.trigger.open', { tab: t('rightPanel.tabs.insights') }), close: t('rightPanel.trigger.close', { tab: t('rightPanel.tabs.insights') }) }}
       onClick={toggleInsights}
     />
   );

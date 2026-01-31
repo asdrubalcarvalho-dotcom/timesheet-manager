@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import { API_URL } from '../../services/api';
 import type { ReactNode } from 'react';
+import { setLanguage } from '../../i18n';
 
 /* ===============================================================
    TYPES
@@ -259,6 +260,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth();
   }, [normalizeUser, API_URL]);
 
+  useEffect(() => {
+    const browserLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
+    const targetLocale = tenantContext?.ui_locale ?? browserLocale ?? 'en';
+    void setLanguage(targetLocale);
+  }, [tenantContext?.ui_locale]);
   /* ---------------------------------------------------------------
      LOGIN
   --------------------------------------------------------------- */

@@ -6,7 +6,7 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import { timesheetsApi, projectsApi, tasksApi, locationsApi, techniciansApi } from '../../services/api';
 import { travelsApi } from '../../services/travels';
-import type { Project, Timesheet, Task, Location, Technician } from '../../types';
+import type { Project, Timesheet, Task, Location, Technician, ProjectMember } from '../../types';
 import type { TravelSegment } from '../../services/travels';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -34,16 +34,8 @@ import { useRegisterRightPanelTab } from '../RightPanel/useRegisterRightPanelTab
 import { RightPanelTrigger } from '../RightPanel/RightPanelTrigger';
 import { useRightPanelTabToggle } from '../RightPanel/useRightPanelTabToggle';
 import { useTimesheetAlertsSummary } from './useTimesheetAlertsSummary';
+import { useTranslation } from 'react-i18next';
 
-// API Response types
-interface ApiResponse<T> {
-  data: T[];
-  user_permissions: Record<string, boolean>;
-}
-
-type TimesheetApiResponse = Timesheet[] | ApiResponse<Timesheet>;
-type TaskApiResponse = Task[] | ApiResponse<Task>;
-type LocationApiResponse = Location[] | ApiResponse<Location>;
 import {
   Box,
   Typography,
@@ -93,7 +85,15 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import type { DateSelectArg, EventClickArg } from '@fullcalendar/core';
+import type { DateClickArg } from '@fullcalendar/interaction';
+import type {
+  DateSelectArg,
+  DayCellMountArg,
+  DatesSetArg,
+  EventClickArg,
+  EventInput,
+  EventMountArg,
+} from '@fullcalendar/core';
 
 import { useTimesheetAISuggestion } from '../../hooks/useTimesheetAISuggestion';
 import AISuggestionCard from '../AI/AISuggestionCard';
@@ -180,6 +180,7 @@ const DAILY_HOUR_CAP = 12;
 
 
 const TimesheetCalendar: React.FC = () => {
+  const { t } = useTranslation();
   const { user, tenant, isManager, isAdmin, loading: authLoading, tenantContext } = useAuth();
   const navigate = useNavigate();
   const { hasTravels } = useFeatures();
@@ -264,12 +265,20 @@ const TimesheetCalendar: React.FC = () => {
   }, [weekFirstDay]);
   
   // Confirmation dialog state
-  const [confirmDialog, setConfirmDialog] = useState({ 
-    open: false, 
-    title: '', 
-    message: '', 
-    recordDetails: {} as any,
-    action: (() => {}) as () => void | Promise<void>
+  type ConfirmDialogState = {
+    open: boolean;
+    title: string;
+    message: string;
+    recordDetails: Record<string, unknown>;
+    action: () => void | Promise<void>;
+  };
+
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
+    open: false,
+    title: '',
+    message: '',
+    recordDetails: {},
+    action: () => {},
   });
   
   // Global notification hook
@@ -286,7 +295,7 @@ const TimesheetCalendar: React.FC = () => {
       if (projects.length === 1) {
         setProjectId(projects[0].id);
       } else if (projects.length === 0) {
-        setProjectId('');
+        setProjectId(0);
       }
     }, [projects]);
   const [taskId, setTaskId] = useState<number>(0);
@@ -330,16 +339,16 @@ const TimesheetCalendar: React.FC = () => {
       const selectedProject = projects.find(p => p.id === Number(projectId));
       
       // Try both camelCase and snake_case (Laravel returns snake_case by default)
-      const memberRecords = selectedProject?.memberRecords || selectedProject?.member_records || [];
+      const memberRecords: ProjectMember[] = selectedProject?.memberRecords || selectedProject?.member_records || [];
       
       // Get project members who have timesheet permissions (role != 'none')
-      const projectMembersWithTimesheetAccess = memberRecords.filter((member: any) => 
+      const projectMembersWithTimesheetAccess = memberRecords.filter((member) =>
         member.project_role && member.project_role !== 'none'
       );
 
       // Map to technician user IDs
       const allowedTechnicianUserIds = new Set(
-        projectMembersWithTimesheetAccess.map((member: any) => member.user_id)
+        projectMembersWithTimesheetAccess.map((member) => member.user_id)
       );
 
       // Filter technicians by project membership
@@ -349,7 +358,7 @@ const TimesheetCalendar: React.FC = () => {
 
       // Check current user's role in this project
       const currentUserProjectMember = projectMembersWithTimesheetAccess.find(
-        (member: any) => member.user_id === user.id
+        (member) => member.user_id === user.id
       );
 
       // For Admins: show all technicians (bypass project membership check)
@@ -362,8 +371,8 @@ const TimesheetCalendar: React.FC = () => {
         // Get member user IDs (excluding managers)
         const memberUserIds = new Set(
           projectMembersWithTimesheetAccess
-            .filter((member: any) => member.project_role === 'member')
-            .map((member: any) => member.user_id)
+            .filter((member) => member.project_role === 'member')
+            .map((member) => member.user_id)
         );
 
         // Filter technicians: only members + current user (manager can see their own)
@@ -443,34 +452,199 @@ const TimesheetCalendar: React.FC = () => {
   };
 
 
+  type ArrayResponse<T> = { data: T[] };
+  const isArrayResponse = <T,>(value: unknown): value is ArrayResponse<T> => {
+    return Boolean(value) && typeof value === 'object' && Array.isArray((value as { data?: unknown }).data);
+  };
+
+  const loadTimesheets = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response: unknown = await timesheetsApi.getAll();
+      console.log('Loaded timesheets:', response);
+
+      let timesheetsData: Timesheet[] = [];
+      if (Array.isArray(response)) {
+        timesheetsData = response as Timesheet[];
+      } else if (isArrayResponse<Timesheet>(response)) {
+        timesheetsData = response.data;
+      }
+
+      setTimesheets(timesheetsData);
+    } catch (error: unknown) {
+      console.error('Error loading timesheets:', error);
+      showError('Failed to load timesheets');
+    } finally {
+      setLoading(false);
+    }
+  }, [showError]);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const data: unknown = await tasksApi.getAll();
+      console.log('Loaded tasks:', data);
+      let tasksArray: Task[] = [];
+      if (Array.isArray(data)) {
+        tasksArray = data as Task[];
+      } else if (isArrayResponse<Task>(data)) {
+        tasksArray = data.data;
+      }
+      setTasks(tasksArray);
+    } catch (error: unknown) {
+      console.error('Error loading tasks:', error);
+      showError('Failed to load tasks');
+    }
+  }, [showError]);
+
+  const loadLocations = useCallback(async () => {
+    try {
+      const data: unknown = await locationsApi.getAll();
+      console.log('Loaded locations:', data);
+      let locationsArray: Location[] = [];
+      if (Array.isArray(data)) {
+        locationsArray = data as Location[];
+      } else if (isArrayResponse<Location>(data)) {
+        locationsArray = data.data;
+      }
+      setLocations(locationsArray);
+    } catch (error: unknown) {
+      console.error('Error loading locations:', error);
+      showError('Failed to load tasks');
+    }
+  }, [showError]);
+
+  const loadTechnicians = useCallback(async () => {
+    try {
+      const response: unknown = await techniciansApi.getAll();
+      console.log('Loaded technicians RAW response:', response);
+
+      let techniciansData: Technician[] = [];
+      if (Array.isArray(response)) {
+        techniciansData = response as Technician[];
+      } else if (isArrayResponse<Technician>(response)) {
+        techniciansData = response.data;
+      } else if (response && typeof response === 'object' && 'data' in response) {
+        const nested = (response as { data?: unknown }).data;
+        if (isArrayResponse<Technician>(nested)) {
+          techniciansData = nested.data;
+        } else if (Array.isArray(nested)) {
+          techniciansData = nested as Technician[];
+        }
+      }
+
+      console.log('Processed technicians:', techniciansData);
+      setTechnicians(techniciansData);
+    } catch (error: unknown) {
+      console.error('Error loading technicians:', error);
+      showError('Failed to load workers');
+    }
+  }, [showError]);
+
+  const loadTravels = useCallback(
+    async (month?: string, technicianId?: number) => {
+      // Load travels for calendar month view integration
+      if (!hasTravels) {
+        setTravelsByDate({});
+        return;
+      }
+
+      try {
+        const params: Record<string, string | number> = {};
+
+        params.month = month ?? dayjs().format('YYYY-MM');
+
+        // Use provided technician filter when explicitly supplied
+        if (technicianId) {
+          params.technician_id = technicianId;
+        }
+
+        console.log('🛫 [TRAVELS] Loading with params:', params);
+        const response = await travelsApi.getTravelsByDate(params);
+
+        console.log('🛫 [TRAVELS] API Response:', response);
+
+        if (response && response.travels_by_date) {
+          const travelCount = Object.keys(response.travels_by_date).length;
+          const totalSegments = Object.values(response.travels_by_date).flat().length;
+          console.log(
+            `🛫 [TRAVELS] Loaded ${totalSegments} segments across ${travelCount} dates:`,
+            response.travels_by_date
+          );
+          setTravelsByDate(response.travels_by_date);
+        } else {
+          console.warn('🛫 [TRAVELS] No travels_by_date in response:', response);
+          setTravelsByDate({});
+        }
+      } catch (error: unknown) {
+        console.error('🛫 [TRAVELS] Error loading travels:', error);
+        setTravelsByDate({});
+        // Fail silently - travels are supplementary info to timesheets
+      }
+    },
+    [hasTravels]
+  );
+
+  const loadProjects = useCallback(
+    async (technicianId?: number | '') => {
+      try {
+        const technicianFilter = typeof technicianId === 'number' ? technicianId : undefined;
+        const userProjectsResponse = await projectsApi
+          .getForCurrentUser(technicianFilter ? { technician_id: technicianFilter } : undefined)
+          .catch(() => ([] as Project[]));
+
+        console.log('Loaded user projects:', userProjectsResponse);
+
+        const userProjectsArray = Array.isArray(userProjectsResponse)
+          ? userProjectsResponse
+          : (userProjectsResponse as { data?: Project[] }).data || [];
+
+        setProjects(userProjectsArray);
+
+        const roleMap = userProjectsArray.reduce<
+          Record<
+            number,
+            {
+              projectRole?: 'member' | 'manager' | 'none';
+              expenseRole?: 'member' | 'manager' | 'none';
+            }
+          >
+        >((acc, project) => {
+          acc[project.id] = {
+            projectRole: project.user_project_role,
+            expenseRole: project.user_expense_role,
+          };
+          return acc;
+        }, {});
+        setProjectRoleMap(roleMap);
+      } catch (error: unknown) {
+        console.error('Error loading projects:', error);
+        showError('Failed to load projects');
+      }
+    },
+    [showError]
+  );
+
   // Load initial data once authentication state is resolved
   useEffect(() => {
-    if (authLoading) {
-      return;
-    }
-
-    if (!user) {
-      return;
-    }
+    if (authLoading) return;
+    if (!user) return;
 
     loadTasks();
     loadLocations();
     loadTechnicians();
     loadTravels(); // Load travel indicators for calendar
-  }, [authLoading, user?.id]);
+  }, [authLoading, user, loadTasks, loadLocations, loadTechnicians, loadTravels]);
 
   // Refetch projects and timesheets when technician selection changes (or on initial load)
   useEffect(() => {
     if (authLoading || !user) return;
-
     loadTimesheets();
-  }, [authLoading, user?.id]);
+  }, [authLoading, user, loadTimesheets]);
 
   useEffect(() => {
     if (authLoading || !user) return;
-
     loadProjects(selectedTechnicianId);
-  }, [authLoading, user?.id, selectedTechnicianId]);
+  }, [authLoading, user, selectedTechnicianId, loadProjects]);
 
   // Don't force scope - respect the default 'all' value from useState
   // Users can manually change scope using toggle buttons
@@ -507,24 +681,6 @@ const TimesheetCalendar: React.FC = () => {
     }
   }, [taskId, locationId, tasks]);
 
-  const loadTimesheets = async () => {
-    try {
-      setLoading(true);
-      const response: TimesheetApiResponse = await timesheetsApi.getAll();
-      console.log('Loaded timesheets:', response);
-      // Handle new API format that returns { data: [...], user_permissions: {...} }
-      const timesheetsData = Array.isArray(response) 
-        ? response 
-        : (response as any)?.data || [];
-      setTimesheets(timesheetsData);
-    } catch (error) {
-      console.error('Error loading timesheets:', error);
-      showError('Failed to load timesheets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDialogClose = useCallback(async () => {
     setDialogOpen(false);
     await loadTimesheets();
@@ -556,164 +712,27 @@ const TimesheetCalendar: React.FC = () => {
   }, [authLoading, user]);
 
   // Handle view change - reload data when switching to Week view
-  const handleViewChange = useCallback((info: any) => {
-    console.log('View changed to:', info.view.type, 'Date range:', info.startStr, 'to', info.endStr);
+  const handleViewChange = useCallback(
+    (info: DatesSetArg) => {
+      console.log('View changed to:', info.view.type, 'Date range:', info.startStr, 'to', info.endStr);
 
-    // Track active view type to allow view-specific header formatting
-    setCurrentCalendarViewType(info.view.type);
+      // Track active view type to allow view-specific header formatting
+      setCurrentCalendarViewType(info.view.type);
 
-    const isTimeGridWeek = info.view.type === 'timeGridWeek';
-    if (isTimeGridWeek) {
-      const date = dayjs(info.start).format('YYYY-MM-DD');
-      setCurrentWeekStartDate(date);
-      loadWeekSummary(date);
-    } else {
-      // Avoid showing stale data if user leaves week views
-      setWeekSummary(null);
-      setWeekSummaryStatus('idle');
-      lastSummaryDateRef.current = null;
-      setCurrentWeekStartDate(null);
-    }
-    
-    // Don't reload timesheets on view change - let the existing data render
-    // Timesheets are already loaded and will display correctly in any view
-    
-    // Only reload travels when the visible month actually changes
-    const newMonth = dayjs(info.view.currentStart).format('YYYY-MM');
-    
-    // Only reload if we don't have data for this month yet
-    if (!travelsByDate || Object.keys(travelsByDate).length === 0 || 
-        !Object.keys(travelsByDate).some(date => date.startsWith(newMonth))) {
-      console.log('Loading travels for month:', newMonth);
-      loadTravels(newMonth);
-    }
-  }, [travelsByDate, loadWeekSummary]);
-
-  const loadProjects = async (technicianId?: number | '') => {
-    try {
-      const technicianFilter = typeof technicianId === 'number' ? technicianId : (typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined);
-      const userProjectsResponse = await projectsApi.getForCurrentUser(
-        technicianFilter ? { technician_id: technicianFilter } : undefined
-      ).catch(() => ([] as Project[]));
-
-      console.log('Loaded user projects:', userProjectsResponse);
-
-      const userProjectsArray = Array.isArray(userProjectsResponse)
-        ? userProjectsResponse
-        : (userProjectsResponse as ApiResponse<Project>).data || [];
-      
-      // Use only user's projects (where user is member)
-      setProjects(userProjectsArray);
-
-      const roleMap = userProjectsArray.reduce<Record<number, { projectRole?: 'member' | 'manager' | 'none'; expenseRole?: 'member' | 'manager' | 'none'; }>>((acc, project) => {
-        acc[project.id] = {
-          projectRole: project.user_project_role,
-          expenseRole: project.user_expense_role
-        };
-        return acc;
-      }, {});
-      setProjectRoleMap(roleMap);
-    } catch (error) {
-      console.error('Error loading projects:', error);
-      showError('Failed to load projects');
-    }
-  };
-
-  const loadTasks = async () => {
-    try {
-      const data: TaskApiResponse = await tasksApi.getAll();
-      console.log('Loaded tasks:', data);
-      // Handle both direct array and wrapped response formats
-      const tasksArray = Array.isArray(data) 
-        ? data 
-        : (data as ApiResponse<Task>).data || [];
-      setTasks(tasksArray);
-    } catch (error) {
-      console.error('Error loading tasks:', error);
-      showError('Failed to load tasks');
-    }
-  };
-
-  const loadLocations = async () => {
-    try {
-      const data: LocationApiResponse = await locationsApi.getAll();
-      console.log('Loaded locations:', data);
-      // Handle both direct array and wrapped response formats
-      const locationsArray = Array.isArray(data) 
-        ? data 
-        : (data as ApiResponse<Location>).data || [];
-      setLocations(locationsArray);
-    } catch (error) {
-      console.error('Error loading locations:', error);
-      showError('Failed to load locations');
-    }
-  };
-
-  const loadTechnicians = async () => {
-    try {
-      const response = await techniciansApi.getAll();
-      console.log('Loaded technicians RAW response:', response);
-      // API returns { data: [...] } format, handle nested data property
-      let techniciansData = [];
-      if (Array.isArray(response)) {
-        techniciansData = response;
-      } else if (response && typeof response === 'object' && 'data' in response) {
-        // Check if data is an array or has nested data property
-        const responseData = response.data as any;
-        techniciansData = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+      if (info.view.type === 'timeGridWeek') {
+        setCurrentWeekStartDate(info.startStr);
+        void loadWeekSummary(info.startStr);
       }
-      console.log('Processed technicians:', techniciansData);
-      setTechnicians(techniciansData);
-    } catch (error) {
-      console.error('Error loading technicians:', error);
-      showError('Failed to load workers');
-    }
-  };
 
-  const loadTravels = async (month?: string, technicianId?: number) => {
-    // Load travels for calendar month view integration
-    if (!hasTravels) {
-      setTravelsByDate({});
-      return;
-    }
-
-    try {
-      const params: any = {};
-      
-      // Use provided month or default to current month
-      if (month) {
-        params.month = month;
-      } else {
-        params.month = dayjs().format('YYYY-MM');
+      // Keep travel indicators in sync with the current visible range (month key)
+      if (hasTravels) {
+        const monthKey = dayjs(info.start).format('YYYY-MM');
+        const technicianFilter = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined;
+        void loadTravels(monthKey, technicianFilter);
       }
-      
-      // Use provided technician filter when explicitly supplied
-      if (technicianId) {
-        params.technician_id = technicianId;
-      }
-      // If no technician specified, backend loads all travels based on user permissions
-      
-      console.log('🛫 [TRAVELS] Loading with params:', params);
-      const response = await travelsApi.getTravelsByDate(params);
-      
-      console.log('🛫 [TRAVELS] API Response:', response);
-      
-      if (response && response.travels_by_date) {
-        const travelCount = Object.keys(response.travels_by_date).length;
-        const totalSegments = Object.values(response.travels_by_date).flat().length;
-        console.log(`🛫 [TRAVELS] Loaded ${totalSegments} segments across ${travelCount} dates:`, response.travels_by_date);
-        setTravelsByDate(response.travels_by_date);
-      } else {
-        console.warn('🛫 [TRAVELS] No travels_by_date in response:', response);
-        setTravelsByDate({});
-      }
-    } catch (error: any) {
-      console.error('🛫 [TRAVELS] Error loading travels:', error);
-      console.error('🛫 [TRAVELS] Error details:', error.response?.data || error.message);
-      setTravelsByDate({});
-      // Fail silently - travels are supplementary info to timesheets
-    }
-  };
+    },
+    [hasTravels, loadWeekSummary, loadTravels, selectedTechnicianId]
+  );
 
   const calculateHours = (startTime: Dayjs | null, endTime: Dayjs | null): number => {
     if (!startTime || !endTime) {
@@ -853,13 +872,14 @@ const TimesheetCalendar: React.FC = () => {
     setDialogOpen(true);
   };
 
-  const handleDateClick = (clickInfo: any) => {
+  const handleDateClick = (clickInfo: DateClickArg) => {
     if (isReadOnlyMode) {
       showReadOnlyWarning();
       return;
     }
     // Ignore click if it's on a travel indicator
-    if (clickInfo.jsEvent?.target?.classList?.contains('travel-indicator')) {
+    const clickTarget = clickInfo.jsEvent?.target;
+    if (clickTarget instanceof HTMLElement && clickTarget.classList.contains('travel-indicator')) {
       console.log('🛫 Ignoring dateClick - clicked on travel indicator');
       return;
     }
@@ -1071,18 +1091,22 @@ const TimesheetCalendar: React.FC = () => {
 
       const requestedTechnicianId = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : null;
 
-      const extractWarningMessage = (result: any): string | null => {
-        const w = result?.warning;
+      const extractWarningMessage = (result: unknown): string | null => {
+        const w = (result as { warning?: unknown } | null | undefined)?.warning;
         if (!w) return null;
         if (typeof w === 'string') return w;
-        if (typeof w?.message === 'string' && w.message.trim()) return w.message;
-        if (typeof w?.detail === 'string' && w.detail.trim()) return w.detail;
+        if (typeof (w as { message?: unknown }).message === 'string' && (w as { message: string }).message.trim()) {
+          return (w as { message: string }).message;
+        }
+        if (typeof (w as { detail?: unknown }).detail === 'string' && (w as { detail: string }).detail.trim()) {
+          return (w as { detail: string }).detail;
+        }
         return null;
       };
 
       if (selectedEntry) {
         // Update existing timesheet
-        const result: any = await timesheetsApi.update(selectedEntry.id, timesheet);
+        const result: unknown = await timesheetsApi.update(selectedEntry.id, timesheet);
         const warningMessage = extractWarningMessage(result);
         if (warningMessage) {
           showWarning(warningMessage);
@@ -1090,13 +1114,17 @@ const TimesheetCalendar: React.FC = () => {
         showSuccess('Timesheet updated successfully');
       } else {
         // Create new timesheet
-        const result: any = await timesheetsApi.create(timesheet);
+        const result: unknown = await timesheetsApi.create(timesheet);
         const warningMessage = extractWarningMessage(result);
         if (warningMessage) {
           showWarning(warningMessage);
         }
 
-        const savedTechnicianId = Number(result?.data?.technician_id ?? result?.data?.technician?.id);
+        const resultData = (result as { data?: unknown } | null | undefined)?.data;
+        const savedTechnicianId = Number(
+          (resultData as { technician_id?: unknown; technician?: { id?: unknown } } | null | undefined)?.technician_id ??
+            (resultData as { technician?: { id?: unknown } } | null | undefined)?.technician?.id
+        );
         const hasOverride =
           requestedTechnicianId !== null &&
           Number.isFinite(savedTechnicianId) &&
@@ -1121,13 +1149,27 @@ const TimesheetCalendar: React.FC = () => {
       if (!selectedEntry && aiSuggestion.suggestion) {
         handleAIFeedback(true); // Successful save indicates good suggestion
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Error saving timesheet:', err);
-      const error = err as any; // Type assertion for axios error
+
+      const error = err as {
+        response?: {
+          status?: number;
+          data?: {
+            message?: unknown;
+            error?: unknown;
+            errors?: Record<string, unknown>;
+          };
+        };
+        message?: unknown;
+      };
       let shouldRefresh = false;
 
       if (error.response?.status === 403) {
-        const message = error.response?.data?.message || error.response?.data?.error || 'Forbidden';
+        const message =
+          (typeof error.response?.data?.message === 'string' && error.response.data.message) ||
+          (typeof error.response?.data?.error === 'string' && error.response.data.error) ||
+          'Forbidden';
         showError(message);
       
         // Provide negative feedback to AI if suggestion was used
@@ -1139,10 +1181,13 @@ const TimesheetCalendar: React.FC = () => {
       
       // Handle time overlap errors (422/409)
       if (error.response?.status === 422 || error.response?.status === 409) {
-        const message = error.response?.data?.message || error.response?.data?.error || '';
+        const message =
+          (typeof error.response?.data?.message === 'string' && error.response.data.message) ||
+          (typeof error.response?.data?.error === 'string' && error.response.data.error) ||
+          '';
         const isOverlapError = message.toLowerCase().includes('overlap') || 
                                message.toLowerCase().includes('sobreposição') ||
-                               error.response?.data?.errors?.time_overlap;
+                               Boolean((error.response?.data?.errors as Record<string, unknown> | undefined)?.time_overlap);
         
         if (isOverlapError) {
           const timeRange = `${formatTenantTime(startTimeObj, tenantContext)} - ${formatTenantTime(endTimeObj, tenantContext)}`;
@@ -1156,7 +1201,12 @@ const TimesheetCalendar: React.FC = () => {
           // Other validation errors
           if (error.response?.data?.errors) {
             const validationErrors = Object.entries(error.response.data.errors)
-              .map(([field, messages]: [string, any]) => `${field}: ${messages.join(', ')}`)
+              .map(([field, messages]) => {
+                const msgList = Array.isArray(messages)
+                  ? messages.filter((m): m is string => typeof m === 'string')
+                  : [];
+                return `${field}: ${msgList.join(', ')}`;
+              })
               .join('\n');
             console.error('Validation errors:', validationErrors);
             showError(`Validation failed: ${validationErrors}`);
@@ -1166,7 +1216,7 @@ const TimesheetCalendar: React.FC = () => {
         }
       } else if (error.response?.data?.message) {
         // Check if message is about status immutability (should be warning, not error)
-        const message = error.response.data.message;
+        const message = typeof error.response.data.message === 'string' ? error.response.data.message : '';
         const isStatusWarning = message.includes('cannot be edited') || message.includes('Approved or closed');
         if (isStatusWarning) {
           showWarning(message);
@@ -1229,9 +1279,13 @@ const TimesheetCalendar: React.FC = () => {
           await loadTimesheets();
           setDialogOpen(false);
           resetForm();
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('Error deleting timesheet:', error);
-          const errorMessage = error?.response?.data?.message || error?.message || 'Failed to delete timesheet';
+          const axiosish = error as { response?: { data?: { message?: unknown } }; message?: unknown };
+          const errorMessage =
+            (typeof axiosish.response?.data?.message === 'string' && axiosish.response.data.message) ||
+            (typeof axiosish.message === 'string' && axiosish.message) ||
+            'Failed to delete timesheet';
           showError(errorMessage);
         } finally {
           setLoading(false);
@@ -1363,19 +1417,18 @@ const TimesheetCalendar: React.FC = () => {
 
     if (rows.length === 0) {
       return {
-        title: 'California 2.0x overtime detected',
+        title: t('rightPanel.timesheets.caOt2.title'),
         severity: 'info' as const,
-        message:
-          'OT (2.0x) is present in the weekly summary, but no >12h day was found in the visible entries for this workweek. This can happen when OT2 comes from non-">12h" rules (e.g., 7th consecutive day) or from entries not visible to you.',
+        message: t('rightPanel.timesheets.caOt2.noDays'),
       };
     }
 
     return {
-      title: 'California 2.0x overtime detected',
+      title: t('rightPanel.timesheets.caOt2.title'),
       severity: 'error' as const,
       rows,
     };
-  }, [tenantContext, currentCalendarViewType, currentWeekStartDate, policyVisibleTimesheets, weekSummary, weekSummaryStatus, caOt2Candidates]);
+  }, [tenantContext, currentCalendarViewType, currentWeekStartDate, policyVisibleTimesheets, weekSummary, weekSummaryStatus, caOt2Candidates, t]);
 
   const insightsAlertsCount = useMemo(() => {
     let count = 0;
@@ -1407,7 +1460,7 @@ const TimesheetCalendar: React.FC = () => {
   const timesheetInsightsTab = useMemo(
     () => ({
       id: 'timesheet-insights',
-      label: 'Insights',
+      label: t('rightPanel.tabs.insights'),
       order: -10,
       render: () => (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1420,8 +1473,11 @@ const TimesheetCalendar: React.FC = () => {
             }}
             variant="fullWidth"
           >
-            <Tab value="alerts" label={alertsSummary.insightsAlertsCount ? `Alerts (${alertsSummary.insightsAlertsCount})` : 'Alerts'} />
-            <Tab value="weekly" label="Weekly breakdown" />
+            <Tab
+              value="alerts"
+              label={t('rightPanel.timesheets.tabs.alerts', { count: alertsSummary.insightsAlertsCount })}
+            />
+            <Tab value="weekly" label={t('rightPanel.timesheets.tabs.weekly')} />
           </Tabs>
 
           <Box sx={{ pt: 2 }}>
@@ -1439,12 +1495,12 @@ const TimesheetCalendar: React.FC = () => {
                         onClick={() => toggleValidationFilter('ai_flagged')}
                         sx={{ textTransform: 'none' }}
                       >
-                        Review AI insights ({alertsSummary.aiAlertsCount})
+                        {t('rightPanel.timesheets.aiReview', { count: alertsSummary.aiAlertsCount })}
                       </Button>
                     }
                   >
-                    <AlertTitle>AI insights available</AlertTitle>
-                    We found {alertsSummary.aiAlertsCount} entries that may need your attention. Review them before submitting.
+                    <AlertTitle>{t('rightPanel.timesheets.aiAvailableTitle')}</AlertTitle>
+                    {t('rightPanel.timesheets.aiAvailableBody', { count: alertsSummary.aiAlertsCount })}
                   </Alert>
                 )}
 
@@ -1478,7 +1534,11 @@ const TimesheetCalendar: React.FC = () => {
                           const totalLabel = formatTenantNumber(row.totalHours, tenantContext, 2);
                           return (
                             <li key={row.date}>
-                              {dateLabel}: {ot2Label}h at 2.0x ({totalLabel}h worked)
+                              {t('rightPanel.timesheets.caOt2.row', {
+                                date: dateLabel,
+                                ot2: ot2Label,
+                                total: totalLabel,
+                              })}
                             </li>
                           );
                         })}
@@ -1487,10 +1547,17 @@ const TimesheetCalendar: React.FC = () => {
                   </Alert>
                 )}
 
-                {!policyAlert && !caOt2Alert && (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    No alerts
-                  </Typography>
+                {!policyAlert && !caOt2Alert && alertsSummary.aiAlertsCount === 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                      {t('rightPanel.timesheets.noAlerts')}
+                    </Typography>
+                    <Box component="ul" sx={{ pl: 2, my: 0, color: 'text.secondary' }}>
+                      <li>{t('rightPanel.timesheets.alertExamples.overtime')}</li>
+                      <li>{t('rightPanel.timesheets.alertExamples.missingBreaks')}</li>
+                      <li>{t('rightPanel.timesheets.alertExamples.policyDrift')}</li>
+                    </Box>
+                  </Box>
                 )}
               </Box>
             ) : (
@@ -1498,10 +1565,15 @@ const TimesheetCalendar: React.FC = () => {
                 {currentCalendarViewType !== 'timeGridWeek' ? (
                   <Box>
                     <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-                      Weekly breakdown is available in Week view.
+                      {t('rightPanel.timesheets.weeklyOnlyInWeek')}
                     </Typography>
+                    <Box component="ul" sx={{ pl: 2, my: 0, color: 'text.secondary', mb: 1 }}>
+                      <li>{t('rightPanel.timesheets.weeklyPreview.regularHours')}</li>
+                      <li>{t('rightPanel.timesheets.weeklyPreview.overtimeSplit')}</li>
+                      <li>{t('rightPanel.timesheets.weeklyPreview.policyKey')}</li>
+                    </Box>
                     <Button variant="outlined" size="small" onClick={handleSwitchToWeekView}>
-                      Switch to Week view
+                      {t('rightPanel.timesheets.weeklyCta')}
                     </Button>
                   </Box>
                 ) : (
@@ -1509,50 +1581,58 @@ const TimesheetCalendar: React.FC = () => {
                     <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          Weekly breakdown
+                          {t('rightPanel.timesheets.weeklyTitle')}
                         </Typography>
                         {weekSummary?.policy_key && (
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Policy: {String(weekSummary.policy_key)}
+                            {t('rightPanel.timesheets.weeklyPolicy', { policy: String(weekSummary.policy_key) })}
                           </Typography>
                         )}
                         {weekSummary?.workweek_start && (
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Workweek start: {formatTenantDate(weekSummary.workweek_start, tenantContext)}
+                            {t('rightPanel.timesheets.weeklyStart', {
+                              date: formatTenantDate(weekSummary.workweek_start, tenantContext),
+                            })}
                           </Typography>
                         )}
                       </Box>
 
                       {weekSummaryStatus === 'loading' && (
                         <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                          Loading summary…
+                          {t('rightPanel.timesheets.weeklyLoading')}
                         </Typography>
                       )}
 
                       {weekSummaryStatus === 'error' && (
                         <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                          Summary unavailable
+                          {t('rightPanel.timesheets.weeklyUnavailable')}
                         </Typography>
                       )}
 
                       {weekSummaryStatus === 'loaded' && weekSummary && (
                         <Grid container spacing={1} sx={{ mt: 0.25 }}>
                           <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Regular</Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {t('rightPanel.timesheets.weeklyRegular')}
+                            </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
                               {formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2)} h
                             </Typography>
                           </Grid>
                           <Grid item xs={12} sm={4}>
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              OT ({formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1)}x)
+                              {t('rightPanel.timesheets.weeklyOvertime', {
+                                rate: formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1),
+                              })}
                             </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
                               {formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2)} h
                             </Typography>
                           </Grid>
                           <Grid item xs={12} sm={4}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>OT (2.0x)</Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {t('rightPanel.timesheets.weeklyOvertime2')}
+                            </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
                               {formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2)} h
                             </Typography>
@@ -1570,7 +1650,8 @@ const TimesheetCalendar: React.FC = () => {
     }),
     [
       insightsTab,
-      insightsAlertsCount,
+      alertsSummary.aiAlertsCount,
+      alertsSummary.insightsAlertsCount,
       policyAlert,
       caOt2Alert,
       navigate,
@@ -1579,13 +1660,18 @@ const TimesheetCalendar: React.FC = () => {
       handleSwitchToWeekView,
       weekSummaryStatus,
       weekSummary,
+      t,
     ]
   );
 
   useRegisterRightPanelTab(timesheetInsightsTab);
 
   // Filter tasks for selected project
-  const filteredTasks = (tasks || []).filter(task => task.project_id === projectId);
+  const filteredTasks = useMemo(() => {
+    const pid = Number(projectId);
+    if (!pid) return [] as Task[];
+    return (tasks || []).filter((task) => task.project_id === pid);
+  }, [tasks, projectId]);
 
   // Filter locations for selected task
   const filteredLocations = useMemo(() => {
@@ -1616,7 +1702,7 @@ const TimesheetCalendar: React.FC = () => {
   };
 
   // Generate calendar events from timesheets
-  const calendarEvents = useMemo(() => {
+  const calendarEvents = useMemo((): EventInput[] => {
     if (!uiFilteredTimesheets) {
       return [];
     }
@@ -1645,7 +1731,7 @@ const TimesheetCalendar: React.FC = () => {
       // Extract date in YYYY-MM-DD format
       const dateOnly = dayjs(timesheet.date).format('YYYY-MM-DD');
 
-      const eventData: any = {
+      const eventData: EventInput = {
         id: timesheet.id.toString(),
         title: `${timesheet.project?.name || 'Project'} - ${decimalToHHMM(timesheet.hours_worked)}`,
         backgroundColor: statusStyle.background,
@@ -1699,7 +1785,7 @@ const TimesheetCalendar: React.FC = () => {
   }, [uiFilteredTimesheets, user, userIsManager, userIsAdmin, isTimesheetOwnedByUser]);
 
   // Day cell renderer - add travel indicators to calendar days
-  const handleDayCellDidMount = (info: any) => {
+  const handleDayCellDidMount = (info: DayCellMountArg) => {
     const dateStr = dayjs(info.date).format('YYYY-MM-DD');
     const travelsForDay = travelsByDate[dateStr];
     
@@ -1868,7 +1954,7 @@ const TimesheetCalendar: React.FC = () => {
 
   // Custom event content renderer to show technician name
   // Event rendering - use eventDidMount instead of eventContent to preserve height calculation
-  const handleEventDidMount = (info: any) => {
+  const handleEventDidMount = (info: EventMountArg) => {
     const { technician, isOwner, project, task, location } = info.event.extendedProps;
     const technicianName = technician?.name || 'Unknown';
     
@@ -1887,7 +1973,7 @@ const TimesheetCalendar: React.FC = () => {
         // Keep the time element that FullCalendar created at the top
         const fcTitle = fcContent.querySelector('.fc-event-title');
         
-        if (fcTitle) {
+        if (fcTitle instanceof HTMLElement) {
           // Clear the title content (we'll rebuild it with more info)
           fcTitle.innerHTML = '';
           fcTitle.style.cssText = `
@@ -2302,9 +2388,12 @@ const TimesheetCalendar: React.FC = () => {
 
       <RightPanelTrigger
         tabId="timesheet-insights"
-        tooltip="Insights / Help / AI"
+        tooltip={t('rightPanel.trigger.tooltip')}
         icon={<SmartToyIcon fontSize="small" />}
-        ariaLabel={{ open: 'Open Insights', close: 'Close Insights' }}
+        ariaLabel={{
+          open: t('rightPanel.trigger.open', { tab: t('rightPanel.tabs.insights') }),
+          close: t('rightPanel.trigger.close', { tab: t('rightPanel.tabs.insights') }),
+        }}
         onClick={handleToggleInsightsPanel}
         badge={
           alertsSummary.aiAlertsCount > 0
