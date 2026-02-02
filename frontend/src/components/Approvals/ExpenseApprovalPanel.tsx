@@ -103,8 +103,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
   const { showSuccess, showError } = useNotification();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
-  const currencySymbol = tenantContext?.currency_symbol || t('common.currencyFallback');
-  const emptyValue = t('rightPanel.insights.emptyValue');
+  const currencySymbol = tenantContext?.currency_symbol || '$';
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('approvals-expenses');
   const [selectedExpenses, setSelectedExpenses] = useState<Set<number>>(new Set());
   const [dateFrom, setDateFrom] = useState<Dayjs>(dayjs().subtract(1, 'month'));
@@ -380,16 +379,6 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
     }
   };
 
-  const getCategoryLabel = (category?: string | null): string => {
-    if (!category) return emptyValue;
-    return t(`expenses.categories.${category}`, { defaultValue: category });
-  };
-
-  const getVehicleLabel = (vehicleType?: string | null): string => {
-    if (!vehicleType) return t('common.notAvailable');
-    return t(`expenses.form.vehicle.${vehicleType}`, { defaultValue: vehicleType });
-  };
-
   // Get category icon
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -476,7 +465,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                     : t('approvals.expenses.type.reimbursementLabel')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
-                  {getCategoryLabel(expense.category)}
+                  {expense.category?.replace('_', ' ').toUpperCase()}
                 </Typography>
               </Box>
 
@@ -502,7 +491,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <Person sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" noWrap fontSize="0.7rem">
-                    {expense.technician?.name || emptyValue}
+                    {expense.technician?.name || '—'}
                   </Typography>
                 </Stack>
               </Grid>
@@ -511,7 +500,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <Business sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" noWrap fontSize="0.7rem">
-                    {expense.project?.name || emptyValue}
+                    {expense.project?.name || '—'}
                   </Typography>
                 </Stack>
               </Grid>
@@ -519,7 +508,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {expense.expense_type === 'mileage' && (
                 <Grid item xs={12}>
                   <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
-                    🛣️ {formatTenantDistanceKm(Number(expense.distance_km ?? 0), tenantContext, 2)} × {formatTenantMoneyPerDistanceKm(Number(expense.rate_per_km ?? 0), tenantContext)} ({getVehicleLabel(expense.vehicle_type)})
+                    🛣️ {formatTenantDistanceKm(Number(expense.distance_km ?? 0), tenantContext, 2)} × {formatTenantMoneyPerDistanceKm(Number(expense.rate_per_km ?? 0), tenantContext)} ({expense.vehicle_type})
                   </Typography>
                 </Grid>
               )}
@@ -1030,13 +1019,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                         {selected.map((value) => (
-                          <Chip key={value} label={getCategoryLabel(value)} size="small" />
+                          <Chip key={value} label={value} size="small" />
                         ))}
                       </Box>
                     )}
                   >
                     {uniqueCategories.map((cat) => (
-                      <MenuItem key={cat} value={cat}>{getCategoryLabel(cat)}</MenuItem>
+                      <MenuItem key={cat} value={cat}>{cat}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1159,7 +1148,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               <Typography variant="h6">{t('approvals.expenses.attachment.title')}</Typography>
               {selectedExpense && (
                 <Typography variant="caption" color="text.secondary">
-                  {getCategoryLabel(selectedExpense.category)} - {formatTenantMoney(parseFloat(String(selectedExpense.amount)) || 0, tenantContext)}
+                  {selectedExpense.category?.replace('_', ' ').toUpperCase()} - {formatTenantMoney(parseFloat(String(selectedExpense.amount)) || 0, tenantContext)}
                 </Typography>
               )}
             </Box>
@@ -1172,7 +1161,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Box
                   component="img"
                   src={getAttachmentUrl(selectedExpense.id)}
-                  alt={t('approvals.expenses.attachment.receiptAlt')}
+                  alt="Receipt"
                   sx={{
                     maxWidth: '100%',
                     maxHeight: '70vh',
@@ -1226,8 +1215,8 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               )}
               <Stack direction="row" spacing={2} sx={{ mt: 3, justifyContent: 'center' }}>
                 <Chip icon={<CalendarToday />} label={formatTenantDate(selectedExpense.date, tenantContext)} />
-                <Chip icon={<Person />} label={selectedExpense.technician?.name || emptyValue} />
-                <Chip icon={<Business />} label={selectedExpense.project?.name || emptyValue} />
+                <Chip icon={<Person />} label={selectedExpense.technician?.name || '—'} />
+                <Chip icon={<Business />} label={selectedExpense.project?.name || '—'} />
               </Stack>
             </Box>
           )}

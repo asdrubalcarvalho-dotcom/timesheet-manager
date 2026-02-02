@@ -472,7 +472,7 @@ const TimesheetPivotReport: React.FC = () => {
 
       const contentDisposition = response.headers?.['content-disposition'] as string | undefined;
       const filename =
-        getFilenameFromContentDisposition(contentDisposition) || `${t('timesheetPivot.export.filename')}.${format}`;
+        getFilenameFromContentDisposition(contentDisposition) || `timesheets_pivot_export.${format}`;
 
       const blob = response.data as Blob;
       const url = window.URL.createObjectURL(blob);
@@ -509,7 +509,7 @@ const TimesheetPivotReport: React.FC = () => {
   const rowHeaderLabel = rowDimensionLabel;
 
   const deterministicInsights = useMemo(() => {
-    const scoped = data?.meta?.scoped ? String(data.meta.scoped) : t('rightPanel.insights.emptyValue');
+    const scoped = data?.meta?.scoped ? String(data.meta.scoped) : '—';
     const grand = typeof data?.totals?.grand === 'number' ? data.totals.grand : null;
     const dims = t('timesheetPivot.dimsLabel', {
       row: rowDimensionLabel,
@@ -871,7 +871,7 @@ const TimesheetPivotReport: React.FC = () => {
         {!loading && data && data.rows.length > 0 && (
           <>
             <Typography variant="body2" color="text.secondary">
-              {t('timesheetPivot.labels.scoped')}: {String(data.meta?.scoped ?? t('rightPanel.insights.emptyValue'))}
+              {t('timesheetPivot.labels.scoped')}: {String(data.meta?.scoped ?? '—')}
             </Typography>
 
             <TableContainer>

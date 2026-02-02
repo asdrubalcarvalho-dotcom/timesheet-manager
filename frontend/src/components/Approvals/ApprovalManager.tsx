@@ -64,7 +64,6 @@ const formatDate = (value: Dayjs) => value.format('YYYY-MM-DD');
 
 const ApprovalManager: React.FC = () => {
   const { t } = useTranslation();
-  const emptyValue = t('rightPanel.insights.emptyValue');
   const { isManager, isAdmin, user, tenantContext } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para counts
   useTenantGuard(); // Ensure tenant_slug exists
@@ -531,7 +530,7 @@ const ApprovalManager: React.FC = () => {
       setSelectedTravels(travels.filter(Boolean));
 
       if (sawNonUpgradeError && !sawUpgradeRequired) {
-        showError(t('approvals.travels.loadFailed'));
+        showError('Failed to load travel details');
       }
     } catch (error) {
       console.error('Error loading travel details:', error);
@@ -539,25 +538,11 @@ const ApprovalManager: React.FC = () => {
       const data = (error as any)?.response?.data;
       const isUpgradeRequired = status === 403 && data?.upgrade_required === true;
       if (!isUpgradeRequired) {
-        showError(t('approvals.travels.loadFailed'));
+        showError('Failed to load travel details');
       }
     } finally {
       setLoadingTravels(false);
     }
-  };
-
-  const getTravelDirectionLabel = (direction?: string | null): string => {
-    if (!direction) return t('common.notAvailable');
-    return t(`approvals.travels.directions.${direction}`, {
-      defaultValue: direction.replace('_', ' ').toUpperCase(),
-    });
-  };
-
-  const getTravelStatusLabel = (status?: string | null): string => {
-    if (!status) return t('common.notAvailable');
-    return t(`approvals.travels.statusValues.${status}`, {
-      defaultValue: status.replace('_', ' ').toUpperCase(),
-    });
   };
 
   // Section 14.3 - Flag translation helper
@@ -606,7 +591,7 @@ const ApprovalManager: React.FC = () => {
       headerName: t('approvals.table.technician'),
       flex: 1,
       minWidth: 140,
-      valueGetter: (_value: any, row: any) => row?.technician?.name ?? emptyValue,
+      valueGetter: (_value: any, row: any) => row?.technician?.name ?? '—',
       filterable: true,
       renderCell: ({ row }) => {
         const isOwnEntry = row?.technician?.email === user?.email;
@@ -623,7 +608,7 @@ const ApprovalManager: React.FC = () => {
               />
             )}
             <span style={{ fontWeight: isOwnEntry ? 600 : 400, fontSize: '0.875rem' }}>
-              {row?.technician?.name ?? emptyValue}
+              {row?.technician?.name ?? '—'}
             </span>
           </Box>
         );
@@ -634,7 +619,7 @@ const ApprovalManager: React.FC = () => {
       headerName: t('approvals.table.projectRole'),
       width: 110,
       renderCell: ({ value }) => {
-        if (!value) return emptyValue;
+        if (!value) return '—';
         const roleColors: Record<string, string> = {
           'member': 'default',
           'manager': 'primary',
@@ -662,7 +647,7 @@ const ApprovalManager: React.FC = () => {
       headerName: t('approvals.table.expenseRole'),
       width: 120,
       renderCell: ({ value }) => {
-        if (!value) return emptyValue;
+        if (!value) return '—';
         const roleColors: Record<string, string> = {
           'member': 'default',
           'manager': 'secondary',
@@ -690,7 +675,7 @@ const ApprovalManager: React.FC = () => {
       headerName: t('approvals.table.project'),
       flex: 1,
       minWidth: 130,
-      valueGetter: (_value: any, row: any) => row?.project?.name ?? emptyValue,
+      valueGetter: (_value: any, row: any) => row?.project?.name ?? '—',
       filterable: true,
     },
     {
@@ -698,7 +683,7 @@ const ApprovalManager: React.FC = () => {
       headerName: t('approvals.table.task'),
       flex: 1,
       minWidth: 130,
-      valueGetter: (_value: any, row: any) => row?.task?.name ?? emptyValue,
+      valueGetter: (_value: any, row: any) => row?.task?.name ?? '—',
       filterable: true,
     },
     {
@@ -708,7 +693,7 @@ const ApprovalManager: React.FC = () => {
       valueGetter: (value: any) => value ?? '',
       renderCell: ({ value }) => {
         const ymd = typeof value === 'string' ? value.slice(0, 10) : '';
-        const label = ymd ? formatTenantDate(ymd, tenantContext) : emptyValue;
+        const label = ymd ? formatTenantDate(ymd, tenantContext) : '—';
         return <Typography variant="body2">{label}</Typography>;
       },
       filterable: true,
@@ -719,9 +704,9 @@ const ApprovalManager: React.FC = () => {
       width: 80,
       valueGetter: (value: any) => value ?? null,
       renderCell: ({ value }) => {
-        if (!value) return <Typography variant="body2">{emptyValue}</Typography>;
+        if (!value) return <Typography variant="body2">—</Typography>;
         const formatted = formatTenantTime(value, tenantContext);
-        return <Typography variant="body2">{formatted === '-' ? emptyValue : formatted}</Typography>;
+        return <Typography variant="body2">{formatted === '-' ? '—' : formatted}</Typography>;
       },
       filterable: true,
     },
@@ -731,9 +716,9 @@ const ApprovalManager: React.FC = () => {
       width: 80,
       valueGetter: (value: any) => value ?? null,
       renderCell: ({ value }) => {
-        if (!value) return <Typography variant="body2">{emptyValue}</Typography>;
+        if (!value) return <Typography variant="body2">—</Typography>;
         const formatted = formatTenantTime(value, tenantContext);
-        return <Typography variant="body2">{formatted === '-' ? emptyValue : formatted}</Typography>;
+        return <Typography variant="body2">{formatted === '-' ? '—' : formatted}</Typography>;
       },
       filterable: true,
     },
@@ -741,7 +726,7 @@ const ApprovalManager: React.FC = () => {
       field: 'hours_worked',
       headerName: t('approvals.table.hours'),
       width: 80,
-      valueFormatter: (value: any) => t('common.hoursShort', { value }),
+      valueFormatter: (value: any) => `${value}h`,
       filterable: true,
     },
     {
@@ -750,7 +735,7 @@ const ApprovalManager: React.FC = () => {
       width: 90,
       renderCell: ({ row }) => {
         if (!row.travels || row.travels.count === 0) {
-          return <Typography variant="body2" color="text.secondary">{emptyValue}</Typography>;
+          return <Typography variant="body2" color="text.secondary">—</Typography>;
         }
         return (
           <Box
@@ -775,10 +760,10 @@ const ApprovalManager: React.FC = () => {
       field: 'travel_time',
       headerName: t('approvals.table.travelTime'),
       width: 110,
-      valueGetter: (_value: any, row: any) => row?.travels?.duration_formatted ?? emptyValue,
+      valueGetter: (_value: any, row: any) => row?.travels?.duration_formatted ?? '—',
       renderCell: ({ row }) => {
         if (!row.travels || row.travels.count === 0) {
-          return <Typography variant="body2" color="text.secondary">{emptyValue}</Typography>;
+          return <Typography variant="body2" color="text.secondary">—</Typography>;
         }
         return (
           <Typography variant="body2" fontWeight={500}>
@@ -825,7 +810,7 @@ const ApprovalManager: React.FC = () => {
       width: 90,
       renderCell: ({ row }) => (
         <Chip
-          label={row.ai_score !== null && row.ai_score !== undefined ? row.ai_score.toFixed(2) : emptyValue}
+          label={row.ai_score !== null && row.ai_score !== undefined ? row.ai_score.toFixed(2) : '—'}
           color={row.ai_flagged ? 'error' : 'default'}
           size="small"
           sx={{ fontWeight: 600, fontSize: '0.75rem', height: 24 }}
@@ -838,10 +823,10 @@ const ApprovalManager: React.FC = () => {
       headerName: t('approvals.table.description'),
       flex: 1.5,
       minWidth: 180,
-      valueGetter: (value: any) => value ?? emptyValue,
+      valueGetter: (value: any) => value ?? '—',
       filterable: true,
     },
-  ], [t, user, tenantContext, handleTravelCellClick, emptyValue]);
+  ], [t, user, tenantContext, handleTravelCellClick]);
 
   if (!canManageTimesheets) {
     return (
@@ -1359,7 +1344,7 @@ const ApprovalManager: React.FC = () => {
                         {t('approvals.travels.direction')}
                       </Typography>
                       <Typography variant="body1">
-                        {getTravelDirectionLabel(travel.direction)}
+                        {travel.direction?.replace('_', ' ').toUpperCase()}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={4}>
@@ -1368,10 +1353,7 @@ const ApprovalManager: React.FC = () => {
                       </Typography>
                       <Typography variant="body1" fontWeight={600}>
                         {travel.duration_minutes 
-                          ? t('approvals.travels.durationValue', {
-                              hours: Math.floor(travel.duration_minutes / 60),
-                              minutes: travel.duration_minutes % 60,
-                            })
+                          ? `${Math.floor(travel.duration_minutes / 60)}h ${travel.duration_minutes % 60}m`
                           : t('common.notAvailable')}
                       </Typography>
                     </Grid>
@@ -1380,7 +1362,7 @@ const ApprovalManager: React.FC = () => {
                         {t('approvals.travels.status')}
                       </Typography>
                       <Chip
-                        label={getTravelStatusLabel(travel.status)}
+                        label={travel.status?.toUpperCase()}
                         size="small"
                         color={travel.status === 'completed' ? 'success' : 'default'}
                       />
