@@ -212,7 +212,7 @@ const ApprovalHeatmapReport: React.FC = () => {
             ? e.response.data.message
             : typeof e?.message === 'string'
               ? e.message
-              : t('approvalHeatmap.errors.loadFailed');
+              : 'Failed to load approval heatmap';
         setError(message);
         setData(null);
       } finally {
@@ -225,7 +225,7 @@ const ApprovalHeatmapReport: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [canQuery, payload, t]);
+  }, [canQuery, payload]);
 
   const allDates = useMemo(() => {
     if (!fromDate || !toDate) return [] as string[];
@@ -289,12 +289,12 @@ const ApprovalHeatmapReport: React.FC = () => {
     }
 
     return {
-      scoped: data?.meta?.scoped ? String(data.meta.scoped) : t('rightPanel.insights.emptyValue'),
+      scoped: data?.meta?.scoped ? String(data.meta.scoped) : '—',
       totalPending,
       totalApprovedTimesheets,
       totalApprovedExpenses,
     };
-  }, [data, t]);
+  }, [data]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -632,10 +632,10 @@ const ApprovalHeatmapReport: React.FC = () => {
 
                   const lines: string[] = [header];
                   if (includeTimesheets) {
-                    lines.push(t('approvalHeatmap.tooltip.timesheetsPending', { count: tsPending }));
+                    lines.push(`Timesheets: ${tsPending} pending`);
                   }
                   if (includeExpenses) {
-                    lines.push(t('approvalHeatmap.tooltip.expensesPending', { count: exPending }));
+                    lines.push(`Expenses: ${exPending} pending`);
                   }
                   return lines.join('\n');
                 })();
@@ -682,11 +682,7 @@ const ApprovalHeatmapReport: React.FC = () => {
             </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              {t('approvalHeatmap.footer.summary', {
-                from: formatTenantDate(String(data.meta.from ?? ''), tenantContext),
-                to: formatTenantDate(String(data.meta.to ?? ''), tenantContext),
-                scoped: String(data.meta.scoped ?? t('rightPanel.insights.emptyValue')),
-              })}
+              Showing {formatTenantDate(String(data.meta.from ?? ''), tenantContext)} → {formatTenantDate(String(data.meta.to ?? ''), tenantContext)} (scoped: {data.meta.scoped})
             </Typography>
           </Box>
         )}

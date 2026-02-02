@@ -340,8 +340,7 @@
     "export": {
       "csv": "Export CSV",
       "xlsx": "Export XLSX",
-      "exporting": "Exporting…",
-      "filename": "timesheets_pivot_export"
+      "exporting": "Exporting…"
     },
     "validation": {
       "invalidFilters": "Select a valid date range and different row/column dimensions."
@@ -396,7 +395,6 @@
     "forbidden": "Forbidden",
     "validationFailed": "Validation failed: {{details}}",
     "notAvailable": "N/A",
-    "currencyFallback": "$",
     "unknown": "Unknown",
     "unknownUpper": "UNKNOWN",
     "otherUpper": "OTHER",
@@ -587,16 +585,6 @@
     "approvedExpensesLabel": "Approved (expenses)",
     "invalidRange": "Select a valid range (max 62 days) and include at least one type.",
     "loading": "Loading heatmap…",
-    "errors": {
-      "loadFailed": "Failed to load approval heatmap"
-    },
-    "tooltip": {
-      "timesheetsPending": "Timesheets: {{count}} pending",
-      "expensesPending": "Expenses: {{count}} pending"
-    },
-    "footer": {
-      "summary": "Showing {{from}} → {{to}} (scoped: {{scoped}})"
-    },
     "insights": {
       "summaryTitle": "Approval highlights",
       "summaryHint": "Overview of pending volume and busiest days.",
@@ -622,11 +610,6 @@
     },
     "accessDenied": "Access denied. This page is only available to Managers or Admins.",
     "filters": {
-    "roles": {
-      "member": "Member",
-      "manager": "Manager",
-      "none": "None"
-    },
       "aiAlerts": "AI alerts: {{count}}",
       "overCapSummary": "Over 12h: {{overCap}} · Overlaps: {{overlaps}}",
       "results": "{{count}} results",
@@ -770,29 +753,14 @@
     "travels": {
       "title": "Travel details",
       "empty": "No travel details found.",
-      "loadFailed": "Failed to load travel details",
       "technician": "Technician",
       "project": "Project",
       "departure": "Departure",
       "arrival": "Arrival",
       "direction": "Direction",
       "duration": "Duration",
-      "durationValue": "{{hours}}h {{minutes}}m",
       "status": "Status",
-      "classificationReason": "Classification reason",
-      "statusValues": {
-        "completed": "COMPLETED",
-        "cancelled": "CANCELLED",
-        "planned": "PLANNED",
-        "in_progress": "IN PROGRESS",
-        "pending": "PENDING"
-      },
-      "directions": {
-        "outbound": "OUTBOUND",
-        "return": "RETURN",
-        "round_trip": "ROUND TRIP",
-        "one_way": "ONE WAY"
-      }
+      "classificationReason": "Classification reason"
     }
   },
   "expenses": {

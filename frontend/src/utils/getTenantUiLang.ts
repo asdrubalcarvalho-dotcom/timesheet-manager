@@ -32,7 +32,8 @@ const normalizeRegionDefault = (region: unknown): UiLanguage | null => {
 
 const getNavigatorLanguage = (): string | null => {
   if (typeof navigator === 'undefined') return null;
-  return navigator.languages?.[0] ?? navigator.language ?? null;
+  if (navigator.language) return navigator.language;
+  return navigator.languages?.[0] ?? null;
 };
 
 export const getStoredUiLanguage = (): UiLanguage | null => {

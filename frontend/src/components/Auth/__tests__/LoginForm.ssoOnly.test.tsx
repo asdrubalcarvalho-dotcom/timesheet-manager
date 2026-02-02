@@ -61,7 +61,7 @@ describe('LoginForm (SSO-only UX)', () => {
       </MemoryRouter>
     );
 
-    await user.type(screen.getByLabelText(/tenant/i), 'acme');
+    await user.type(screen.getByLabelText(/workspace/i), 'acme');
     await user.type(screen.getByLabelText(/email address/i), 'user@acme.test');
     await user.type(screen.getByLabelText(/password/i), 'secret');
 
@@ -99,7 +99,7 @@ describe('LoginForm (SSO-only UX)', () => {
     expect(msButton).toBeDisabled();
     expect(googleButton).toBeDisabled();
 
-    await user.type(screen.getByLabelText(/tenant/i), 'acme');
+    await user.type(screen.getByLabelText(/workspace/i), 'acme');
 
     expect(msButton).toBeEnabled();
     expect(googleButton).toBeEnabled();

@@ -71,7 +71,7 @@ describe('LoginForm (CAPTCHA state machine)', () => {
       </MemoryRouter>
     );
 
-    await user.type(screen.getByLabelText(/tenant/i), 'acme');
+    await user.type(screen.getByLabelText(/workspace/i), 'acme');
     await user.type(screen.getByLabelText(/email address/i), 'user@acme.test');
     await user.type(screen.getByLabelText(/password/i), 'secret');
 
