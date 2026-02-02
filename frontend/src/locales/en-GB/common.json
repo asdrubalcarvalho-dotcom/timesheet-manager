@@ -1,0 +1,998 @@
+{
+  "rightPanel": {
+    "tabs": {
+      "insights": "Insights",
+      "help": "Help",
+      "ai": "AI Chat"
+    },
+    "trigger": {
+      "tooltip": "Insights / Help / AI",
+      "open": "Open {{tab}}",
+      "close": "Close {{tab}}"
+    },
+    "panelFallback": "Panel",
+    "closePanel": "Close panel",
+    "insights": {
+      "emptyValue": "—"
+    },
+    "help": {
+      "title": "Need help?",
+      "subtitle": "Browse docs and AI tips for faster answers.",
+      "tip": "Tip: Ask the AI tab for summaries, anomalies, and next steps.",
+      "fallbackTitle": "Help",
+      "fallbackBody": "No help is available for this page yet.",
+      "timesheets": {
+        "title": "Timesheets help",
+        "intro": "Quick tips for managing calendar entries and travel visibility.",
+        "sections": {
+          "calendar": {
+            "title": "Calendar",
+            "bullets": {
+              "switchViews": "Switch between Month, Week, and List views from the toolbar.",
+              "createEdit": "Click a day to add an entry; click an entry to edit.",
+              "scope": "Managers can toggle Mine / Others / All in the header."
+            }
+          },
+          "travels": {
+            "title": "Travels",
+            "bullets": {
+              "indicators": "Travel indicators appear on calendar days with trips.",
+              "listView": "In list views, click the ✈ travel line to see details."
+            }
+          },
+          "insights": {
+            "title": "Insights",
+            "bullets": {
+              "alerts": "Alerts highlight AI flags and policy issues.",
+              "weekly": "Weekly breakdown is available in Week view.",
+              "filters": "Use the daily hours cap chip to filter overages."
+            }
+          },
+          "ai": {
+            "title": "AI Chat",
+            "bullets": {
+              "chat": "Ask for summaries of flagged entries or trends.",
+              "suggestions": "Use suggestion chips to start a question."
+            }
+          }
+        },
+        "comingSoon": {
+          "title": "Coming soon",
+          "bullets": {
+            "dragRange": "Select and drag a time range to create entries across multiple days/hours.",
+            "aiDrafts": "Ask AI to generate draft entries for a selected date range (you review before saving)."
+          }
+        }
+      },
+      "timesheetsReports": {
+        "title": "Timesheet reports",
+        "intro": "Use reports to analyze hours, costs, and activity by project, task, and technician.",
+        "sections": {
+          "filters": {
+            "title": "Filters & scope",
+            "bullets": {
+              "dateRange": "Use the date range to focus on a specific period.",
+              "projectTask": "Filter by project and task to drill into specific work.",
+              "technicianScope": "Switch scope (mine / others / all) if you have permissions."
+            }
+          },
+          "analysis": {
+            "title": "Analysis",
+            "bullets": {
+              "grouping": "Group results by project, task, technician, or day to spot patterns.",
+              "totals": "Review totals to validate expected hours and compare periods.",
+              "readResults": "Click rows to inspect details before taking action."
+            }
+          },
+          "exports": {
+            "title": "Export & actions",
+            "bullets": {
+              "downloads": "Export the current view for sharing or offline review.",
+              "share": "Use consistent filters before sharing results with the team."
+            }
+          },
+          "ai": {
+            "title": "Use AI with reports",
+            "bullets": {
+              "questions": "Ask AI questions like “why did hours spike last week?”.",
+              "summaries": "Ask AI to summarize key insights and anomalies from the report."
+            }
+          }
+        }
+      },
+      "docsTitle": "Documentation",
+      "terms": "Terms of service",
+      "privacy": "Privacy policy",
+      "acceptableUse": "Acceptable use"
+    },
+    "ai": {
+      "title": "Ask TimePerk AI",
+      "subtitle": "Summarize anomalies, approvals, and trends.",
+      "suggestions": {
+        "flags": "What entries were flagged?",
+        "overtime": "Where did overtime spike?",
+        "approvals": "Which approvals are pending?",
+        "projectCosts": "Which projects exceed budgeted hours?"
+      },
+      "placeholderResponse": "I'm still learning. For now, I can summarize the report based on your question.",
+      "errorFallback": "Something went wrong. Please try again.",
+      "viewBilling": "View billing",
+      "addonNotice": "AI is available as an add-on for your plan.",
+      "billingSettings": "Billing settings",
+      "disabledTitle": "AI is disabled",
+      "disabledMessage": "Enable AI in tenant billing settings to continue.",
+      "disabledTenant": "AI is disabled for this tenant.",
+      "unavailable": "AI is not available for this tenant.",
+      "enabledNotice": "Ask a question to generate insights.",
+      "errorLabel": "Error: {{message}}",
+      "you": "You",
+      "assistant": "Assistant",
+      "placeholder": "No messages yet.",
+      "inputLabel": "Ask AI",
+      "inputPlaceholder": "Type a question…",
+      "sending": "Sending…",
+      "send": "Send"
+    },
+    "reports": {
+      "aiIntro": "Ask about this report or pick a suggestion to start.",
+      "noInsights": "No insights yet. Run the report to populate insights."
+    },
+    "timesheets": {
+      "tabs": {
+        "alerts": "Alerts ({{count}})",
+        "weekly": "Weekly"
+      },
+      "aiReview": "Review {{count}} flagged",
+      "aiAvailableTitle": "AI alerts available",
+      "aiAvailableBody": "{{count}} entries were flagged and are ready for review.",
+      "caOt2": {
+        "title": "OT2 threshold reached",
+        "noDays": "No days exceeded the OT2 threshold.",
+        "row": "{{date}} — OT2: {{ot2}}h (Total: {{total}}h)"
+      },
+      "noAlerts": "No alerts in this range.",
+      "alertExamples": {
+        "overtime": "Overtime spikes",
+        "missingBreaks": "Missing breaks",
+        "policyDrift": "Policy drift"
+      },
+      "weeklyOnlyInWeek": "Weekly breakdown is available in Week view.",
+      "weeklyPreview": {
+        "regularHours": "Regular vs overtime split",
+        "overtimeSplit": "Overtime rate applied",
+        "policyKey": "Policy key summary"
+      },
+      "weeklyCta": "Switch to Week view",
+      "weeklyTitle": "Weekly totals",
+      "weeklyPolicy": "Policy: {{policy}}",
+      "weeklyStart": "Week of {{date}}",
+      "weeklyLoading": "Loading weekly totals…",
+      "weeklyUnavailable": "Weekly totals are unavailable.",
+      "weeklyRegular": "Regular hours",
+      "weeklyOvertime": "Overtime ({{rate}}x)",
+      "weeklyOvertime2": "Overtime 2.0"
+    }
+  },
+  "timesheets": {
+    "alerts": {
+      "viewFlaggedCta": "View flagged entries ({{count}})",
+      "aiFlaggedDetected": "AI flagged entries detected.",
+      "aiAlertsAvailableInInsights": "AI alerts are available inside Insights."
+    },
+    "insights": {
+      "noAlerts": "No alerts",
+      "weeklyBreakdown": "Weekly breakdown",
+      "weeklyBreakdownAvailableInWeekView": "Weekly breakdown is available in Week view."
+    },
+    "title": "Timesheets",
+    "status": {
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "closed": "Closed"
+    },
+    "scope": {
+      "mine": "Mine",
+      "others": "Others",
+      "all": "All"
+    },
+    "calendar": {
+      "weekList": "Week List",
+      "monthList": "Month List"
+    },
+    "validation": {
+      "overCapTooltip": "Days where a technician's total exceeds {{cap}}h",
+      "overCapLabel": "Daily > {{cap}}h ({{count}})",
+      "projectRequired": "Project is required",
+      "taskRequired": "Task is required",
+      "locationRequired": "Location is required",
+      "descriptionRequired": "Description is required (min 3 characters)",
+      "workerRequired": "Worker is required",
+      "dateRequired": "Date is required",
+      "timeRequired": "Start and end times are required",
+      "hoursMin": "Hours worked must be greater than 0",
+      "hoursMax": "Hours worked cannot exceed 24 hours"
+    },
+    "permissions": {
+      "editOwnOrManaged": "You can only edit your own timesheets or timesheets from projects you manage."
+    },
+    "toast": {
+      "created": "Timesheet created successfully",
+      "updated": "Timesheet updated successfully",
+      "deleted": "Timesheet deleted successfully"
+    },
+    "warning": {
+      "workerOverride": "Selected worker was not allowed; the timesheet was saved for your technician."
+    },
+    "errors": {
+      "timeConflict": "⚠️ Time conflict detected for {{timeRange}}. There is already an entry in this time period. Please choose a different time slot or check existing entries.",
+      "saveFailed": "Failed to save timesheet",
+      "deleteFailed": "Failed to delete timesheet",
+      "loadTimesheets": "Failed to load timesheets",
+      "loadTasks": "Failed to load tasks",
+      "loadLocations": "Failed to load locations",
+      "loadWorkers": "Failed to load workers",
+      "loadProjects": "Failed to load projects"
+    },
+    "delete": {
+      "title": "Delete timesheet entry",
+      "message": "Are you sure you want to delete this timesheet entry? This action cannot be undone."
+    },
+    "entry": {
+      "newTitle": "New entry",
+      "editTitle": "Edit entry"
+    },
+    "ownerLabel": "Owner: {{name}}",
+    "ai": {
+      "showSuggestions": "Show AI suggestions",
+      "hideSuggestions": "Hide AI suggestions"
+    },
+    "sections": {
+      "worker": "👤 Worker",
+      "dateTime": "Date & Time",
+      "projectDetails": "Project details",
+      "description": "Description"
+    },
+    "labels": {
+      "worker": "Worker",
+      "date": "Date",
+      "startTime": "Start time",
+      "endTime": "End time",
+      "project": "Project",
+      "task": "Task",
+      "location": "Location",
+      "workDescription": "Work description",
+      "entryOwner": "Entry owner",
+      "you": "You",
+      "projectFallback": "Project"
+    },
+    "placeholders": {
+      "selectWorker": "Select worker",
+      "selectProject": "Select a project",
+      "selectTask": "Select a task",
+      "selectLocation": "Select a location",
+      "workDescription": "Describe the work performed..."
+    },
+    "description": {
+      "count": "{{count}} characters"
+    },
+    "policy": {
+      "label": "Policy: {{policy}}"
+    },
+    "summary": {
+      "loading": "Summary: loading…",
+      "unavailable": "Summary unavailable",
+      "format": "Regular {{regular}}h | OT{{overtimeRate}} {{overtime}}h | OT2.0 {{overtime2}}h"
+    },
+    "travels": {
+      "title": "Travel details",
+      "titleWithDate": "Travel details — {{date}}",
+      "empty": "No travels found for this date.",
+      "generic": "Travel",
+      "viewDetails": "Click to view travel details",
+      "indicatorTitle": "{{count}} travel(s) — click to view details",
+      "count_one": "{{count}} travel",
+      "count_other": "{{count}} travels",
+      "durationValue": "{{hours}}h {{minutes}}min",
+      "fields": {
+        "technician": "Technician",
+        "project": "Project",
+        "departure": "Departure",
+        "arrival": "Arrival",
+        "duration": "Duration",
+        "direction": "Direction",
+        "status": "Status",
+        "classificationReason": "Classification reason"
+      }
+    }
+  },
+  "timesheetPivot": {
+    "title": "Timesheets analysis",
+    "subtitle": "Hours by user × project",
+    "resultsLabel": "{{count}} rows",
+    "filters": {
+      "period": "Period",
+      "from": "From",
+      "to": "To",
+      "rows": "Rows",
+      "columns": "Columns"
+    },
+    "periods": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "dimensions": {
+      "user": "User",
+      "project": "Project",
+      "users": "Users",
+      "projects": "Projects"
+    },
+    "dimsLabel": "{{row}} × {{column}}",
+    "labels": {
+      "scope": "Scope",
+      "period": "Period",
+      "range": "Range",
+      "grandTotal": "Grand total",
+      "scoped": "Scoped",
+      "total": "Total"
+    },
+    "export": {
+      "csv": "Export CSV",
+      "xlsx": "Export XLSX",
+      "exporting": "Exporting…",
+      "filename": "timesheets_pivot_export"
+    },
+    "validation": {
+      "invalidFilters": "Select a valid date range and different row/column dimensions."
+    },
+    "loading": "Loading…",
+    "noData": "No data for the selected range.",
+    "errors": {
+      "exportFailed": "Failed to export pivot report",
+      "loadFailed": "Failed to load pivot report"
+    },
+    "ai": {
+      "loadFirst": "Load the pivot report first (select a range and wait for results), then ask again.",
+      "scopeLine": "Scope: {{scoped}}. Dimensions: {{row}} × {{column}}.",
+      "grandTotal": "Grand total hours: {{hours}}.",
+      "grandTotalEmpty": "Grand total hours: —.",
+      "peakCell": "Peak cell: {{row}} × {{column}} = {{hours}}h.",
+      "peakCellEmpty": "Peak cell: —.",
+      "totalsLine": "{{label}} by total: {{items}}."
+    },
+    "insights": {
+      "summaryTitle": "Pivot highlights",
+      "summaryHint": "Quick summary of top contributors and peak combinations.",
+      "totalHours": "Total hours",
+      "topUser": "Top user",
+      "topProject": "Top project",
+      "peakCell": "Peak combination",
+      "suggestions": {
+        "topUsers": "Who logged the most hours?",
+        "topProjects": "Which project had the most hours?",
+        "peakCell": "Where is the busiest row/column?"
+      }
+    }
+  },
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "close": "Close",
+    "delete": "Delete",
+    "approve": "Approve",
+    "reject": "Reject",
+    "refresh": "Refresh",
+    "clear": "Clear",
+    "save": "Save",
+    "saving": "Saving…",
+    "today": "Today",
+    "week": "Week",
+    "month": "Month",
+    "filters": "Filters",
+    "clearAll": "Clear all",
+    "clearFilter": "Clear filter",
+    "forbidden": "Forbidden",
+    "validationFailed": "Validation failed: {{details}}",
+    "notAvailable": "N/A",
+    "unknown": "Unknown",
+    "unknownUpper": "UNKNOWN",
+    "otherUpper": "OTHER",
+    "hoursShort": "{{value}} h",
+    "input": "Input",
+    "recordDetails": "Record details",
+    "rejectionReason": "Rejection reason",
+    "code": "Code",
+    "name": "Name",
+    "description": "Description"
+  },
+  "auth": {
+    "login": {
+      "aiCortex": "AI CORTEX",
+      "tagline": "The brain behind your team's time",
+      "title": "Sign in",
+      "signIn": "Sign in",
+      "signingIn": "Signing in…",
+      "tenantLabel": "Workspace",
+      "tenantPlaceholder": "e.g., demo",
+      "tenantHelper": "Your organisation's unique identifier",
+      "emailLabel": "Email address",
+      "passwordLabel": "Password",
+      "continueWith": "continue with",
+      "orContinueWith": "or continue with",
+      "microsoftSso": "Sign in with Microsoft (Work or School)",
+      "googleSso": "Sign in with Google",
+      "noWorkspace": "Don't have a workspace?",
+      "createOne": "Create one",
+      "ssoOnlyNotice": "This organisation requires Single Sign-On. Please use your company account.",
+      "usePasswordInstead": "Use password instead",
+      "errors": {
+        "workspaceRequired": "Please enter your workspace first.",
+        "rateLimited": "Too many attempts. Please wait before trying again.",
+        "securityCheck": "Please complete the security check.",
+        "signInFailed": "Sign in failed. Please try again.",
+        "ssoFailed": "SSO login failed. Please try again or use email and password.",
+        "ssoOnly": "This workspace requires Single Sign-On. Please use the buttons below.",
+        "missingFields": "Please enter email, password, and workspace."
+      }
+    },
+    "register": {
+      "title": "Create your workspace",
+      "subtitle": "Start your 14-day free trial • No credit card required",
+      "sections": {
+        "companyInfo": "Company information",
+        "adminAccount": "Admin account"
+      },
+      "fields": {
+        "companyName": "Company name",
+        "workspaceSlug": "Workspace slug",
+        "workspaceSlugHelper": "This will be your unique workspace identifier (e.g., acme.vendaslive.com)",
+        "industryOptional": "Industry (optional)",
+        "selectIndustry": "Select industry",
+        "countryOptional": "Country (optional)",
+        "selectCountry": "Select country",
+        "region": "Region",
+        "regionEU": "Europe (EU)",
+        "regionUS": "United States (US)",
+        "adminName": "Admin name",
+        "adminEmail": "Admin email",
+        "password": "Password",
+        "passwordMinHelper": "Minimum 8 characters",
+        "passwordConfirm": "Confirm password"
+      },
+      "captchaPrompt": "Just one more step: confirm you’re not a robot.",
+      "legal": {
+        "prefix": "I agree to the",
+        "terms": "Terms",
+        "privacy": "Privacy policy",
+        "acceptableUse": "Acceptable use policy"
+      },
+      "submit": "Create workspace",
+      "sendingVerification": "Sending verification email…",
+      "haveWorkspace": "Already have a workspace?",
+      "signIn": "Sign in",
+      "successEmailSent": "Verification email sent! Please check your inbox.",
+      "checkEmailTitle": "Check your email",
+      "checkEmailSubtitle": "We've sent a verification link to:",
+      "checkEmailBody": "Please click the link in the email to activate your workspace.",
+      "expiresIn": "The verification link will expire in {{hours}} hours.",
+      "devLinkLabel": "🔧 DEV MODE - Direct Verification Link:",
+      "devLinkCopyButton": "Copy verification URL + token",
+      "devLinkCopied": "Verification URL + token copied to clipboard",
+      "devLinkCopyFailed": "Failed to copy to clipboard",
+      "devLinkToken": "Token:",
+      "noEmailNotice": "Didn't receive the email? Check your spam folder or",
+      "tryAgain": "try again",
+      "errors": {
+        "fixFormErrors": "Please fix the form errors",
+        "signupFailed": "Signup failed. Please try again.",
+        "slugFormat": "Slug can only contain lowercase letters, numbers, and hyphens",
+        "slugUnavailable": "This slug is not available",
+        "companyRequired": "Company name is required",
+        "slugRequired": "Slug is required",
+        "slugChooseAvailable": "Please choose an available slug",
+        "adminNameRequired": "Admin name is required",
+        "adminEmailRequired": "Admin email is required",
+        "passwordRequired": "Password is required",
+        "passwordMin": "Password must be at least 8 characters",
+        "passwordMismatch": "Passwords do not match",
+        "legalRequired": "You must accept the Terms, Privacy Policy, and Acceptable Use Policy"
+      }
+    },
+    "verify": {
+      "loadingTitle": "Verifying your email…",
+      "loadingBody": "Please wait while we verify your email address.",
+      "success": {
+        "title": "Email verified!",
+        "created": "Your workspace has been created!",
+        "redirecting": "Your workspace has been created! Redirecting to login..."
+      },
+      "captcha": {
+        "title": "Security check required",
+        "body": "Please complete the security check to continue.",
+        "submit": "Create workspace"
+      },
+      "error": {
+        "title": "Verification failed",
+        "retryRegistration": "Start registration again",
+        "goLogin": "Go to login"
+      },
+      "common": {
+        "goHome": "Go to home"
+      },
+      "errors": {
+        "missingToken": "Verification token is missing",
+        "missingTokenLink": "Verification token is missing. Please check your email link.",
+        "invalidLink": "Invalid verification link",
+        "rateLimited": "Too many attempts. Please wait before trying again.",
+        "securityCheck": "Please complete the security check.",
+        "emailNotVerified": "Please verify your email first, then try again.",
+        "emailNotVerifiedTitle": "Email not verified",
+        "expired": "This verification link has expired. Please start the registration process again.",
+        "notFound": "Invalid verification link. Please check your email or start registration again.",
+        "slugTaken": "This workspace name is no longer available. Please start registration again with a different name.",
+        "signupFailed": "Signup failed. Please try again or contact support.",
+        "signupFailedTitle": "Signup failed",
+        "verificationFailed": "Verification failed. Please try again or contact support."
+      }
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "timesheets": "Timesheets",
+    "travels": "Travels",
+    "expenses": "Expenses",
+    "approvals": "Approvals",
+    "reports": "Reports",
+    "planning": "Planning",
+    "management": "Management",
+    "administration": "Administration",
+    "team": "Team",
+    "projects": "Projects",
+    "tasks": "Tasks",
+    "locations": "Locations",
+    "countries": "Countries",
+    "users": "Users",
+    "aiInsights": "AI Insights",
+    "billing": "Billing",
+    "resetData": "Reset data",
+    "legal": "Legal",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "acceptableUse": "Acceptable use",
+    "logout": "Logout",
+    "userFallback": "User",
+    "tagline": "Smart Timesheet"
+  },
+  "language": {
+    "label": "Language",
+    "enUS": "English (US)",
+    "enGB": "English (UK)",
+    "ptPT": "Português (PT)"
+  },
+  "approvalHeatmap": {
+    "title": "Approval heatmap",
+    "subtitle": "Pending approvals by day",
+    "filters": {
+      "from": "From",
+      "to": "To",
+      "timesheets": "Timesheets",
+      "expenses": "Expenses"
+    },
+    "scopeLabel": "Scope",
+    "pendingLabel": "Pending",
+    "approvedTimesheetsLabel": "Approved (timesheets)",
+    "approvedExpensesLabel": "Approved (expenses)",
+    "invalidRange": "Select a valid range (max 62 days) and include at least one type.",
+    "loading": "Loading heatmap…",
+    "insights": {
+      "summaryTitle": "Approval highlights",
+      "summaryHint": "Overview of pending volume and busiest days.",
+      "pendingTotal": "Pending approvals",
+      "approvedTimesheets": "Approved timesheets",
+      "approvedExpenses": "Approved expenses",
+      "peakDay": "Busiest day",
+      "suggestions": {
+        "backlog": "Where are approvals piling up?",
+        "worstDays": "Which days were worst?",
+        "compareTypes": "Compare timesheets vs expenses"
+      }
+    }
+  },
+  "approvals": {
+    "title": "Approvals",
+    "badges": {
+      "pending": "{{count}} pending"
+    },
+    "tabs": {
+      "timesheets": "Timesheets",
+      "expenses": "Expenses"
+    },
+    "accessDenied": "Access denied. This page is only available to Managers or Admins.",
+    "filters": {
+    "roles": {
+      "member": "Member",
+      "manager": "Manager",
+      "none": "None"
+    },
+      "aiAlerts": "AI alerts: {{count}}",
+      "overCapSummary": "Over 12h: {{overCap}} · Overlaps: {{overlaps}}",
+      "results": "{{count}} results",
+      "searchPlaceholder": "Search technician, project, task, description...",
+      "sortBy": "Sort by",
+      "sort": {
+        "date": "Date",
+        "hours": "Hours",
+        "project": "Project",
+        "technician": "Technician",
+        "amount": "Amount"
+      },
+      "sortOrder": {
+        "ascending": "Ascending",
+        "descending": "Descending"
+      },
+      "fromDate": "From date",
+      "toDate": "To date",
+      "minHours": "Min hours",
+      "maxHours": "Max hours"
+    },
+    "table": {
+      "status": "Status",
+      "technician": "Technician",
+      "projectRole": "Project role",
+      "expenseRole": "Expense role",
+      "project": "Project",
+      "task": "Task",
+      "date": "Date",
+      "start": "Start",
+      "end": "End",
+      "hours": "Hours",
+      "travels": "Travels",
+      "travelTime": "Travel time",
+      "flags": "Flags",
+      "aiScore": "AI score",
+      "description": "Description"
+    },
+    "roles": {
+      "member": "Member",
+      "manager": "Manager",
+      "none": "None"
+    },
+    "flags": {
+      "ok": "OK",
+      "travelWithoutWork": "Travel without work hours",
+      "excessiveTravelTime": "Travel time > 2x work hours",
+      "expensesWithoutWork": "Expenses without work hours"
+    },
+    "timesheets": {
+      "loading": "Loading timesheets...",
+      "emptyTitle": "No pending approvals",
+      "emptySubtitle": "All timesheets have been reviewed or no submitted entries found",
+      "approveSelected": "Approve ({{count}})",
+      "rejectSelected": "Reject ({{count}})",
+      "entry": "entry",
+      "entries": "entries",
+      "selectedCount": "{{count}} {{label}} selected",
+      "ownEntryTooltip": "Your own entry - cannot approve",
+      "ownEntriesWarningTitle": "Warning: Own entries detected",
+      "ownEntriesWarningMessage": "{{ownCount}} of {{totalCount}} selected entries are yours. You cannot approve your own timesheets.\n\nContinue with the remaining {{validCount}} entries?",
+      "ownEntriesCannotApprove": "Cannot approve your own timesheets.",
+      "rejectEntryTitle": "Reject entry",
+      "rejectEntryMessage": "Please provide a reason for rejecting this entry:",
+      "rejectSuccessSingle": "Entry rejected successfully",
+      "rejectFailedSingle": "Failed to reject entry",
+      "rejectSelectedTitle": "Reject selected entries",
+      "rejectSelectedMessage": "Please provide a reason for rejecting the selected entries:",
+      "rejectSuccess": "Successfully rejected {{count}} entries",
+      "rejectFailed": "Bulk rejection failed.",
+      "rejectInvalidStatus": "Invalid timesheet status. Only submitted timesheets can be rejected.",
+      "approveSuccess": "Successfully approved {{count}} entries",
+      "approveFailed": "Bulk approval failed.",
+      "approveInvalidStatus": "Invalid timesheet status. Only submitted timesheets can be approved."
+    },
+    "expenses": {
+      "loadFailedStatus": "Failed to load pending expenses: {{status}}",
+      "loadFailed": "Failed to load pending expenses. Please try again.",
+      "approveSuccess": "{{count}} expense(s) approved successfully",
+      "rejectSuccess": "{{count}} expense(s) rejected",
+      "markPaidSuccess": "{{count}} expense(s) marked as paid",
+      "approveFailed": "Failed to approve expenses",
+      "rejectFailed": "Failed to reject expenses",
+      "markPaidFailed": "Failed to mark expenses as paid",
+      "rejectionReasonRequired": "Please provide a rejection reason",
+      "paymentReferenceRequired": "Please provide a payment reference",
+      "searchPlaceholder": "Search description, category, project...",
+      "minAmount": "Min amount",
+      "maxAmount": "Max amount",
+      "statusLabel": "Status",
+      "typeLabel": "Type",
+      "categoryLabel": "Category",
+      "projectLabel": "Project",
+      "countLabel": "{{count}} {{label}}",
+      "item": "expense",
+      "items": "expenses",
+      "selectAll": "Select all ({{count}})",
+      "deselectAll": "Deselect all ({{count}})",
+      "markPaid": "Mark paid",
+      "markPaidTitle": "Mark as paid",
+      "paymentReference": "Payment reference",
+      "paymentReferencePlaceholder": "e.g., TRF-2025-001234",
+      "rejectDialogTitle": "Reject expenses",
+      "columns": {
+        "pendingReview": "Pending review",
+        "financeReview": "Finance review",
+        "approved": "Approved",
+        "paid": "Paid"
+      },
+      "stats": {
+        "totalValue": "Total value",
+        "totalCount": "{{count}} expenses",
+        "selected": "Selected",
+        "selectedCount": "{{count}} selected"
+      },
+      "type": {
+        "reimbursement": "Reimbursement",
+        "mileage": "Mileage",
+        "companyCard": "Company card",
+        "reimbursementLabel": "💰 Reimbursement",
+        "mileageLabel": "🚗 Mileage"
+      },
+      "status": {
+        "submitted": "Submitted",
+        "financeReview": "Finance review",
+        "financeApproved": "Finance approved",
+        "paid": "Paid"
+      },
+      "attachment": {
+        "viewReceipt": "View receipt",
+        "noReceipt": "No receipt",
+        "title": "Receipt attachment",
+        "previewUnavailable": "Preview not available for this file type",
+        "downloadFile": "Download file",
+        "descriptionLabel": "Description",
+        "download": "Download",
+        "receiptAlt": "Receipt",
+        "pdfTitle": "PDF receipt"
+      }
+    },
+    "travels": {
+      "title": "Travel details",
+      "empty": "No travel details found.",
+      "technician": "Technician",
+      "project": "Project",
+      "departure": "Departure",
+      "arrival": "Arrival",
+      "direction": "Direction",
+      "duration": "Duration",
+      "status": "Status",
+      "classificationReason": "Classification reason"
+    }
+  },
+  "expenses": {
+    "title": "Expenses",
+    "subtitle": "Submit expenses with receipts for project-related costs",
+    "loading": "Loading expenses...",
+    "empty": {
+      "title": "No expenses yet",
+      "subtitle": "Click the + button to submit your first expense entry",
+      "action": "Add expense"
+    },
+    "validation": {
+      "projectForTechnician": "Please select a valid project for the chosen technician."
+    },
+    "warning": {
+      "workerOverride": "You are not allowed to create/edit expenses for that worker. The record was saved for a different technician."
+    },
+    "toast": {
+      "saved": "Expense {{action}} successfully",
+      "created": "created",
+      "updated": "updated",
+      "deleted": "Expense deleted successfully"
+    },
+    "errors": {
+      "saveFailed": "Failed to {{action}} expense",
+      "loadFailed": "Failed to load expenses. Please try again.",
+      "loadFailedStatus": "Failed to load expenses: {{status}}",
+      "deleteFailed": "Failed to delete expense",
+      "attachmentLoadFailed": "Failed to load attachment"
+    },
+    "reject": {
+      "title": "Reject expense",
+      "message": "Please provide a reason for rejecting this expense:"
+    },
+    "status": {
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "approvedLegacy": "Approved (Legacy)",
+      "rejected": "Rejected",
+      "financeReview": "Finance review",
+      "financeApproved": "Finance approved",
+      "paid": "Paid"
+    },
+    "table": {
+      "id": "ID",
+      "date": "Date",
+      "technician": "Technician",
+      "project": "Project",
+      "amount": "Amount",
+      "description": "Description",
+      "attachment": "Attachment",
+      "status": "Status",
+      "actions": "Actions",
+      "viewAttachment": "View attachment",
+      "rejectionReason": "Reason: {{reason}}"
+    },
+    "delete": {
+      "confirm": "Are you sure you want to delete this expense?"
+    },
+    "dialog": {
+      "editTitle": "Edit expense",
+      "newTitle": "New expense",
+      "currentStatus": "Current status:",
+      "rejectionReasonTitle": "Rejection reason",
+      "update": "Update",
+      "saveDraft": "Save as draft",
+      "submitForApproval": "Submit for approval",
+      "approveSendToFinance": "Approve (send to finance)"
+    },
+    "form": {
+      "technician": "Technician",
+      "defaultTechnician": "(Default)",
+      "project": "Project",
+      "projectPlaceholder": "Select a project",
+      "date": "Expense date",
+      "type": "Expense type",
+      "typeReimbursement": "Reimbursement (Receipt required)",
+      "typeMileage": "Mileage ({{unit}})",
+      "typeCompanyCard": "Company card",
+      "category": "Category",
+      "categoryPlaceholder": "Select a category",
+      "distance": "Distance ({{unit}})",
+      "ratePerUnit": "Rate per {{unit}} ({{currency}})",
+      "vehicleType": "Vehicle type",
+      "vehicle": {
+        "car": "Car",
+        "motorcycle": "Motorcycle",
+        "bicycle": "Bicycle"
+      },
+      "calculatedAmount": "Calculated amount: {{amount}}",
+      "amount": "Amount ({{currency}})",
+      "description": "Description",
+      "uploadReceipt": "Upload receipt {{hint}}",
+      "uploadHintRecommended": "(Recommended)",
+      "uploadHintOptional": "(Optional)"
+    },
+    "attachment": {
+      "previewTitle": "Attachment preview",
+      "previewUnavailable": "Preview not available for this file type",
+      "downloadFile": "Download file"
+    },
+    "categories": {
+      "general": "General",
+      "travel": "Travel",
+      "meals": "Meals",
+      "lodging": "Lodging",
+      "fuel": "Fuel",
+      "parking": "Parking",
+      "materials": "Materials",
+      "tools": "Tools",
+      "other": "Other"
+    }
+  },
+  "reports": {
+    "ai": {
+      "openPanel": "Open AI",
+      "closePanel": "Close AI"
+    },
+    "analysis": "Analysis",
+    "heatmap": "Heatmap",
+    "expensesAnalysis": {
+      "title": "Expenses analysis",
+      "subtitle": "Spend, trends and approvals",
+      "results": "{{count}} results",
+      "filters": {
+        "from": "From",
+        "to": "To",
+        "status": "Status",
+        "category": "Category",
+        "project": "Project",
+        "all": "All"
+      },
+      "validation": {
+        "range": "Select a valid date range."
+      },
+      "loading": "Loading expenses…",
+      "kpis": {
+        "totalValue": "Total value",
+        "totalCount": "{{count}} expenses",
+        "pendingReview": "Pending review",
+        "financeReview": "Finance review",
+        "approved": "Approved",
+        "paid": "Paid"
+      },
+      "trends": {
+        "title": "Trends",
+        "subtitle": "Spend and expense count over time for the current filters",
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "missingDates": "Trends not available from current data (missing expense dates).",
+        "noExpenses": "No expenses match the current filters.",
+        "totalSpend": "Total spend",
+        "expenseCount": "Expense count",
+        "peakPeriod": "Peak period",
+        "lowestPeriod": "Lowest period",
+        "changeVsPrevious": "Change vs previous",
+        "spendVolatility": "Spend volatility"
+      },
+      "breakdown": {
+        "categoryTitle": "Breakdown by category",
+        "projectTitle": "Breakdown by project",
+        "spendLabel": "Spend"
+      },
+      "outliers": {
+        "title": "Outliers",
+        "subtitle": "Detect unusually large expenses using an IQR threshold (Q3 + 1.5×IQR)",
+        "notEnoughVariation": "Not enough variation to compute an outlier threshold for this result set.",
+        "noneDetected": "No outliers detected (threshold > {{threshold}}).",
+        "threshold": "Outlier threshold > {{threshold}}",
+        "uncategorized": "Uncategorized"
+      },
+      "change": {
+        "title": "What changed",
+        "subtitle": "Comparison vs previous period {{from}} → {{to}}",
+        "invalidRange": "Select a valid date range to compare.",
+        "totalSpend": "Total spend",
+        "delta": "Change",
+        "volume": "Volume",
+        "topCategory": "Top category (current → previous)",
+        "topProject": "Top project (current → previous)"
+      },
+      "statusFunnel": {
+        "title": "Status funnel",
+        "subtitle": "Counts and spend by status for the current filters",
+        "countLabel": "Count",
+        "submittedToPaid": "Submitted → Paid",
+        "submittedToFinanceReview": "Submitted → Finance review",
+        "financeReviewToApproved": "Finance review → Finance approved"
+      },
+      "dataQuality": {
+        "title": "Data quality",
+        "subtitle": "Coverage indicators for the current filtered result set",
+        "missingCategory": "Missing category",
+        "missingProject": "Missing project name",
+        "unparseableDates": "Unparseable trend dates",
+        "results": "Results"
+      },
+      "spendMix": {
+        "title": "Spend mix",
+        "subtitle": "Share of total spend by category and status",
+        "categoryTitle": "Category mix",
+        "statusTitle": "Status mix"
+      },
+      "movers": {
+        "title": "Top movers",
+        "invalidRange": "Select a valid date range to compare with the previous period.",
+        "subtitle": "Biggest spend deltas vs previous period {{from}} → {{to}}",
+        "categories": "Categories",
+        "increases": "Increases"
+      },
+      "noExpenses": "No expenses match the current filters.",
+      "ai": {
+        "noExpenses": "No expenses match the current filters.",
+        "spendMixUnavailable": "Spend mix is not available (total spend is 0 for the current filters).",
+        "spendMixHeader": "Spend mix (range {{from}} → {{to}}): total {{total}}",
+        "topCategories": "Top categories:",
+        "topStatuses": "Top statuses:",
+        "summaryHeader": "Expenses analysis (range {{from}} → {{to}}):",
+        "summaryTotal": "- Total: {{total}} ({{count}} expenses)",
+        "summaryPending": "- Pending review: {{count}}",
+        "summaryFinanceReview": "- Finance review: {{count}}",
+        "summaryApproved": "- Approved: {{count}}",
+        "summaryPaid": "- Paid: {{count}}",
+        "summaryPrompt": "Ask about “categories”, “projects”, “outliers”, “what changed”, “status funnel”, “data quality”, “movers”, or “mix”."
+      }
+    }
+  }
+}

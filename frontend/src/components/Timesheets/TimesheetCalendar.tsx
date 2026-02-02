@@ -207,6 +207,7 @@ const TimesheetCalendar: React.FC = () => {
   
   // Calendar ref to access API methods
   const calendarRef = useRef<FullCalendar>(null);
+  const calendarContainerRef = useRef<HTMLDivElement>(null);
   
   // State variables
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
@@ -240,6 +241,18 @@ const TimesheetCalendar: React.FC = () => {
     // For other views, reset to Sunday (keeps current behavior with locale="en").
     api.setOption('firstDay', isTenantDrivenFirstDayView ? weekFirstDay : 0);
   }, [isTenantDrivenFirstDayView, weekFirstDay]);
+
+  useEffect(() => {
+    const node = calendarContainerRef.current;
+    if (!node) return;
+
+    const observer = new ResizeObserver(() => {
+      calendarRef.current?.getApi().updateSize();
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   // Week summary (read-only UI)
   const [weekSummary, setWeekSummary] = useState<{
@@ -313,8 +326,9 @@ const TimesheetCalendar: React.FC = () => {
   const roleIsAssigned = (role?: 'member' | 'manager' | 'none') => role && role !== 'none';
 
   const formatRoleLabel = (role?: 'member' | 'manager' | 'none') => {
-    if (!role || role === 'none') return 'Nenhum';
-    return role.charAt(0).toUpperCase() + role.slice(1);
+    if (!role || role === 'none') return t('timesheets.roles.none');
+    if (role === 'manager') return t('timesheets.roles.manager');
+    return t('timesheets.roles.member');
   };
 
   // AI Suggestion state - with localStorage persistence
@@ -473,7 +487,7 @@ const TimesheetCalendar: React.FC = () => {
       setTimesheets(timesheetsData);
     } catch (error: unknown) {
       console.error('Error loading timesheets:', error);
-      showError('Failed to load timesheets');
+      showError(t('timesheets.errors.loadTimesheets'));
     } finally {
       setLoading(false);
     }
@@ -492,7 +506,7 @@ const TimesheetCalendar: React.FC = () => {
       setTasks(tasksArray);
     } catch (error: unknown) {
       console.error('Error loading tasks:', error);
-      showError('Failed to load tasks');
+      showError(t('timesheets.errors.loadTasks'));
     }
   }, [showError]);
 
@@ -509,7 +523,7 @@ const TimesheetCalendar: React.FC = () => {
       setLocations(locationsArray);
     } catch (error: unknown) {
       console.error('Error loading locations:', error);
-      showError('Failed to load tasks');
+      showError(t('timesheets.errors.loadLocations'));
     }
   }, [showError]);
 
@@ -536,7 +550,7 @@ const TimesheetCalendar: React.FC = () => {
       setTechnicians(techniciansData);
     } catch (error: unknown) {
       console.error('Error loading technicians:', error);
-      showError('Failed to load workers');
+      showError(t('timesheets.errors.loadWorkers'));
     }
   }, [showError]);
 
@@ -618,7 +632,7 @@ const TimesheetCalendar: React.FC = () => {
         setProjectRoleMap(roleMap);
       } catch (error: unknown) {
         console.error('Error loading projects:', error);
-        showError('Failed to load projects');
+        showError(t('timesheets.errors.loadProjects'));
       }
     },
     [showError]
@@ -937,7 +951,7 @@ const TimesheetCalendar: React.FC = () => {
       if (!canEdit) {
         console.log('User cannot edit this entry - not owner, not manager of project, and not admin');
         // Show warning notification
-        showWarning('You can only edit your own timesheets or timesheets from projects you manage.');
+        showWarning(t('timesheets.permissions.editOwnOrManaged'));
         return;
       }
       
@@ -1015,44 +1029,44 @@ const TimesheetCalendar: React.FC = () => {
     }
     // Sequential validation: focus first invalid field and show error
     if (!projectId) {
-      showError('Project is required');
+      showError(t('timesheets.validation.projectRequired'));
       document.getElementById('timesheet-project-field')?.focus();
       return;
     }
     if (!taskId) {
-      showError('Task is required');
+      showError(t('timesheets.validation.taskRequired'));
       document.getElementById('timesheet-task-field')?.focus();
       return;
     }
     if (!locationId) {
-      showError('Location is required');
+      showError(t('timesheets.validation.locationRequired'));
       document.getElementById('timesheet-location-field')?.focus();
       return;
     }
     if (!description.trim() || description.trim().length < 3) {
-      showError('Description is required (min 3 characters)');
+      showError(t('timesheets.validation.descriptionRequired'));
       document.getElementById('timesheet-description-field')?.focus();
       return;
     }
     if (!selectedTechnicianId) {
-      showError('Worker is required');
+      showError(t('timesheets.validation.workerRequired'));
       document.getElementById('timesheet-worker-field')?.focus();
       return;
     }
     if (!selectedDate) {
-      showError('Date is required');
+      showError(t('timesheets.validation.dateRequired'));
       return;
     }
     if (!startTimeObj || !endTimeObj) {
-      showError('Start and end times are required');
+      showError(t('timesheets.validation.timeRequired'));
       return;
     }
     if (hoursWorked <= 0) {
-      showError('Hours worked must be greater than 0');
+      showError(t('timesheets.validation.hoursMin'));
       return;
     }
     if (hoursWorked > 24) {
-      showError('Hours worked cannot exceed 24 hours');
+      showError(t('timesheets.validation.hoursMax'));
       return;
     }
 
@@ -1066,7 +1080,7 @@ const TimesheetCalendar: React.FC = () => {
         const canEdit = isOwner || userIsAdmin || managesProject;
         
         if (!canEdit) {
-          showWarning('You can only edit your own timesheets or timesheets from projects you manage.');
+          showWarning(t('timesheets.permissions.editOwnOrManaged'));
           setLoading(false);
           return;
         }
@@ -1111,7 +1125,7 @@ const TimesheetCalendar: React.FC = () => {
         if (warningMessage) {
           showWarning(warningMessage);
         }
-        showSuccess('Timesheet updated successfully');
+        showSuccess(t('timesheets.toast.updated'));
       } else {
         // Create new timesheet
         const result: unknown = await timesheetsApi.create(timesheet);
@@ -1134,10 +1148,10 @@ const TimesheetCalendar: React.FC = () => {
         if (hasOverride) {
           setSelectedTechnicianId(savedTechnicianId);
           if (!warningMessage) {
-            showWarning('Selected worker was not allowed; the timesheet was saved for your technician.');
+            showWarning(t('timesheets.warning.workerOverride'));
           }
         }
-        showSuccess('Timesheet created successfully');
+        showSuccess(t('timesheets.toast.created'));
       }
 
       console.log('Timesheet saved successfully');
@@ -1169,7 +1183,7 @@ const TimesheetCalendar: React.FC = () => {
         const message =
           (typeof error.response?.data?.message === 'string' && error.response.data.message) ||
           (typeof error.response?.data?.error === 'string' && error.response.data.error) ||
-          'Forbidden';
+          t('common.forbidden');
         showError(message);
       
         // Provide negative feedback to AI if suggestion was used
@@ -1191,11 +1205,7 @@ const TimesheetCalendar: React.FC = () => {
         
         if (isOverlapError) {
           const timeRange = `${formatTenantTime(startTimeObj, tenantContext)} - ${formatTenantTime(endTimeObj, tenantContext)}`;
-          showError(
-            `⚠️ Time conflict detected for ${timeRange}. ` +
-            `There is already an entry in this time period. ` +
-            `Please choose a different time slot or check existing entries.`
-          );
+          showError(t('timesheets.errors.timeConflict', { timeRange }));
           shouldRefresh = true; // Refresh to show latest data
         } else {
           // Other validation errors
@@ -1209,7 +1219,7 @@ const TimesheetCalendar: React.FC = () => {
               })
               .join('\n');
             console.error('Validation errors:', validationErrors);
-            showError(`Validation failed: ${validationErrors}`);
+            showError(t('common.validationFailed', { details: validationErrors }));
           } else {
             showError(message);
           }
@@ -1228,7 +1238,7 @@ const TimesheetCalendar: React.FC = () => {
           }
         }
       } else {
-        const errorMsg = error instanceof Error ? error.message : 'Failed to save timesheet';
+        const errorMsg = error instanceof Error ? error.message : t('timesheets.errors.saveFailed');
         showError(errorMsg);
       }
       
@@ -1259,8 +1269,8 @@ const TimesheetCalendar: React.FC = () => {
     
     setConfirmDialog({
       open: true,
-      title: 'Delete Timesheet Entry',
-      message: 'Are you sure you want to delete this timesheet entry? This action cannot be undone.',
+      title: t('timesheets.delete.title'),
+      message: t('timesheets.delete.message'),
       recordDetails: {
         date: formatDate(dayjs(selectedEntry.date)),
         project: project?.name,
@@ -1275,7 +1285,7 @@ const TimesheetCalendar: React.FC = () => {
           await timesheetsApi.delete(selectedEntry.id);
           
           console.log('Timesheet deleted successfully');
-          showSuccess('Timesheet deleted successfully');
+          showSuccess(t('timesheets.toast.deleted'));
           await loadTimesheets();
           setDialogOpen(false);
           resetForm();
@@ -1285,7 +1295,7 @@ const TimesheetCalendar: React.FC = () => {
           const errorMessage =
             (typeof axiosish.response?.data?.message === 'string' && axiosish.response.data.message) ||
             (typeof axiosish.message === 'string' && axiosish.message) ||
-            'Failed to delete timesheet';
+            t('timesheets.errors.deleteFailed');
           showError(errorMessage);
         } finally {
           setLoading(false);
@@ -1349,23 +1359,23 @@ const TimesheetCalendar: React.FC = () => {
     const raw = weekSummary?.policy_key ?? tenantContext?.policy_key;
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim();
-    return trimmed ? `Policy: ${trimmed}` : null;
-  }, [tenantContext?.policy_key, weekSummary?.policy_key]);
+    return trimmed ? t('timesheets.policy.label', { policy: trimmed }) : null;
+  }, [tenantContext?.policy_key, weekSummary?.policy_key, t]);
 
   const weeklySummaryPillLabel = useMemo(() => {
     if (currentCalendarViewType !== 'timeGridWeek') return null;
 
-    if (weekSummaryStatus === 'loading') return 'Summary: loading…';
-    if (weekSummaryStatus === 'error') return 'Summary unavailable';
-    if (weekSummaryStatus !== 'loaded' || !weekSummary) return 'Summary unavailable';
+    if (weekSummaryStatus === 'loading') return t('timesheets.summary.loading');
+    if (weekSummaryStatus === 'error') return t('timesheets.summary.unavailable');
+    if (weekSummaryStatus !== 'loaded' || !weekSummary) return t('timesheets.summary.unavailable');
 
     const regular = formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2);
     const overtimeRate = formatTenantNumber(weekSummary.overtime_rate ?? 1.5, tenantContext, 1);
     const overtime = formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2);
     const overtime2 = formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2);
 
-    return `Regular ${regular}h | OT${overtimeRate} ${overtime}h | OT2.0 ${overtime2}h`;
-  }, [currentCalendarViewType, tenantContext, weekSummary, weekSummaryStatus]);
+    return t('timesheets.summary.format', { regular, overtimeRate, overtime, overtime2 });
+  }, [currentCalendarViewType, tenantContext, weekSummary, weekSummaryStatus, t]);
 
   const caOt2Alert = useMemo(() => {
     const region = String(tenantContext?.region ?? '').toUpperCase();
@@ -1616,7 +1626,9 @@ const TimesheetCalendar: React.FC = () => {
                               {t('rightPanel.timesheets.weeklyRegular')}
                             </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2)} h
+                              {t('common.hoursShort', {
+                                value: formatTenantNumber(weekSummary.regular_hours ?? 0, tenantContext, 2),
+                              })}
                             </Typography>
                           </Grid>
                           <Grid item xs={12} sm={4}>
@@ -1626,7 +1638,9 @@ const TimesheetCalendar: React.FC = () => {
                               })}
                             </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2)} h
+                              {t('common.hoursShort', {
+                                value: formatTenantNumber(weekSummary.overtime_hours ?? 0, tenantContext, 2),
+                              })}
                             </Typography>
                           </Grid>
                           <Grid item xs={12} sm={4}>
@@ -1634,7 +1648,9 @@ const TimesheetCalendar: React.FC = () => {
                               {t('rightPanel.timesheets.weeklyOvertime2')}
                             </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2)} h
+                              {t('common.hoursShort', {
+                                value: formatTenantNumber(weekSummary.overtime_hours_2_0 ?? 0, tenantContext, 2),
+                              })}
                             </Typography>
                           </Grid>
                         </Grid>
@@ -1733,7 +1749,7 @@ const TimesheetCalendar: React.FC = () => {
 
       const eventData: EventInput = {
         id: timesheet.id.toString(),
-        title: `${timesheet.project?.name || 'Project'} - ${decimalToHHMM(timesheet.hours_worked)}`,
+        title: `${timesheet.project?.name || t('timesheets.labels.projectFallback')} - ${decimalToHHMM(timesheet.hours_worked)}`,
         backgroundColor: statusStyle.background,
         borderColor: '#e0e0e0',
         textColor: eventTextColor,
@@ -1782,7 +1798,7 @@ const TimesheetCalendar: React.FC = () => {
 
       return eventData;
     });
-  }, [uiFilteredTimesheets, user, userIsManager, userIsAdmin, isTimesheetOwnedByUser]);
+  }, [uiFilteredTimesheets, user, userIsManager, userIsAdmin, isTimesheetOwnedByUser, t]);
 
   // Day cell renderer - add travel indicators to calendar days
   const handleDayCellDidMount = (info: DayCellMountArg) => {
@@ -1843,6 +1859,9 @@ const TimesheetCalendar: React.FC = () => {
         const statusColor = travel.status === 'completed' ? '#4caf50' : 
                            travel.status === 'cancelled' ? '#9e9e9e' : '#ff9800';
         
+        const travelDirectionLabel = travel.direction || t('timesheets.travels.generic');
+        const travelStatusLabel = travel.status || t('common.unknown');
+
         travelItem.innerHTML = `
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 18px; color: ${statusColor};">✈</span>
@@ -1851,7 +1870,7 @@ const TimesheetCalendar: React.FC = () => {
                 ${travel.origin_city || travel.origin_country} → ${travel.destination_city || travel.destination_country}
               </div>
               <div style="font-size: 0.85em; color: #666;">
-                ${travel.direction || 'Travel'} • ${travel.status}
+                ${travelDirectionLabel} • ${travelStatusLabel}
               </div>
             </div>
           </div>
@@ -1928,7 +1947,7 @@ const TimesheetCalendar: React.FC = () => {
       line-height: 1;
     `;
     indicator.textContent = '✈';
-    indicator.title = `${travelsForDay.length} travel(s) - Click to view details`;
+    indicator.title = t('timesheets.travels.indicatorTitle', { count: travelsForDay.length });
     
     // Add click handler to show travel details - PREVENT dateClick propagation
     indicator.addEventListener('click', (e) => {
@@ -1956,7 +1975,7 @@ const TimesheetCalendar: React.FC = () => {
   // Event rendering - use eventDidMount instead of eventContent to preserve height calculation
   const handleEventDidMount = (info: EventMountArg) => {
     const { technician, isOwner, project, task, location } = info.event.extendedProps;
-    const technicianName = technician?.name || 'Unknown';
+    const technicianName = technician?.name || t('common.unknown');
     
     // Get initials for badge
     const initials = technicianName
@@ -2020,7 +2039,7 @@ const TimesheetCalendar: React.FC = () => {
             white-space: nowrap;
             flex: 1;
           `;
-          projectName.textContent = project?.name || 'Project';
+          projectName.textContent = project?.name || t('timesheets.labels.projectFallback');
           projectName.title = project?.name || '';
           
           projectLine.appendChild(badge);
@@ -2043,8 +2062,8 @@ const TimesheetCalendar: React.FC = () => {
               padding-left: 2px;
               cursor: pointer;
             `;
-            travelLine.textContent = `✈ ${travelsForDay.length} travel${travelsForDay.length > 1 ? 's' : ''}`;
-            travelLine.title = 'Click to view travel details';
+            travelLine.textContent = `✈ ${t('timesheets.travels.count', { count: travelsForDay.length })}`;
+            travelLine.title = t('timesheets.travels.viewDetails');
             travelLine.addEventListener('click', (e) => {
               e.stopPropagation();
               handleTravelIndicatorClick(eventDate, travelsForDay);
@@ -2184,8 +2203,8 @@ const TimesheetCalendar: React.FC = () => {
                 font-weight: 600;
                 cursor: pointer;
               `;
-              travelInfo.textContent = `✈ ${travelsForDay.length} travel${travelsForDay.length > 1 ? 's' : ''}`;
-              travelInfo.title = 'Click to view travel details';
+              travelInfo.textContent = `✈ ${t('timesheets.travels.count', { count: travelsForDay.length })}`;
+              travelInfo.title = t('timesheets.travels.viewDetails');
               travelInfo.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleTravelIndicatorClick(eventDate, travelsForDay);
@@ -2222,7 +2241,9 @@ const TimesheetCalendar: React.FC = () => {
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      flex: 1,
+      minWidth: 0
     }}>
       {/* Header Card with Status Legend - STICKY - Compacto */}
       <Card 
@@ -2262,7 +2283,7 @@ const TimesheetCalendar: React.FC = () => {
                 gap: 1
               }}
             >
-              Timesheet
+              {t('timesheets.title')}
             </Typography>
             
             <Box
@@ -2277,28 +2298,28 @@ const TimesheetCalendar: React.FC = () => {
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                 <Chip 
                   icon={<Avatar sx={{ bgcolor: '#ff9800 !important', width: 12, height: 12 }}>●</Avatar>} 
-                  label="Submitted" 
+                  label={t('timesheets.status.submitted')} 
                   variant="filled"
                   size="small"
                   sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
                 />
                 <Chip 
                   icon={<Avatar sx={{ bgcolor: '#4caf50 !important', width: 12, height: 12 }}>●</Avatar>} 
-                  label="Approved" 
+                  label={t('timesheets.status.approved')} 
                   variant="filled"
                   size="small"
                   sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
                 />
                 <Chip 
                   icon={<Avatar sx={{ bgcolor: '#f44336 !important', width: 12, height: 12 }}>●</Avatar>} 
-                  label="Rejected" 
+                  label={t('timesheets.status.rejected')} 
                   variant="filled"
                   size="small"
                   sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
                 />
                 <Chip 
                   icon={<Avatar sx={{ bgcolor: '#9c27b0 !important', width: 12, height: 12 }}>●</Avatar>} 
-                  label="Closed" 
+                  label={t('timesheets.status.closed')} 
                   variant="filled"
                   size="small"
                   sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', height: 24, fontSize: '0.75rem' }}
@@ -2331,9 +2352,9 @@ const TimesheetCalendar: React.FC = () => {
                     }
                   }}
                 >
-                  <ToggleButton value="mine">Mine</ToggleButton>
-                  <ToggleButton value="others">Others</ToggleButton>
-                  <ToggleButton value="all">All</ToggleButton>
+                  <ToggleButton value="mine">{t('timesheets.scope.mine')}</ToggleButton>
+                  <ToggleButton value="others">{t('timesheets.scope.others')}</ToggleButton>
+                  <ToggleButton value="all">{t('timesheets.scope.all')}</ToggleButton>
                 </ToggleButtonGroup>
               )}
             </Box>
@@ -2354,10 +2375,10 @@ const TimesheetCalendar: React.FC = () => {
         }}
       >
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-          <Tooltip title="Days where technician's total exceeds 12h">
+          <Tooltip title={t('timesheets.validation.overCapTooltip', { cap: DAILY_HOUR_CAP })}>
             <span>
               <Chip
-                label={`Daily > ${DAILY_HOUR_CAP}h (${validationSummary.overCap})`}
+                label={t('timesheets.validation.overCapLabel', { cap: DAILY_HOUR_CAP, count: validationSummary.overCap })}
                 color={validationFilter === 'overcap' ? 'warning' : 'default'}
                 variant={validationSummary.overCap ? 'filled' : 'outlined'}
                 onClick={() => toggleValidationFilter('overcap')}
@@ -2368,7 +2389,7 @@ const TimesheetCalendar: React.FC = () => {
           </Tooltip>
           {validationFilter !== 'all' && (
             <Chip
-              label="Clear filter"
+              label={t('common.clearFilter')}
               onClick={() => setValidationFilter('all')}
               variant="outlined"
             />
@@ -2406,23 +2427,25 @@ const TimesheetCalendar: React.FC = () => {
       />
 
       {/* Calendar Container - Scrollable */}
-      <Paper 
-        elevation={0}
-        sx={{ 
-          borderRadius: 0,
-          overflow: 'auto',
-          flex: 1,
-          border: '1px solid',
-          borderColor: 'grey.200',
-          display: 'flex',
-          flexDirection: 'column',
-          '& .fc': {
-            height: '100%',
-            width: '100%',
-            fontFamily: theme.typography.fontFamily,
+      <Box ref={calendarContainerRef} sx={{ flex: 1, minWidth: 0, display: 'flex' }}>
+        <Paper 
+          elevation={0}
+          sx={{ 
+            borderRadius: 0,
+            overflow: 'auto',
+            flex: 1,
+            minWidth: 0,
+            border: '1px solid',
+            borderColor: 'grey.200',
             display: 'flex',
-            flexDirection: 'column'
-          },
+            flexDirection: 'column',
+            '& .fc': {
+              height: '100%',
+              width: '100%',
+              fontFamily: theme.typography.fontFamily,
+              display: 'flex',
+              flexDirection: 'column'
+            },
           '& .fc-view-harness': {
             flex: 1,
             overflow: 'auto',
@@ -2648,118 +2671,119 @@ const TimesheetCalendar: React.FC = () => {
             }
           }
         }}
-      >
-        <FullCalendar
-          key={`weekFirstDay:${weekFirstDay}`}
-          ref={calendarRef}
-          plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,listWeek,listMonth'
-          }}
-          buttonText={{
-            today: 'Today',
-            dayGridMonth: 'Month',
-            timeGridWeek: 'Week',
-            listWeek: 'Week List',
-            listMonth: 'Month List'
-          }}
-          events={calendarEvents}
-          selectable={!isReadOnlyMode}
-          selectMirror={true}
-          selectOverlap={true}
-          selectConstraint={{
-            startTime: '00:00',
-            endTime: '24:00',
-          }}
-          eventDidMount={handleEventDidMount}
-          dayCellDidMount={handleDayCellDidMount}
-          datesSet={handleViewChange}
-          dayMaxEvents={isMobile ? 2 : 3}
-          weekends={true}
-          select={handleDateSelect}
-          eventClick={handleEventClick}
-          dateClick={handleDateClick}
-          height="100%" // Usar 100% da altura disponível
-          locale="en"
-          firstDay={
-            currentCalendarViewType === 'timeGridWeek' ||
-            currentCalendarViewType === 'listWeek' ||
-            currentCalendarViewType === 'dayGridMonth' ||
-            currentCalendarViewType === 'listMonth'
-              ? weekFirstDay
-              : undefined
-          }
-          views={{
-            // Manual QA:
-            // - EU tenant (week_start monday): Week/ListWeek views are Monday-first.
-            // - US tenant (week_start sunday): Week/ListWeek views are Sunday-first.
-            // - Month/ListMonth also follow tenant week_start.
-            // - DevTools Network: switching to Week triggers GET /api/timesheets/summary?date=YYYY-MM-DD
-            //   where date corresponds to the visible first day column.
-            dayGridMonth: {
-              firstDay: weekFirstDay,
-            },
-            timeGridWeek: {
-              firstDay: weekFirstDay,
-            },
-            listWeek: {
-              firstDay: weekFirstDay,
-            },
-            listMonth: {
-              firstDay: weekFirstDay,
-            },
-          }}
-          weekNumbers={!isMobile}
-          // Time grid configurations - Todas as 24 horas
-          slotMinTime="00:00:00" // Início: meia-noite
-          slotMaxTime="24:00:00" // Fim: meia-noite do dia seguinte (23:59)
-          slotDuration="00:30:00" // Intervalo de 30 minutos
-          slotLabelInterval="01:00:00" // Mostrar label a cada 1 hora
-          slotLabelFormat={{
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: timePickerAmpm
-          }}
-          eventTimeFormat={{
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: timePickerAmpm
-          }}
-          displayEventTime={true}
-          displayEventEnd={true}
-          scrollTime="08:00:00"
-          scrollTimeReset={false}
-          selectAllow={(selectInfo) => {
-            if (isReadOnlyMode) {
-              return false;
+        >
+          <FullCalendar
+            key={`weekFirstDay:${weekFirstDay}`}
+            ref={calendarRef}
+            plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+            initialView="dayGridMonth"
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,listWeek,listMonth'
+            }}
+            buttonText={{
+              today: t('common.today'),
+              dayGridMonth: t('common.month'),
+              timeGridWeek: t('common.week'),
+              listWeek: t('timesheets.calendar.weekList'),
+              listMonth: t('timesheets.calendar.monthList')
+            }}
+            events={calendarEvents}
+            selectable={!isReadOnlyMode}
+            selectMirror={true}
+            selectOverlap={true}
+            selectConstraint={{
+              startTime: '00:00',
+              endTime: '24:00',
+            }}
+            eventDidMount={handleEventDidMount}
+            dayCellDidMount={handleDayCellDidMount}
+            datesSet={handleViewChange}
+            dayMaxEvents={isMobile ? 2 : 3}
+            weekends={true}
+            select={handleDateSelect}
+            eventClick={handleEventClick}
+            dateClick={handleDateClick}
+            height="100%" // Usar 100% da altura disponível
+            locale="en"
+            firstDay={
+              currentCalendarViewType === 'timeGridWeek' ||
+              currentCalendarViewType === 'listWeek' ||
+              currentCalendarViewType === 'dayGridMonth' ||
+              currentCalendarViewType === 'listMonth'
+                ? weekFirstDay
+                : undefined
             }
-            const start = dayjs(selectInfo.start);
-            const end = dayjs(selectInfo.end);
-            return start.isSame(end, 'day') || start.add(1, 'second').isSame(end, 'day');
-          }}
-          // Enhanced mobile-specific configurations
-          longPressDelay={isMobile ? 150 : 1000}
-          selectLongPressDelay={isMobile ? 150 : 1000}
-          eventLongPressDelay={isMobile ? 150 : 1000}
-          // Improve touch interactions  
-          selectMinDistance={isMobile ? 3 : 0}
-          // Ensure events are clickable on all devices
-          eventStartEditable={false}
-          eventDurationEditable={false}
-          // Additional mobile optimizations
-          stickyHeaderDates={true} // Headers das datas também sticky
-          dayHeaderFormat={
-            currentCalendarViewType === 'dayGridMonth'
-              ? (isMobile ? { weekday: 'short' } : { weekday: 'long' })
-              : (isMobile ? { weekday: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric' })
-          }
-          allDaySlot={false} // Remove all-day slot - not used
-          nowIndicator={true} // Mostrar linha do horário atual
-        />
-      </Paper>
+            views={{
+              // Manual QA:
+              // - EU tenant (week_start monday): Week/ListWeek views are Monday-first.
+              // - US tenant (week_start sunday): Week/ListWeek views are Sunday-first.
+              // - Month/ListMonth also follow tenant week_start.
+              // - DevTools Network: switching to Week triggers GET /api/timesheets/summary?date=YYYY-MM-DD
+              //   where date corresponds to the visible first day column.
+              dayGridMonth: {
+                firstDay: weekFirstDay,
+              },
+              timeGridWeek: {
+                firstDay: weekFirstDay,
+              },
+              listWeek: {
+                firstDay: weekFirstDay,
+              },
+              listMonth: {
+                firstDay: weekFirstDay,
+              },
+            }}
+            weekNumbers={!isMobile}
+            // Time grid configurations - Todas as 24 horas
+            slotMinTime="00:00:00" // Início: meia-noite
+            slotMaxTime="24:00:00" // Fim: meia-noite do dia seguinte (23:59)
+            slotDuration="00:30:00" // Intervalo de 30 minutos
+            slotLabelInterval="01:00:00" // Mostrar label a cada 1 hora
+            slotLabelFormat={{
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: timePickerAmpm
+            }}
+            eventTimeFormat={{
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: timePickerAmpm
+            }}
+            displayEventTime={true}
+            displayEventEnd={true}
+            scrollTime="08:00:00"
+            scrollTimeReset={false}
+            selectAllow={(selectInfo) => {
+              if (isReadOnlyMode) {
+                return false;
+              }
+              const start = dayjs(selectInfo.start);
+              const end = dayjs(selectInfo.end);
+              return start.isSame(end, 'day') || start.add(1, 'second').isSame(end, 'day');
+            }}
+            // Enhanced mobile-specific configurations
+            longPressDelay={isMobile ? 150 : 1000}
+            selectLongPressDelay={isMobile ? 150 : 1000}
+            eventLongPressDelay={isMobile ? 150 : 1000}
+            // Improve touch interactions  
+            selectMinDistance={isMobile ? 3 : 0}
+            // Ensure events are clickable on all devices
+            eventStartEditable={false}
+            eventDurationEditable={false}
+            // Additional mobile optimizations
+            stickyHeaderDates={true} // Headers das datas também sticky
+            dayHeaderFormat={
+              currentCalendarViewType === 'dayGridMonth'
+                ? (isMobile ? { weekday: 'short' } : { weekday: 'long' })
+                : (isMobile ? { weekday: 'short', day: 'numeric' } : { weekday: 'long', day: 'numeric' })
+            }
+            allDaySlot={false} // Remove all-day slot - not used
+            nowIndicator={true} // Mostrar linha do horário atual
+          />
+        </Paper>
+      </Box>
 
       {/* Enhanced Timesheet Entry Dialog */}
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={getTenantUiLocale(tenantContext)}>
@@ -2808,7 +2832,7 @@ const TimesheetCalendar: React.FC = () => {
                   component="span"
                   sx={{ fontWeight: 600 }}
                 >
-                  {selectedEntry ? 'Edit Entry' : 'New Entry'}
+                  {selectedEntry ? t('timesheets.entry.editTitle') : t('timesheets.entry.newTitle')}
                 </Typography>
               </Box>
               
@@ -2821,7 +2845,11 @@ const TimesheetCalendar: React.FC = () => {
               }}>
                 {selectedEntry && selectedEntry.technician && (
                   <Chip
-                    label={isMobile ? selectedEntry.technician.name : `Owner: ${selectedEntry.technician.name}`}
+                    label={
+                      isMobile
+                        ? selectedEntry.technician.name
+                        : t('timesheets.ownerLabel', { name: selectedEntry.technician.name })
+                    }
                     color="primary"
                     size="small"
                     variant="filled"
@@ -2885,7 +2913,7 @@ const TimesheetCalendar: React.FC = () => {
                         }
                       }}
                       size={isMobile ? "medium" : "small"}
-                      title={showAISuggestions ? 'Hide AI Suggestions' : 'Show AI Suggestions'}
+                      title={showAISuggestions ? t('timesheets.ai.hideSuggestions') : t('timesheets.ai.showSuggestions')}
                     >
                       <Typography sx={{ fontSize: '1.2rem' }}>🤖</Typography>
                     </IconButton>
@@ -2928,14 +2956,14 @@ const TimesheetCalendar: React.FC = () => {
                   <Grid item xs={12}>
                     <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
                       <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
-                        👤 Worker
+                        {t('timesheets.sections.worker')}
                       </Typography>
                       
                       <TextField
                         select
                         fullWidth
                         size="small"
-                        label="Worker"
+                        label={t('timesheets.labels.worker')}
                         value={selectedTechnicianId || ''}
                         onChange={(e) => {
                           const newTechId = e.target.value === '' ? '' : parseInt(e.target.value);
@@ -2946,18 +2974,18 @@ const TimesheetCalendar: React.FC = () => {
                         id="timesheet-worker-field"
                       >
                         <MenuItem value="" disabled>
-                          Select Worker
+                          {t('timesheets.placeholders.selectWorker')}
                         </MenuItem>
                         {/* Show current timesheet owner even if not in availableTechnicians */}
                         {selectedEntry && selectedEntry.technician && 
                          !availableTechnicians.find(t => t.id === selectedEntry.technician_id) && (
                           <MenuItem key={selectedEntry.technician.id} value={selectedEntry.technician.id}>
-                            {selectedEntry.technician.name} (Entry Owner)
+                            {selectedEntry.technician.name} ({t('timesheets.labels.entryOwner')})
                           </MenuItem>
                         )}
                         {availableTechnicians.map((tech) => (
                           <MenuItem key={tech.id} value={tech.id}>
-                            {tech.name} {tech.email === user?.email ? '(You)' : ''}
+                            {tech.name} {tech.email === user?.email ? `(${t('timesheets.labels.you')})` : ''}
                           </MenuItem>
                         ))}
                       </TextField>
@@ -2969,13 +2997,13 @@ const TimesheetCalendar: React.FC = () => {
                     <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
                       <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
                         <TimeIcon color="primary" />
-                        Date & Time
+                        {t('timesheets.sections.dateTime')}
                       </Typography>
                       
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={4}>
                           <DatePicker
-                            label="Date"
+                            label={t('timesheets.labels.date')}
                             value={selectedDate}
                             onChange={(newDate) => setSelectedDate(newDate)}
                             format={datePickerFormat}
@@ -2991,7 +3019,7 @@ const TimesheetCalendar: React.FC = () => {
                         
                         <Grid item xs={6} sm={4}>
                           <TimePicker
-                            label="Start Time"
+                            label={t('timesheets.labels.startTime')}
                             value={startTimeObj}
                             onChange={(newTime) => {
                               setStartTimeObj(newTime);
@@ -3024,7 +3052,7 @@ const TimesheetCalendar: React.FC = () => {
                         
                         <Grid item xs={6} sm={4}>
                           <TimePicker
-                            label="End Time"
+                            label={t('timesheets.labels.endTime')}
                             value={endTimeObj}
                             onChange={(newTime) => setEndTimeObj(newTime)}
                             ampm={timePickerAmpm}
@@ -3048,7 +3076,7 @@ const TimesheetCalendar: React.FC = () => {
                     <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
                       <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
                         <ProjectIcon color="primary" />
-                        Project Details
+                        {t('timesheets.sections.projectDetails')}
                       </Typography>
                       
                       <Grid container spacing={2}>
@@ -3058,7 +3086,7 @@ const TimesheetCalendar: React.FC = () => {
                             fullWidth
                             required
                             size="small"
-                            label="Project"
+                            label={t('timesheets.labels.project')}
                             value={projectId}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -3069,13 +3097,13 @@ const TimesheetCalendar: React.FC = () => {
                             id="timesheet-project-field"
                             SelectProps={{
                               renderValue: (value) => {
-                                if (!value || value === '') return 'Select a project';
+                                if (!value || value === '') return t('timesheets.placeholders.selectProject');
                                 const selectedProject = projects.find(p => p.id === value);
-                                return selectedProject ? selectedProject.name : 'Select a project';
+                                return selectedProject ? selectedProject.name : t('timesheets.placeholders.selectProject');
                               }
                             }}
                           >
-                            <MenuItem value="">Select a project</MenuItem>
+                            <MenuItem value="">{t('timesheets.placeholders.selectProject')}</MenuItem>
                             {(projects || []).map((project) => (
                               <MenuItem key={project.id} value={project.id}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 2 }}>
@@ -3122,7 +3150,7 @@ const TimesheetCalendar: React.FC = () => {
                             fullWidth
                             required
                             size="small"
-                            label="Task"
+                            label={t('timesheets.labels.task')}
                             value={taskId || 0}
                             onChange={(e) => setTaskId(Number(e.target.value))}
                             variant="outlined"
@@ -3130,13 +3158,13 @@ const TimesheetCalendar: React.FC = () => {
                             id="timesheet-task-field"
                             SelectProps={{
                               renderValue: (value) => {
-                                if (!value || value === 0) return 'Select a task';
+                                if (!value || value === 0) return t('timesheets.placeholders.selectTask');
                                 const selectedTask = filteredTasks.find(t => t.id === value);
-                                return selectedTask ? selectedTask.name : 'Select a task';
+                                return selectedTask ? selectedTask.name : t('timesheets.placeholders.selectTask');
                               }
                             }}
                           >
-                            <MenuItem value={0}>Select a task</MenuItem>
+                            <MenuItem value={0}>{t('timesheets.placeholders.selectTask')}</MenuItem>
                             {(filteredTasks || []).map((task) => (
                               <MenuItem key={task.id} value={task.id}>
                                 {task.name}
@@ -3151,7 +3179,7 @@ const TimesheetCalendar: React.FC = () => {
                             fullWidth
                             required
                             size="small"
-                            label="Location"
+                            label={t('timesheets.labels.location')}
                             value={locationId}
                             onChange={(e) => setLocationId(e.target.value)}
                             variant="outlined"
@@ -3160,7 +3188,7 @@ const TimesheetCalendar: React.FC = () => {
                               startAdornment: <LocationIcon color="action" sx={{ mr: 1 }} />
                             }}
                           >
-                            <MenuItem value="">Select a location</MenuItem>
+                            <MenuItem value="">{t('timesheets.placeholders.selectLocation')}</MenuItem>
                             {(filteredLocations || []).map((location) => {
                               const latitude = Number(location.latitude);
                               const longitude = Number(location.longitude);
@@ -3193,7 +3221,7 @@ const TimesheetCalendar: React.FC = () => {
                     <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'white' }}>
                       <Typography variant="h6" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
                         <TaskIcon color="primary" />
-                        Description
+                        {t('timesheets.sections.description')}
                       </Typography>
                       
                       <TextField
@@ -3203,12 +3231,12 @@ const TimesheetCalendar: React.FC = () => {
                         size="small"
                         minRows={1}
                         maxRows={4}
-                        label="Work Description"
+                        label={t('timesheets.labels.workDescription')}
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Describe the work performed..."
+                        placeholder={t('timesheets.placeholders.workDescription')}
                         variant="outlined"
-                        helperText={description.length ? `${description.length} characters` : ''}
+                        helperText={description.length ? t('timesheets.description.count', { count: description.length }) : ''}
                         id="timesheet-description-field"
                         sx={{
                           '& .MuiInputBase-root': {
@@ -3232,7 +3260,7 @@ const TimesheetCalendar: React.FC = () => {
               size="small"
               sx={{ minWidth: 80 }}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             {selectedEntry && (
               <Button
@@ -3243,7 +3271,7 @@ const TimesheetCalendar: React.FC = () => {
                 disabled={loading || isReadOnlyMode || (selectedEntry.status === 'approved')}
                 sx={{ minWidth: 80 }}
               >
-                Delete
+                {t('common.delete')}
               </Button>
             )}
             <Button
@@ -3265,7 +3293,7 @@ const TimesheetCalendar: React.FC = () => {
                 }
               }}
             >
-              {loading ? 'Saving...' : 'SAVE'}
+              {loading ? t('common.saving') : t('common.save')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -3278,12 +3306,14 @@ const TimesheetCalendar: React.FC = () => {
           fullWidth
         >
           <DialogTitle>
-            Travel Details - {selectedTravelDate ? formatTenantDate(selectedTravelDate, tenantContext) : ''}
+            {selectedTravelDate
+              ? t('timesheets.travels.titleWithDate', { date: formatTenantDate(selectedTravelDate, tenantContext) })
+              : t('timesheets.travels.title')}
           </DialogTitle>
           <DialogContent>
             <Box sx={{ mt: 2 }}>
               {selectedTravels.length === 0 ? (
-                <Typography>No travels found for this date.</Typography>
+                <Typography>{t('timesheets.travels.empty')}</Typography>
               ) : (
                 selectedTravels.map((travel) => (
                   <Box
@@ -3299,30 +3329,30 @@ const TimesheetCalendar: React.FC = () => {
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2" color="text.secondary">
-                          Technician
+                          {t('timesheets.travels.fields.technician')}
                         </Typography>
                         <Typography variant="body1">
-                          {travel.technician?.name || 'Unknown'}
+                          {travel.technician?.name || t('common.unknown')}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2" color="text.secondary">
-                          Project
+                          {t('timesheets.travels.fields.project')}
                         </Typography>
                         <Typography variant="body1">
-                          {travel.project?.name || 'Unknown'}
+                          {travel.project?.name || t('common.unknown')}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2" color="text.secondary">
-                          Departure
+                          {t('timesheets.travels.fields.departure')}
                         </Typography>
                         <Typography variant="body1">
                           {travel.start_at 
                             ? formatTenantDateTime(travel.start_at, tenantContext)
                             : travel.travel_date 
                               ? formatTenantDate(travel.travel_date, tenantContext)
-                              : 'N/A'}
+                              : t('common.notAvailable')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {travel.origin_city ? `${travel.origin_city}, ` : ''}{travel.origin_country}
@@ -3330,12 +3360,12 @@ const TimesheetCalendar: React.FC = () => {
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2" color="text.secondary">
-                          Arrival
+                          {t('timesheets.travels.fields.arrival')}
                         </Typography>
                         <Typography variant="body1">
                           {travel.end_at 
                             ? formatTenantDateTime(travel.end_at, tenantContext)
-                            : 'N/A'}
+                            : t('common.notAvailable')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {travel.destination_city ? `${travel.destination_city}, ` : ''}{travel.destination_country}
@@ -3344,27 +3374,30 @@ const TimesheetCalendar: React.FC = () => {
                       {travel.duration_minutes && travel.duration_minutes > 0 && (
                         <Grid item xs={12} sm={6}>
                           <Typography variant="subtitle2" color="text.secondary">
-                            Duration
+                            {t('timesheets.travels.fields.duration')}
                           </Typography>
                           <Typography variant="body1">
-                            {Math.floor(travel.duration_minutes / 60)}h {travel.duration_minutes % 60}min
+                            {t('timesheets.travels.durationValue', {
+                              hours: Math.floor(travel.duration_minutes / 60),
+                              minutes: travel.duration_minutes % 60,
+                            })}
                           </Typography>
                         </Grid>
                       )}
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2" color="text.secondary">
-                          Direction
+                          {t('timesheets.travels.fields.direction')}
                         </Typography>
                         <Typography variant="body1">
-                          {travel.direction?.replace(/_/g, ' ').toUpperCase() || 'OTHER'}
+                          {travel.direction?.replace(/_/g, ' ').toUpperCase() || t('common.otherUpper')}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2" color="text.secondary">
-                          Status
+                          {t('timesheets.travels.fields.status')}
                         </Typography>
                         <Chip 
-                          label={travel.status?.toUpperCase() || 'UNKNOWN'}
+                          label={travel.status?.toUpperCase() || t('common.unknownUpper')}
                           size="small"
                           color={
                             travel.status === 'completed' ? 'success' : 
@@ -3376,7 +3409,7 @@ const TimesheetCalendar: React.FC = () => {
                       {travel.classification_reason && (
                         <Grid item xs={12}>
                           <Typography variant="subtitle2" color="text.secondary">
-                            Classification Reason
+                            {t('timesheets.travels.fields.classificationReason')}
                           </Typography>
                           <Typography variant="body2">
                             {travel.classification_reason}
@@ -3391,7 +3424,7 @@ const TimesheetCalendar: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setTravelDetailsOpen(false)} variant="outlined">
-              Close
+              {t('common.close')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -3401,8 +3434,8 @@ const TimesheetCalendar: React.FC = () => {
           title={confirmDialog.title}
           message={confirmDialog.message}
           recordDetails={confirmDialog.recordDetails}
-          confirmText="Delete"
-          cancelText="Cancel"
+          confirmText={t('common.delete')}
+          cancelText={t('common.cancel')}
           confirmColor="error"
           onConfirm={confirmDialog.action}
           onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
