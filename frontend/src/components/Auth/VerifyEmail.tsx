@@ -12,10 +12,12 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useNotification } from '../../contexts/NotificationContext';
 import api, { API_URL } from '../../services/api';
 import { CaptchaWidget, type CaptchaChallenge } from './CaptchaWidget';
+import { useTranslation } from 'react-i18next';
 
 type CaptchaStatus = 'idle' | 'required' | 'verifying' | 'verified' | 'expired';
 
 const VerifyEmail: React.FC = () => {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
@@ -94,16 +96,16 @@ const VerifyEmail: React.FC = () => {
   const completeRequest = useCallback(async (captchaTokenValue?: string | null) => {
     if (!token) {
       setStatus('error');
-      setMessage('Verification token is missing');
+      setMessage(t('auth.verify.errors.missingToken'));
       setErrorType('missing_token');
-      showError('Invalid verification link');
+      showError(t('auth.verify.errors.invalidLink'));
       return;
     }
 
     if (isRateLimited) {
       setStatus('error');
       setErrorType('rate_limited');
-      setMessage('Too many attempts. Please wait before trying again.');
+      setMessage(t('auth.verify.errors.rateLimited'));
       return;
     }
 
@@ -125,8 +127,8 @@ const VerifyEmail: React.FC = () => {
 
       if (response.status === 200) {
         setStatus('success');
-        setMessage(response.data.message || 'Your workspace has been created!');
-        showSuccess('Your workspace has been created! Redirecting to login...');
+        setMessage(response.data.message || t('auth.verify.success.created'));
+        showSuccess(t('auth.verify.success.redirecting'));
 
         setTimeout(() => {
           if (response.data.login_url) {
@@ -143,7 +145,7 @@ const VerifyEmail: React.FC = () => {
         resetCaptcha();
         setStatus('error');
         setErrorType('rate_limited');
-        setMessage('Too many attempts. Please wait before trying again.');
+        setMessage(t('auth.verify.errors.rateLimited'));
 
         const retryAfterHeader = (response.headers as any)?.['retry-after'];
         const parsed = Number(retryAfterHeader);
@@ -166,15 +168,15 @@ const VerifyEmail: React.FC = () => {
         setCaptchaWidgetKey((k) => k + 1);
         setStatus('captcha');
         setErrorType('captcha_required');
-        setMessage('Please complete the security check.');
+        setMessage(t('auth.verify.errors.securityCheck'));
         return;
       }
 
       if (response.status === 422 && response.data?.code === 'email_not_verified') {
         setStatus('error');
         setErrorType('email_not_verified');
-        setMessage('Please verify your email first, then try again.');
-        showError('Email not verified');
+        setMessage(t('auth.verify.errors.emailNotVerified'));
+        showError(t('auth.verify.errors.emailNotVerifiedTitle'));
         return;
       }
 
@@ -182,24 +184,24 @@ const VerifyEmail: React.FC = () => {
       setErrorType(response.data?.error || 'unknown');
 
       if (response.data?.error === 'expired') {
-        setMessage('This verification link has expired. Please start the registration process again.');
+        setMessage(t('auth.verify.errors.expired'));
       } else if (response.data?.error === 'not_found') {
-        setMessage('Invalid verification link. Please check your email or start registration again.');
+        setMessage(t('auth.verify.errors.notFound'));
       } else if (response.data?.error === 'slug_taken') {
-        setMessage('This workspace name is no longer available. Please start registration again with a different name.');
+        setMessage(t('auth.verify.errors.slugTaken'));
       } else {
-        setMessage(response.data?.message || 'Signup failed. Please try again or contact support.');
+        setMessage(response.data?.message || t('auth.verify.errors.signupFailed'));
       }
 
-      showError(response.data?.message || 'Signup failed');
+      showError(response.data?.message || t('auth.verify.errors.signupFailedTitle'));
     } catch (error: any) {
       console.error('Signup completion failed:', error);
       setStatus('error');
       setErrorType('unknown');
-      setMessage('Signup failed. Please try again or contact support.');
-      showError('Signup failed');
+      setMessage(t('auth.verify.errors.signupFailed'));
+      showError(t('auth.verify.errors.signupFailedTitle'));
     }
-  }, [isRateLimited, navigate, resetCaptcha, showError, showSuccess, startCooldown, token]);
+  }, [isRateLimited, navigate, resetCaptcha, showError, showSuccess, startCooldown, t, token]);
 
   useEffect(() => {
     resetCaptcha();
@@ -209,7 +211,7 @@ const VerifyEmail: React.FC = () => {
 
     if (!token) {
       setStatus('error');
-      setMessage('Verification token is missing');
+      setMessage(t('auth.verify.errors.missingToken'));
       setErrorType('missing_token');
       return;
     }
@@ -227,20 +229,20 @@ const VerifyEmail: React.FC = () => {
       setErrorType(reason || 'unknown');
 
       if (reason === 'expired') {
-        setMessage('This verification link has expired. Please start the registration process again.');
+        setMessage(t('auth.verify.errors.expired'));
       } else if (reason === 'not_found') {
-        setMessage('Invalid verification link. Please check your email or start registration again.');
+        setMessage(t('auth.verify.errors.notFound'));
       } else if (reason === 'missing_token') {
-        setMessage('Verification token is missing. Please check your email link.');
+        setMessage(t('auth.verify.errors.missingTokenLink'));
       } else {
-        setMessage('Verification failed. Please try again or contact support.');
+        setMessage(t('auth.verify.errors.verificationFailed'));
       }
       return;
     }
 
     // Email verified -> final submit creates tenant (may still require CAPTCHA).
     void completeRequest(null);
-  }, [API_URL, completeRequest, reason, resetCaptcha, token, verified]);
+  }, [API_URL, completeRequest, reason, resetCaptcha, t, token, verified]);
 
   return (
     <Box
@@ -267,10 +269,10 @@ const VerifyEmail: React.FC = () => {
           <>
             <CircularProgress size={64} sx={{ mb: 3 }} />
             <Typography variant="h5" gutterBottom>
-              Verifying your email...
+              {t('auth.verify.loadingTitle')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Please wait while we verify your email address.
+              {t('auth.verify.loadingBody')}
             </Typography>
           </>
         )}
@@ -279,13 +281,13 @@ const VerifyEmail: React.FC = () => {
           <>
             <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
             <Typography variant="h5" gutterBottom color="success.main">
-              Email Verified!
+              {t('auth.verify.success.title')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
               {message}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Your workspace has been successfully created. Redirecting you to login...
+              {t('auth.verify.success.redirecting')}
             </Typography>
             <CircularProgress size={24} />
           </>
@@ -295,10 +297,10 @@ const VerifyEmail: React.FC = () => {
           <>
             <ErrorIcon sx={{ fontSize: 64, color: 'warning.main', mb: 2 }} />
             <Typography variant="h5" gutterBottom color="warning.main">
-              Security Check Required
+              {t('auth.verify.captcha.title')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-              {message || 'Please complete the security check to continue.'}
+              {message || t('auth.verify.captcha.body')}
             </Typography>
 
             {captcha && (
@@ -318,14 +320,14 @@ const VerifyEmail: React.FC = () => {
                 fullWidth
                 disabled={isRateLimited || captchaStatus === 'verifying' || captchaStatus !== 'verified' || !captchaToken}
               >
-                Create Workspace
+                {t('auth.verify.captcha.submit')}
               </Button>
               <Button
                 variant="outlined"
                 onClick={() => navigate('/')}
                 fullWidth
               >
-                Go to Home
+                {t('auth.verify.common.goHome')}
               </Button>
             </Box>
           </>
@@ -335,7 +337,7 @@ const VerifyEmail: React.FC = () => {
           <>
             <ErrorIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
             <Typography variant="h5" gutterBottom color="error.main">
-              Verification Failed
+              {t('auth.verify.error.title')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
               {message}
@@ -348,7 +350,7 @@ const VerifyEmail: React.FC = () => {
                   onClick={() => navigate('/register')}
                   fullWidth
                 >
-                  Start Registration Again
+                  {t('auth.verify.error.retryRegistration')}
                 </Button>
               )}
               
@@ -358,7 +360,7 @@ const VerifyEmail: React.FC = () => {
                   onClick={() => navigate('/login')}
                   fullWidth
                 >
-                  Go to Login
+                  {t('auth.verify.error.goLogin')}
                 </Button>
               )}
               
@@ -367,7 +369,7 @@ const VerifyEmail: React.FC = () => {
                 onClick={() => navigate('/')}
                 fullWidth
               >
-                Go to Home
+                {t('auth.verify.common.goHome')}
               </Button>
             </Box>
           </>

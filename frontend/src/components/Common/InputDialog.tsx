@@ -8,6 +8,7 @@ import {
   Button,
   TextField
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface InputDialogProps {
   open: boolean;
@@ -27,15 +28,20 @@ const InputDialog: React.FC<InputDialogProps> = ({
   open,
   title,
   message,
-  label = 'Input',
+  label,
   required = true,
   multiline = false,
   rows = 1,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   onConfirm,
   onCancel,
 }) => {
+  const { t } = useTranslation();
+  const resolvedLabel = label ?? t('common.input');
+  const resolvedConfirmText = confirmText ?? t('common.confirm');
+  const resolvedCancelText = cancelText ?? t('common.cancel');
+
   const [value, setValue] = useState('');
 
   const handleConfirm = () => {
@@ -66,7 +72,7 @@ const InputDialog: React.FC<InputDialogProps> = ({
         <TextField
           autoFocus
           margin="dense"
-          label={label}
+          label={resolvedLabel}
           fullWidth
           multiline={multiline}
           rows={multiline ? rows : undefined}
@@ -82,14 +88,14 @@ const InputDialog: React.FC<InputDialogProps> = ({
       </DialogContent>
       <DialogActions>
         <Button onClick={handleCancel} color="inherit">
-          {cancelText}
+          {resolvedCancelText}
         </Button>
         <Button 
           onClick={handleConfirm} 
           variant="contained" 
           disabled={required && !value.trim()}
         >
-          {confirmText}
+          {resolvedConfirmText}
         </Button>
       </DialogActions>
     </Dialog>
