@@ -1,4 +1,4 @@
-import type { TenantContext } from '../components/Auth/AuthContext';
+import type { TenantContext } from '../types/tenant';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 

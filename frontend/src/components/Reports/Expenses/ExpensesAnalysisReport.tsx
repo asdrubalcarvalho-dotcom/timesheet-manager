@@ -37,6 +37,7 @@ import { useBilling } from '../../../contexts/BillingContext';
 import { getTenantAiState } from '../../Common/aiState';
 import { API_URL, fetchWithAuth } from '../../../services/api';
 import { formatTenantDate, formatTenantMoney, formatTenantMonth, getTenantDatePickerFormat } from '../../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
 
 type ExpenseEntry = {
   id?: number;
@@ -146,6 +147,7 @@ const quantile = (sortedAsc: number[], q: number): number | null => {
 };
 
 const ExpensesAnalysisReport: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
@@ -155,6 +157,21 @@ const ExpensesAnalysisReport: React.FC = () => {
   const formatMoney = useMemo(() => {
     return (amount: number) => formatTenantMoney(amount, tenantContext);
   }, [tenantContext]);
+
+  const getStatusLabel = (value: string): string => {
+    switch (value) {
+      case 'submitted':
+        return t('approvals.expenses.status.submitted');
+      case 'finance_review':
+        return t('approvals.expenses.status.financeReview');
+      case 'finance_approved':
+        return t('approvals.expenses.status.financeApproved');
+      case 'paid':
+        return t('approvals.expenses.status.paid');
+      default:
+        return value;
+    }
+  };
 
   const baselineFilters = useMemo(
     () => ({
@@ -188,6 +205,7 @@ const ExpensesAnalysisReport: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
+  const noExpensesMessage = t('reports.expensesAnalysis.noExpenses');
 
   useEffect(() => {
     let mounted = true;
@@ -721,10 +739,10 @@ const ExpensesAnalysisReport: React.FC = () => {
     for (const exp of filteredExpenses) {
       const amount = safeAmount(exp.amount);
 
-      const cat = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
+      const cat = typeof exp.category === 'string' && exp.category.trim() ? exp.category : t('reports.expensesAnalysis.outliers.uncategorized');
       byCategory.set(cat, (byCategory.get(cat) ?? 0) + amount);
 
-      const st = typeof exp.status === 'string' && exp.status.trim() ? exp.status : 'unknown';
+      const st = typeof exp.status === 'string' && exp.status.trim() ? exp.status : t('common.unknown');
       byStatus.set(st, (byStatus.get(st) ?? 0) + amount);
     }
 
@@ -742,7 +760,7 @@ const ExpensesAnalysisReport: React.FC = () => {
       categories: toRows(byCategory),
       statuses: toRows(byStatus),
     };
-  }, [filteredExpenses]);
+  }, [filteredExpenses, t]);
 
   const aiInsightsNode = useMemo(() => {
     return (
@@ -860,29 +878,39 @@ const ExpensesAnalysisReport: React.FC = () => {
     }
 
     if (q.includes('mix') || q.includes('share') || q.includes('distribution')) {
-      if (filteredExpenses.length === 0) return 'No expenses match the current filters.';
-      if (spendMix.totalSpend <= 0) return 'Spend mix is not available (total spend is 0 for the current filters).';
+      if (filteredExpenses.length === 0) return t('reports.expensesAnalysis.ai.noExpenses');
+      if (spendMix.totalSpend <= 0) return t('reports.expensesAnalysis.ai.spendMixUnavailable');
 
       const topCats = spendMix.categories.slice(0, 5);
       const topStatuses = spendMix.statuses.slice(0, 5);
 
       return [
-        `Spend mix (range ${rangeDisplay.from} → ${rangeDisplay.to}): total ${formatMoney(spendMix.totalSpend)}`,
-        'Top categories:',
+        t('reports.expensesAnalysis.ai.spendMixHeader', {
+          from: rangeDisplay.from,
+          to: rangeDisplay.to,
+          total: formatMoney(spendMix.totalSpend),
+        }),
+        t('reports.expensesAnalysis.ai.topCategories'),
         ...topCats.map((r) => `- ${r.key}: ${r.share.toFixed(1)}% (${formatMoney(r.total)})`),
-        'Top statuses:',
+        t('reports.expensesAnalysis.ai.topStatuses'),
         ...topStatuses.map((r) => `- ${r.key}: ${r.share.toFixed(1)}% (${formatMoney(r.total)})`),
       ].join('\n');
     }
 
     return [
-      `Expenses analysis (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
-      `- Total: ${formatMoney(kpis.totalValue)} (${kpis.count} expenses)`,
-      `- Pending Review: ${kpis.pendingReview}`,
-      `- Finance Review: ${kpis.financeReview}`,
-      `- Approved: ${kpis.approved}`,
-      `- Paid: ${kpis.paid}`,
-      'Ask about “categories”, “projects”, “outliers”, “what changed”, “status funnel”, “data quality”, “movers”, or “mix”.',
+      t('reports.expensesAnalysis.ai.summaryHeader', {
+        from: rangeDisplay.from,
+        to: rangeDisplay.to,
+      }),
+      t('reports.expensesAnalysis.ai.summaryTotal', {
+        total: formatMoney(kpis.totalValue),
+        count: kpis.count,
+      }),
+      t('reports.expensesAnalysis.ai.summaryPending', { count: kpis.pendingReview }),
+      t('reports.expensesAnalysis.ai.summaryFinanceReview', { count: kpis.financeReview }),
+      t('reports.expensesAnalysis.ai.summaryApproved', { count: kpis.approved }),
+      t('reports.expensesAnalysis.ai.summaryPaid', { count: kpis.paid }),
+      t('reports.expensesAnalysis.ai.summaryPrompt'),
     ].join('\n');
   };
 
@@ -891,19 +919,19 @@ const ExpensesAnalysisReport: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Stack spacing={2}>
-        <PageHeader title="Expenses Analysis" subtitle="Spend, trends and approvals" />
+        <PageHeader title={t('reports.expensesAnalysis.title')} subtitle={t('reports.expensesAnalysis.subtitle')} />
 
         <ReportFiltersCard
           expanded={filtersExpanded}
           onToggleExpanded={() => setFiltersExpanded(!filtersExpanded)}
           activeFiltersCount={activeFiltersCount}
           onClearAll={clearAll}
-          resultsLabel={loading ? undefined : `${filteredExpenses.length} results`}
+          resultsLabel={loading ? undefined : t('reports.expensesAnalysis.results', { count: filteredExpenses.length })}
         >
           <Grid container spacing={1} alignItems="center">
             <Grid item xs={12} md={3}>
               <DatePicker
-                label="From"
+                label={t('reports.expensesAnalysis.filters.from')}
                 value={toDayjsOrNull(from)}
                 onChange={(v) => {
                   if (!v || !v.isValid()) return;
@@ -916,7 +944,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
             <Grid item xs={12} md={3}>
               <DatePicker
-                label="To"
+                label={t('reports.expensesAnalysis.filters.to')}
                 value={toDayjsOrNull(to)}
                 onChange={(v) => {
                   if (!v || !v.isValid()) return;
@@ -929,17 +957,17 @@ const ExpensesAnalysisReport: React.FC = () => {
 
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel id="expenses-analysis-status">Status</InputLabel>
+                <InputLabel id="expenses-analysis-status">{t('reports.expensesAnalysis.filters.status')}</InputLabel>
                 <Select
                   labelId="expenses-analysis-status"
-                  label="Status"
+                  label={t('reports.expensesAnalysis.filters.status')}
                   value={status}
                   onChange={(e) => setStatus(String(e.target.value))}
                 >
-                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="all">{t('reports.expensesAnalysis.filters.all')}</MenuItem>
                   {statusOptions.map((s) => (
                     <MenuItem key={s} value={s}>
-                      {s}
+                      {getStatusLabel(s)}
                     </MenuItem>
                   ))}
                 </Select>
@@ -948,14 +976,14 @@ const ExpensesAnalysisReport: React.FC = () => {
 
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel id="expenses-analysis-category">Category</InputLabel>
+                <InputLabel id="expenses-analysis-category">{t('reports.expensesAnalysis.filters.category')}</InputLabel>
                 <Select
                   labelId="expenses-analysis-category"
-                  label="Category"
+                  label={t('reports.expensesAnalysis.filters.category')}
                   value={category}
                   onChange={(e) => setCategory(String(e.target.value))}
                 >
-                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="all">{t('reports.expensesAnalysis.filters.all')}</MenuItem>
                   {categories.map((c) => (
                     <MenuItem key={c} value={c}>
                       {c}
@@ -967,17 +995,17 @@ const ExpensesAnalysisReport: React.FC = () => {
 
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel id="expenses-analysis-project">Project</InputLabel>
+                <InputLabel id="expenses-analysis-project">{t('reports.expensesAnalysis.filters.project')}</InputLabel>
                 <Select
                   labelId="expenses-analysis-project"
-                  label="Project"
+                  label={t('reports.expensesAnalysis.filters.project')}
                   value={projectId}
                   onChange={(e) => {
                     const v = e.target.value;
                     setProjectId(v === 'all' ? 'all' : Number(v));
                   }}
                 >
-                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="all">{t('reports.expensesAnalysis.filters.all')}</MenuItem>
                   {projects.map((p) => (
                     <MenuItem key={p.id} value={p.id}>
                       {p.name}
@@ -989,14 +1017,14 @@ const ExpensesAnalysisReport: React.FC = () => {
           </Grid>
         </ReportFiltersCard>
 
-        {!canQuery && <Alert severity="info">Select a valid date range.</Alert>}
+        {!canQuery && <Alert severity="info">{t('reports.expensesAnalysis.validation.range')}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
 
         {loading && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" color="text.secondary">
-              Loading expenses…
+              {t('reports.expensesAnalysis.loading')}
             </Typography>
           </Box>
         )}
@@ -1009,13 +1037,13 @@ const ExpensesAnalysisReport: React.FC = () => {
                   <Grid item xs={12} md={3}>
                     <Stack spacing={0.3}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                        TOTAL VALUE
+                        {t('reports.expensesAnalysis.kpis.totalValue')}
                       </Typography>
                       <Typography variant="h5" fontWeight={700} color="white">
                         {formatMoney(kpis.totalValue)}
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
-                        {kpis.count} expenses
+                        {t('reports.expensesAnalysis.kpis.totalCount', { count: kpis.count })}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -1025,7 +1053,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Grid item xs={6} sm={3}>
                         <Stack spacing={0.3}>
                           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                            Pending Review
+                            {t('reports.expensesAnalysis.kpis.pendingReview')}
                           </Typography>
                           <Typography variant="h6" fontWeight={600} color="white">
                             {kpis.pendingReview}
@@ -1035,7 +1063,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Grid item xs={6} sm={3}>
                         <Stack spacing={0.3}>
                           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                            Finance Review
+                            {t('reports.expensesAnalysis.kpis.financeReview')}
                           </Typography>
                           <Typography variant="h6" fontWeight={600} color="white">
                             {kpis.financeReview}
@@ -1045,7 +1073,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Grid item xs={6} sm={3}>
                         <Stack spacing={0.3}>
                           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                            Approved
+                            {t('reports.expensesAnalysis.kpis.approved')}
                           </Typography>
                           <Typography variant="h6" fontWeight={600} color="white">
                             {kpis.approved}
@@ -1055,7 +1083,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Grid item xs={6} sm={3}>
                         <Stack spacing={0.3}>
                           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                            Paid
+                            {t('reports.expensesAnalysis.kpis.paid')}
                           </Typography>
                           <Typography variant="h6" fontWeight={600} color="white">
                             {kpis.paid}
@@ -1082,10 +1110,10 @@ const ExpensesAnalysisReport: React.FC = () => {
                 >
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                      Trends
+                      {t('reports.expensesAnalysis.trends.title')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Spend and expense count over time for the current filters
+                      {t('reports.expensesAnalysis.trends.subtitle')}
                     </Typography>
                   </Box>
 
@@ -1099,21 +1127,21 @@ const ExpensesAnalysisReport: React.FC = () => {
                     }}
                     aria-label="Trends granularity"
                   >
-                    <ToggleButton value="day">Daily</ToggleButton>
-                    <ToggleButton value="week">Weekly</ToggleButton>
-                    <ToggleButton value="month">Monthly</ToggleButton>
+                    <ToggleButton value="day">{t('reports.expensesAnalysis.trends.daily')}</ToggleButton>
+                    <ToggleButton value="week">{t('reports.expensesAnalysis.trends.weekly')}</ToggleButton>
+                    <ToggleButton value="month">{t('reports.expensesAnalysis.trends.monthly')}</ToggleButton>
                   </ToggleButtonGroup>
                 </Box>
 
                 {filteredExpenses.length > 0 && trends.series.length === 0 ? (
                   <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-                    Trends not available from current data (missing expense dates).
+                    {t('reports.expensesAnalysis.trends.missingDates')}
                   </Alert>
                 ) : null}
 
                 {filteredExpenses.length === 0 ? (
                   <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-                    No expenses match the current filters.
+                    {t('reports.expensesAnalysis.trends.noExpenses')}
                   </Alert>
                 ) : (
                   <Box sx={{ width: '100%', height: 260 }}>
@@ -1132,13 +1160,19 @@ const ExpensesAnalysisReport: React.FC = () => {
                         <YAxis yAxisId="count" orientation="right" allowDecimals={false} tick={{ fontSize: 12 }} />
                         <Tooltip
                           formatter={(value: any, name: any) => {
-                            if (name === 'spend') return [formatMoney(Number(value) || 0), 'Total Spend'];
-                            if (name === 'count') return [String(Number(value) || 0), 'Expense Count'];
+                            if (name === 'spend') return [formatMoney(Number(value) || 0), t('reports.expensesAnalysis.trends.totalSpend')];
+                            if (name === 'count') return [String(Number(value) || 0), t('reports.expensesAnalysis.trends.expenseCount')];
                             return [String(value), String(name)];
                           }}
                         />
                         <Legend
-                          formatter={(value: any) => (value === 'spend' ? 'Total Spend' : value === 'count' ? 'Expense Count' : String(value))}
+                          formatter={(value: any) =>
+                            value === 'spend'
+                              ? t('reports.expensesAnalysis.trends.totalSpend')
+                              : value === 'count'
+                              ? t('reports.expensesAnalysis.trends.expenseCount')
+                              : String(value)
+                          }
                         />
                         <Area
                           yAxisId="spend"
@@ -1167,7 +1201,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                   <Grid item xs={12} sm={6} md={3}>
                     <Stack spacing={0.25}>
                       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                        PEAK PERIOD
+                        {t('reports.expensesAnalysis.trends.peakPeriod')}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {trends.insights.peak ? `${trends.insights.peak.label} · ${formatMoney(trends.insights.peak.spend)}` : '—'}
@@ -1177,7 +1211,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                   <Grid item xs={12} sm={6} md={3}>
                     <Stack spacing={0.25}>
                       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                        LOWEST PERIOD
+                        {t('reports.expensesAnalysis.trends.lowestPeriod')}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {trends.insights.lowest ? `${trends.insights.lowest.label} · ${formatMoney(trends.insights.lowest.spend)}` : '—'}
@@ -1187,7 +1221,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                   <Grid item xs={12} sm={6} md={3}>
                     <Stack spacing={0.25}>
                       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                        CHANGE VS PREVIOUS
+                        {t('reports.expensesAnalysis.trends.changeVsPrevious')}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {typeof trends.insights.pctChange === 'number'
@@ -1199,7 +1233,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                   <Grid item xs={12} sm={6} md={3}>
                     <Stack spacing={0.25}>
                       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                        SPEND VOLATILITY
+                        {t('reports.expensesAnalysis.trends.spendVolatility')}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {typeof trends.insights.volatility === 'number'
@@ -1217,11 +1251,11 @@ const ExpensesAnalysisReport: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                      Breakdown by Category
+                      {t('reports.expensesAnalysis.breakdown.categoryTitle')}
                     </Typography>
                     {breakdownByCategory.length === 0 ? (
                       <Alert severity="info" variant="outlined">
-                        No expenses match the current filters.
+                        {noExpensesMessage}
                       </Alert>
                     ) : (
                       <Stack spacing={1.5}>
@@ -1257,7 +1291,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                                   if (name === 'total') {
                                     const count = ctx?.payload?.count;
                                     const suffix = Number.isFinite(count) ? ` (${count})` : '';
-                                    return [`${formatMoney(Number(value) || 0)}${suffix}`, 'Spend'];
+                                    return [`${formatMoney(Number(value) || 0)}${suffix}`, t('reports.expensesAnalysis.breakdown.spendLabel')];
                                   }
                                   return [String(value), String(name)];
                                 }}
@@ -1289,11 +1323,11 @@ const ExpensesAnalysisReport: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                      Breakdown by Project
+                      {t('reports.expensesAnalysis.breakdown.projectTitle')}
                     </Typography>
                     {breakdownByProject.length === 0 ? (
                       <Alert severity="info" variant="outlined">
-                        No expenses match the current filters.
+                        {noExpensesMessage}
                       </Alert>
                     ) : (
                       <Stack spacing={1.5}>
@@ -1363,28 +1397,38 @@ const ExpensesAnalysisReport: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                      Outliers
+                      {t('reports.expensesAnalysis.outliers.title')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Detect unusually large expenses using an IQR threshold (Q3 + 1.5×IQR)
+                      {t('reports.expensesAnalysis.outliers.subtitle')}
                     </Typography>
 
                     {filteredExpenses.length === 0 ? (
                       <Alert severity="info" variant="outlined">
-                        No expenses match the current filters.
+                        {noExpensesMessage}
                       </Alert>
                     ) : outliers.threshold === null ? (
                       <Alert severity="info">
-                        Not enough variation to compute an outlier threshold for this result set.
+                        {t('reports.expensesAnalysis.outliers.notEnoughVariation')}
                       </Alert>
                     ) : outliers.rows.length === 0 ? (
-                      <Alert severity="success">No outliers detected (threshold &gt; {formatMoney(outliers.threshold)}).</Alert>
+                      <Alert severity="success">
+                        {t('reports.expensesAnalysis.outliers.noneDetected', {
+                          threshold: formatMoney(outliers.threshold),
+                        })}
+                      </Alert>
                     ) : (
                       <Stack spacing={1}>
-                        <Alert severity="warning">Outlier threshold &gt; {formatMoney(outliers.threshold)}</Alert>
+                        <Alert severity="warning">
+                          {t('reports.expensesAnalysis.outliers.threshold', {
+                            threshold: formatMoney(outliers.threshold),
+                          })}
+                        </Alert>
                         {outliers.rows.map(({ exp, amount }) => {
                           const name = exp.project?.name ? String(exp.project.name) : `Project #${exp.project_id}`;
-                          const cat = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
+                          const cat = typeof exp.category === 'string' && exp.category.trim()
+                            ? exp.category
+                            : t('reports.expensesAnalysis.outliers.uncategorized');
                           const ymd = typeof exp.date === 'string' ? exp.date.slice(0, 10) : '';
                           const ymdLabel = ymd ? formatTenantDate(ymd, tenantContext) : '—';
                           return (
@@ -1408,15 +1452,18 @@ const ExpensesAnalysisReport: React.FC = () => {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                      What changed
+                      {t('reports.expensesAnalysis.change.title')}
                     </Typography>
                     {previousRange ? (
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Comparison vs previous period {formatTenantDate(previousRange.from, tenantContext)} → {formatTenantDate(previousRange.to, tenantContext)}
+                        {t('reports.expensesAnalysis.change.subtitle', {
+                          from: formatTenantDate(previousRange.from, tenantContext),
+                          to: formatTenantDate(previousRange.to, tenantContext),
+                        })}
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Select a valid date range to compare.
+                        {t('reports.expensesAnalysis.change.invalidRange')}
                       </Typography>
                     )}
 
@@ -1424,7 +1471,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Stack spacing={1}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                           <Typography variant="body2" color="text.primary" sx={{ fontWeight: 600 }}>
-                            Total spend
+                            {t('reports.expensesAnalysis.change.totalSpend')}
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>
                             {formatMoney(comparison.current.total)} vs {formatMoney(comparison.previous.total)}
@@ -1433,7 +1480,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                           <Typography variant="body2" color="text.primary" sx={{ fontWeight: 600 }}>
-                            Change
+                            {t('reports.expensesAnalysis.change.delta')}
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>
                             {formatMoney(comparison.delta.total)}
@@ -1445,7 +1492,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                           <Typography variant="body2" color="text.primary" sx={{ fontWeight: 600 }}>
-                            Volume
+                            {t('reports.expensesAnalysis.change.volume')}
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>
                             {comparison.current.count} vs {comparison.previous.count}
@@ -1457,7 +1504,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
                         <Box sx={{ pt: 0.5 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                            TOP CATEGORY (CURRENT → PREVIOUS)
+                            {t('reports.expensesAnalysis.change.topCategory')}
                           </Typography>
                           <Typography variant="body2" color="text.primary">
                             {breakdownByCategory[0]
@@ -1472,7 +1519,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
                         <Box sx={{ pt: 0.5 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                            TOP PROJECT (CURRENT → PREVIOUS)
+                            {t('reports.expensesAnalysis.change.topProject')}
                           </Typography>
                           <Typography variant="body2" color="text.primary">
                             {breakdownByProject[0]
@@ -1494,15 +1541,15 @@ const ExpensesAnalysisReport: React.FC = () => {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                  Status funnel
+                  {t('reports.expensesAnalysis.statusFunnel.title')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Counts and spend by status for the current filters
+                  {t('reports.expensesAnalysis.statusFunnel.subtitle')}
                 </Typography>
 
                 {filteredExpenses.length === 0 ? (
                   <Alert severity="info" variant="outlined">
-                    No expenses match the current filters.
+                    {noExpensesMessage}
                   </Alert>
                 ) : (
                   <>
@@ -1511,7 +1558,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                         <ComposedChart
                           layout="vertical"
                           data={statusBreakdown.map((s) => ({
-                            name: s.statusKey,
+                            name: getStatusLabel(s.statusKey),
                             total: s.total,
                             count: s.count,
                           }))}
@@ -1529,9 +1576,9 @@ const ExpensesAnalysisReport: React.FC = () => {
                               if (name === 'total') {
                                 const count = ctx?.payload?.count;
                                 const suffix = Number.isFinite(count) ? ` (${count})` : '';
-                                return [`${formatMoney(Number(value) || 0)}${suffix}`, 'Spend'];
+                                return [`${formatMoney(Number(value) || 0)}${suffix}`, t('reports.expensesAnalysis.breakdown.spendLabel')];
                               }
-                              if (name === 'count') return [String(Number(value) || 0), 'Count'];
+                              if (name === 'count') return [String(Number(value) || 0), t('reports.expensesAnalysis.statusFunnel.countLabel')];
                               return [String(value), String(name)];
                             }}
                           />
@@ -1544,7 +1591,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Grid item xs={12} sm={6} md={4}>
                         <Stack spacing={0.25}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                            SUBMITTED → PAID
+                            {t('reports.expensesAnalysis.statusFunnel.submittedToPaid')}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {typeof statusFunnel.rates.submittedToPaid === 'number'
@@ -1556,7 +1603,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Grid item xs={12} sm={6} md={4}>
                         <Stack spacing={0.25}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                            SUBMITTED → FINANCE REVIEW
+                            {t('reports.expensesAnalysis.statusFunnel.submittedToFinanceReview')}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {typeof statusFunnel.rates.submittedToFinanceReview === 'number'
@@ -1568,7 +1615,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Grid item xs={12} sm={6} md={4}>
                         <Stack spacing={0.25}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                            FINANCE REVIEW → FINANCE APPROVED
+                            {t('reports.expensesAnalysis.statusFunnel.financeReviewToApproved')}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {typeof statusFunnel.rates.financeReviewToFinanceApproved === 'number'
@@ -1586,22 +1633,22 @@ const ExpensesAnalysisReport: React.FC = () => {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                  Data quality
+                  {t('reports.expensesAnalysis.dataQuality.title')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Coverage indicators for the current filtered result set
+                  {t('reports.expensesAnalysis.dataQuality.subtitle')}
                 </Typography>
 
                 {filteredExpenses.length === 0 ? (
                   <Alert severity="info" variant="outlined">
-                    No expenses match the current filters.
+                    {noExpensesMessage}
                   </Alert>
                 ) : (
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6} md={3}>
                       <Stack spacing={0.25}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                          MISSING CATEGORY
+                          {t('reports.expensesAnalysis.dataQuality.missingCategory')}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {dataQuality.missingCategory}
@@ -1611,7 +1658,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                     <Grid item xs={12} sm={6} md={3}>
                       <Stack spacing={0.25}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                          MISSING PROJECT NAME
+                          {t('reports.expensesAnalysis.dataQuality.missingProject')}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {dataQuality.missingProjectName}
@@ -1621,7 +1668,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                     <Grid item xs={12} sm={6} md={3}>
                       <Stack spacing={0.25}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                          UNPARSEABLE TREND DATES
+                          {t('reports.expensesAnalysis.dataQuality.unparseableDates')}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {dataQuality.unparseableTrendDates}
@@ -1631,7 +1678,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                     <Grid item xs={12} sm={6} md={3}>
                       <Stack spacing={0.25}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                          RESULTS
+                          {t('reports.expensesAnalysis.dataQuality.results')}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {dataQuality.total}
@@ -1646,25 +1693,28 @@ const ExpensesAnalysisReport: React.FC = () => {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                  Top movers
+                  {t('reports.expensesAnalysis.movers.title')}
                 </Typography>
                 {!previousRange ? (
-                  <Alert severity="info">Select a valid date range to compare with the previous period.</Alert>
+                  <Alert severity="info">{t('reports.expensesAnalysis.movers.invalidRange')}</Alert>
                 ) : (
                   <>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Biggest spend deltas vs previous period {formatTenantDate(previousRange.from, tenantContext)} → {formatTenantDate(previousRange.to, tenantContext)}
+                      {t('reports.expensesAnalysis.movers.subtitle', {
+                        from: formatTenantDate(previousRange.from, tenantContext),
+                        to: formatTenantDate(previousRange.to, tenantContext),
+                      })}
                     </Typography>
 
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={6}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                          Categories
+                          {t('reports.expensesAnalysis.movers.categories')}
                         </Typography>
                         <Grid container spacing={2}>
                           <Grid item xs={12} sm={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                              INCREASES
+                              {t('reports.expensesAnalysis.movers.increases')}
                             </Typography>
                             <Stack spacing={0.75} sx={{ mt: 0.75 }}>
                               {(moversByCategory?.increases ?? []).filter((r) => r.deltaTotal > 0).slice(0, 5).length === 0 ? (
@@ -1785,23 +1835,23 @@ const ExpensesAnalysisReport: React.FC = () => {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                  Spend mix
+                  {t('reports.expensesAnalysis.spendMix.title')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Share of total spend by category and status
+                  {t('reports.expensesAnalysis.spendMix.subtitle')}
                 </Typography>
 
                 {filteredExpenses.length === 0 ? (
                   <Alert severity="info" variant="outlined">
-                    No expenses match the current filters.
+                    {t('reports.expensesAnalysis.noExpenses')}
                   </Alert>
                 ) : spendMix.totalSpend <= 0 ? (
-                  <Alert severity="info">Spend mix not available (total spend is 0 for the current filters).</Alert>
+                  <Alert severity="info">{t('reports.expensesAnalysis.ai.spendMixUnavailable')}</Alert>
                 ) : (
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                        Category mix
+                        {t('reports.expensesAnalysis.spendMix.categoryTitle')}
                       </Typography>
                       <Box sx={{ width: '100%', height: 240 }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -1849,7 +1899,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
                     <Grid item xs={12} md={6}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                        Status mix
+                        {t('reports.expensesAnalysis.spendMix.statusTitle')}
                       </Typography>
                       <Box sx={{ width: '100%', height: 240 }}>
                         <ResponsiveContainer width="100%" height="100%">

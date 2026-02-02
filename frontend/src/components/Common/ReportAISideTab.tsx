@@ -29,12 +29,13 @@ const ReportAISideTab: React.FC<Props> = ({
   aiState,
   insights,
   insightSuggestions = [],
-  title = 'AI',
+  title,
   onUpgrade,
   onOpenSettings,
   onAsk,
 }) => {
   const { t } = useTranslation();
+  const resolvedTitle = title ?? t('rightPanel.tabs.ai');
   const { open } = useRightPanel();
   const canChat = useMemo(() => aiState === 'enabled' && typeof onAsk === 'function', [aiState, onAsk]);
   const [draftQuestion, setDraftQuestion] = useState<string>('');
@@ -89,7 +90,7 @@ const ReportAISideTab: React.FC<Props> = ({
   const aiTab = useMemo(
     () => ({
       id: 'ai-chat',
-      label: title,
+      label: resolvedTitle,
       order: 10,
       render: () => (
         <Box>
@@ -143,7 +144,7 @@ const ReportAISideTab: React.FC<Props> = ({
         </Box>
       ),
     }),
-    [title, aiState, onUpgrade, onOpenSettings, canChat, onAsk, insightSuggestions, draftQuestion, t]
+    [resolvedTitle, aiState, onUpgrade, onOpenSettings, canChat, onAsk, insightSuggestions, draftQuestion, t]
   );
 
   useRegisterRightPanelTab(insightsTab);

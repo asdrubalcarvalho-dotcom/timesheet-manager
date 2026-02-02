@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import dayjs from 'dayjs';
-import type { TenantContext } from '../components/Auth/AuthContext';
+import type { TenantContext } from '../types/tenant';
 import { formatTenantTime, getTenantHourCycle, getTenantTimeFormat, getTenantUiLocale } from './tenantFormatting';
 
 const ctx = (overrides: Partial<TenantContext> = {}): TenantContext => ({
@@ -15,7 +15,7 @@ const ctx = (overrides: Partial<TenantContext> = {}): TenantContext => ({
 
 describe('getTenantUiLocale', () => {
   it('EU + locale pt-PT + no ui_locale => "en"', () => {
-    expect(getTenantUiLocale(ctx({ region: 'EU', locale: 'pt-PT', ui_locale: null }))).toBe('en');
+    expect(getTenantUiLocale(ctx({ region: 'EU', locale: 'pt-PT', ui_locale: undefined }))).toBe('en');
   });
 
   it('EU + ui_locale "pt" => "pt"', () => {
@@ -23,7 +23,7 @@ describe('getTenantUiLocale', () => {
   });
 
   it('US + locale en-US => "en"', () => {
-    expect(getTenantUiLocale(ctx({ region: 'US', locale: 'en-US', date_format: 'm/d/Y', ui_locale: null }))).toBe('en');
+    expect(getTenantUiLocale(ctx({ region: 'US', locale: 'en-US', date_format: 'm/d/Y', ui_locale: undefined }))).toBe('en');
   });
 });
 

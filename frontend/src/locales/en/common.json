@@ -19,6 +19,87 @@
       "title": "Need help?",
       "subtitle": "Browse docs and AI tips for faster answers.",
       "tip": "Tip: Ask the AI tab for summaries, anomalies, and next steps.",
+      "fallbackTitle": "Help",
+      "fallbackBody": "No help is available for this page yet.",
+      "timesheets": {
+        "title": "Timesheets help",
+        "intro": "Quick tips for managing calendar entries and travel visibility.",
+        "sections": {
+          "calendar": {
+            "title": "Calendar",
+            "bullets": {
+              "switchViews": "Switch between Month, Week, and List views from the toolbar.",
+              "createEdit": "Click a day to add an entry; click an entry to edit.",
+              "scope": "Managers can toggle Mine / Others / All in the header."
+            }
+          },
+          "travels": {
+            "title": "Travels",
+            "bullets": {
+              "indicators": "Travel indicators appear on calendar days with trips.",
+              "listView": "In list views, click the ✈ travel line to see details."
+            }
+          },
+          "insights": {
+            "title": "Insights",
+            "bullets": {
+              "alerts": "Alerts highlight AI flags and policy issues.",
+              "weekly": "Weekly breakdown is available in Week view.",
+              "filters": "Use the daily hours cap chip to filter overages."
+            }
+          },
+          "ai": {
+            "title": "AI Chat",
+            "bullets": {
+              "chat": "Ask for summaries of flagged entries or trends.",
+              "suggestions": "Use suggestion chips to start a question."
+            }
+          }
+        },
+        "comingSoon": {
+          "title": "Coming soon",
+          "bullets": {
+            "dragRange": "Select and drag a time range to create entries across multiple days/hours.",
+            "aiDrafts": "Ask AI to generate draft entries for a selected date range (you review before saving)."
+          }
+        }
+      },
+      "timesheetsReports": {
+        "title": "Timesheet reports",
+        "intro": "Use reports to analyze hours, costs, and activity by project, task, and technician.",
+        "sections": {
+          "filters": {
+            "title": "Filters & scope",
+            "bullets": {
+              "dateRange": "Use the date range to focus on a specific period.",
+              "projectTask": "Filter by project and task to drill into specific work.",
+              "technicianScope": "Switch scope (mine / others / all) if you have permissions."
+            }
+          },
+          "analysis": {
+            "title": "Analysis",
+            "bullets": {
+              "grouping": "Group results by project, task, technician, or day to spot patterns.",
+              "totals": "Review totals to validate expected hours and compare periods.",
+              "readResults": "Click rows to inspect details before taking action."
+            }
+          },
+          "exports": {
+            "title": "Export & actions",
+            "bullets": {
+              "downloads": "Export the current view for sharing or offline review.",
+              "share": "Use consistent filters before sharing results with the team."
+            }
+          },
+          "ai": {
+            "title": "Use AI with reports",
+            "bullets": {
+              "questions": "Ask AI questions like “why did hours spike last week?”.",
+              "summaries": "Ask AI to summarize key insights and anomalies from the report."
+            }
+          }
+        }
+      },
       "docsTitle": "Documentation",
       "terms": "Terms of service",
       "privacy": "Privacy policy",
