@@ -11,6 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Clear, ExpandLess, ExpandMore, FilterList } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
   expanded: boolean;
@@ -29,6 +30,8 @@ const ReportFiltersCard: React.FC<Props> = ({
   resultsLabel,
   children,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <Card sx={{ mb: 1 }}>
       <CardContent sx={{ py: 1.25 }}>
@@ -45,7 +48,7 @@ const ReportFiltersCard: React.FC<Props> = ({
               <FilterList />
             </Badge>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Filters
+              {t('common.filters')}
             </Typography>
             {activeFiltersCount > 0 && resultsLabel ? (
               <Chip label={resultsLabel} size="small" color="primary" variant="outlined" />
@@ -59,7 +62,7 @@ const ReportFiltersCard: React.FC<Props> = ({
                 onClick={onClearAll}
                 sx={{ textTransform: 'none' }}
               >
-                Clear All
+                {t('common.clearAll')}
               </Button>
             ) : null}
             <IconButton size="small" onClick={onToggleExpanded}>

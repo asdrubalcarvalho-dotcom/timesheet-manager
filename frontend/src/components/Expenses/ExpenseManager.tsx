@@ -28,6 +28,7 @@ import { getAuthHeaders, fetchWithAuth, API_URL, techniciansApi, projectsApi } f
 import { useTenantGuard } from '../../hooks/useTenantGuard';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
+import { useTranslation } from 'react-i18next';
 import {
   displayDistanceToKm,
   displayRateToRatePerKm,
@@ -73,18 +74,19 @@ interface ExpenseEntry {
 }
 
 const expenseCategories = [
-  { value: 'general', label: 'General' },
-  { value: 'travel', label: 'Travel' },
-  { value: 'meals', label: 'Meals' },
-  { value: 'lodging', label: 'Lodging' },
-  { value: 'fuel', label: 'Fuel' },
-  { value: 'parking', label: 'Parking' },
-  { value: 'materials', label: 'Materials' },
-  { value: 'tools', label: 'Tools' },
-  { value: 'other', label: 'Other' },
+  { value: 'general', labelKey: 'expenses.categories.general' },
+  { value: 'travel', labelKey: 'expenses.categories.travel' },
+  { value: 'meals', labelKey: 'expenses.categories.meals' },
+  { value: 'lodging', labelKey: 'expenses.categories.lodging' },
+  { value: 'fuel', labelKey: 'expenses.categories.fuel' },
+  { value: 'parking', labelKey: 'expenses.categories.parking' },
+  { value: 'materials', labelKey: 'expenses.categories.materials' },
+  { value: 'tools', labelKey: 'expenses.categories.tools' },
+  { value: 'other', labelKey: 'expenses.categories.other' },
 ];
 
 export const ExpenseManager: React.FC = () => {
+  const { t } = useTranslation();
   const { showSuccess, showError, showWarning } = useNotification();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
@@ -147,14 +149,14 @@ export const ExpenseManager: React.FC = () => {
           const message =
             errorData?.message ||
             errorData?.error ||
-            `Failed to load expenses: ${response.statusText}`;
+            t('expenses.errors.loadFailedStatus', { status: response.statusText });
           showError(message);
         }
       }
     } catch (error) {
       console.error('Failed to load expenses:', error);
       setExpenses([]); // Set empty array on error
-      showError('Failed to load expenses. Please try again.');
+      showError(t('expenses.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -266,7 +268,7 @@ export const ExpenseManager: React.FC = () => {
     const isProjectValid = projectId > 0 && projects.some((project) => project.id === projectId);
     if (!isProjectValid) {
       setProjectId(0);
-      showError('Please select a valid project for the chosen technician.');
+      showError(t('expenses.validation.projectForTechnician'));
       return;
     }
 
@@ -348,11 +350,11 @@ export const ExpenseManager: React.FC = () => {
           savedTechnicianId !== selectedTechnicianId
         ) {
           showWarning(
-            'You are not allowed to create/edit expenses for that worker. The record was saved for a different technician.'
+            t('expenses.warning.workerOverride')
           );
         }
 
-        showSuccess(`Expense ${selectedExpense ? 'updated' : 'created'} successfully`);
+        showSuccess(t('expenses.toast.saved', { action: selectedExpense ? t('expenses.toast.updated') : t('expenses.toast.created') }));
         loadExpenses();
         setDialogOpen(false);
         resetForm();
@@ -364,11 +366,14 @@ export const ExpenseManager: React.FC = () => {
           (errorData?.details && typeof errorData.details === 'object'
             ? Object.values(errorData.details).flat()?.[0]
             : null) ||
-          `Failed to ${selectedExpense ? 'update' : 'create'} expense`;
+          t('expenses.errors.saveFailed', { action: selectedExpense ? t('expenses.toast.updated') : t('expenses.toast.created') });
         showError(message);
       }
     } catch (error: any) {
-      showError(error.response?.data?.message || `Failed to ${selectedExpense ? 'update' : 'create'} expense`);
+      showError(
+        error.response?.data?.message ||
+          t('expenses.errors.saveFailed', { action: selectedExpense ? t('expenses.toast.updated') : t('expenses.toast.created') })
+      );
     }
   };
 
@@ -377,7 +382,7 @@ export const ExpenseManager: React.FC = () => {
       showReadOnlyWarning();
       return;
     }
-    if (window.confirm('Are you sure you want to delete this expense?')) {
+    if (window.confirm(t('expenses.delete.confirm'))) {
       try {
         const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}`, {
           method: 'DELETE',
@@ -385,18 +390,18 @@ export const ExpenseManager: React.FC = () => {
         });
 
         if (response.ok) {
-          showSuccess('Expense deleted successfully');
+          showSuccess(t('expenses.toast.deleted'));
           loadExpenses();
         } else {
           try {
             const data = await response.json();
-            showError(data?.message || 'Failed to delete expense');
+            showError(data?.message || t('expenses.errors.deleteFailed'));
           } catch {
-            showError('Failed to delete expense');
+            showError(t('expenses.errors.deleteFailed'));
           }
         }
       } catch {
-        showError('Failed to delete expense');
+        showError(t('expenses.errors.deleteFailed'));
       }
     }
   };
@@ -456,8 +461,8 @@ export const ExpenseManager: React.FC = () => {
     
     setInputDialog({
       open: true,
-      title: 'Reject Expense',
-      message: 'Please provide a reason for rejecting this expense:',
+      title: t('expenses.reject.title'),
+      message: t('expenses.reject.message'),
       action: async (reason: string) => {
         try {
           if (isReadOnlyMode) {
@@ -488,13 +493,13 @@ export const ExpenseManager: React.FC = () => {
 
   const getStatusChip = (status: string) => {
     const statusConfig = {
-      draft: { color: 'default' as const, label: 'Draft' },
-      submitted: { color: 'info' as const, label: 'Submitted' },
-      approved: { color: 'success' as const, label: 'Approved (Legacy)' },
-      rejected: { color: 'error' as const, label: 'Rejected' },
-      finance_review: { color: 'warning' as const, label: 'Finance Review' },
-      finance_approved: { color: 'success' as const, label: 'Finance Approved' },
-      paid: { color: 'success' as const, label: 'Paid' },
+      draft: { color: 'default' as const, label: t('expenses.status.draft') },
+      submitted: { color: 'info' as const, label: t('expenses.status.submitted') },
+      approved: { color: 'success' as const, label: t('expenses.status.approvedLegacy') },
+      rejected: { color: 'error' as const, label: t('expenses.status.rejected') },
+      finance_review: { color: 'warning' as const, label: t('expenses.status.financeReview') },
+      finance_approved: { color: 'success' as const, label: t('expenses.status.financeApproved') },
+      paid: { color: 'success' as const, label: t('expenses.status.paid') },
     };
     
     const config = statusConfig[status as keyof typeof statusConfig] || { color: 'default' as const, label: status };
@@ -513,17 +518,17 @@ export const ExpenseManager: React.FC = () => {
   };
 
   const columns: GridColDef<ExpenseEntry>[] = [
-    { field: 'id', headerName: 'ID', width: 80 },
+    { field: 'id', headerName: t('expenses.table.id'), width: 80 },
     {
       field: 'date',
-      headerName: 'Date',
+      headerName: t('expenses.table.date'),
       width: 120,
       valueGetter: (_value, row) => row.date,
       renderCell: (params: GridRenderCellParams<ExpenseEntry>) => formatTenantDate(params.row.date, tenantContext),
     },
     {
       field: 'technician',
-      headerName: 'Technician',
+      headerName: t('expenses.table.technician'),
       minWidth: 160,
       flex: 1,
       valueGetter: (_value, row) => resolveTechnicianName(row),
@@ -531,15 +536,15 @@ export const ExpenseManager: React.FC = () => {
     },
     {
       field: 'project',
-      headerName: 'Project',
+      headerName: t('expenses.table.project'),
       minWidth: 180,
       flex: 1,
-      valueGetter: (_value, row) => row.project?.name || 'Unknown',
-      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => params.row.project?.name || 'Unknown',
+      valueGetter: (_value, row) => row.project?.name || t('common.unknown'),
+      renderCell: (params: GridRenderCellParams<ExpenseEntry>) => params.row.project?.name || t('common.unknown'),
     },
     {
       field: 'amount',
-      headerName: 'Amount',
+      headerName: t('expenses.table.amount'),
       width: 120,
       valueGetter: (_value, row) => Number(row.amount),
       renderCell: (params: GridRenderCellParams<ExpenseEntry>) =>
@@ -547,13 +552,13 @@ export const ExpenseManager: React.FC = () => {
     },
     {
       field: 'description',
-      headerName: 'Description',
+      headerName: t('expenses.table.description'),
       minWidth: 220,
       flex: 2,
     },
     {
       field: 'attachment',
-      headerName: 'Attachment',
+      headerName: t('expenses.table.attachment'),
       width: 120,
       sortable: false,
       filterable: false,
@@ -571,13 +576,13 @@ export const ExpenseManager: React.FC = () => {
                   setPreviewAttachmentUrl(url);
                   setAttachmentPreviewOpen(true);
                 } else {
-                  showError('Failed to load attachment');
+                  showError(t('expenses.errors.attachmentLoadFailed'));
                 }
               } catch {
-                showError('Failed to load attachment');
+                showError(t('expenses.errors.attachmentLoadFailed'));
               }
             }}
-            title="View Attachment"
+            title={t('expenses.table.viewAttachment')}
           >
             <Visibility fontSize="small" />
           </IconButton>
@@ -587,7 +592,7 @@ export const ExpenseManager: React.FC = () => {
     },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('expenses.table.status'),
       width: 170,
       valueGetter: (_value, row) => row.status,
       renderCell: (params: GridRenderCellParams<ExpenseEntry>) => (
@@ -595,7 +600,7 @@ export const ExpenseManager: React.FC = () => {
           {getStatusChip(params.row.status)}
           {params.row.status === 'rejected' && params.row.rejection_reason ? (
             <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5, fontStyle: 'italic' }}>
-              Reason: {params.row.rejection_reason}
+              {t('expenses.table.rejectionReason', { reason: params.row.rejection_reason })}
             </Typography>
           ) : null}
         </Box>
@@ -603,7 +608,7 @@ export const ExpenseManager: React.FC = () => {
     },
     {
       field: 'actions',
-      headerName: 'Actions',
+      headerName: t('expenses.table.actions'),
       width: 120,
       sortable: false,
       filterable: false,
@@ -640,23 +645,23 @@ export const ExpenseManager: React.FC = () => {
       overflow: 'hidden'
     }}>
       <PageHeader
-        title="Expenses"
-        subtitle="Submit expenses with receipts for project-related costs"
+        title={t('expenses.title')}
+        subtitle={t('expenses.subtitle')}
       />
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         {loading && (
           <Typography sx={{ mb: 2, color: 'info.main' }}>
-            Loading expenses...
+            {t('expenses.loading')}
           </Typography>
         )}
 
         {!loading && expenses.length === 0 && (
           <EmptyState
             icon={ReceiptIcon}
-            title="No expenses yet"
-            subtitle="Click the + button to submit your first expense entry"
-            actionLabel="Add Expense"
+            title={t('expenses.empty.title')}
+            subtitle={t('expenses.empty.subtitle')}
+            actionLabel={t('expenses.empty.action')}
             onAction={isReadOnlyMode ? showReadOnlyWarning : handleAddNew}
           />
         )}
@@ -715,12 +720,12 @@ export const ExpenseManager: React.FC = () => {
         <DialogTitle>
           <Box>
             <Typography variant="h6" component="span">
-              {selectedExpense ? 'Edit Expense' : 'New Expense'}
+              {selectedExpense ? t('expenses.dialog.editTitle') : t('expenses.dialog.newTitle')}
             </Typography>
             {selectedExpense && (
               <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Current Status:
+                  {t('expenses.dialog.currentStatus')}
                 </Typography>
                 {getStatusChip(selectedExpense.status)}
               </Box>
@@ -762,7 +767,7 @@ export const ExpenseManager: React.FC = () => {
                     letterSpacing: 0.5
                   }}
                 >
-                  REJECTION REASON
+                  {t('expenses.dialog.rejectionReasonTitle')}
                 </Typography>
                 <Typography 
                   variant="body2" 
@@ -787,14 +792,14 @@ export const ExpenseManager: React.FC = () => {
             <TextField
               select
               fullWidth
-              label="Technician"
+              label={t('expenses.form.technician')}
               value={selectedTechnicianId === '' ? '' : selectedTechnicianId}
               onChange={(e) => {
                 const nextValue = e.target.value === '' ? '' : parseInt(e.target.value, 10);
                 setSelectedTechnicianId(nextValue);
               }}
             >
-              <MenuItem value="">(Default)</MenuItem>
+              <MenuItem value="">{t('expenses.form.defaultTechnician')}</MenuItem>
               {technicians.map((tech) => (
                 <MenuItem key={tech.id} value={tech.id}>
                   {tech.name}
@@ -805,12 +810,12 @@ export const ExpenseManager: React.FC = () => {
             <TextField
               select
               fullWidth
-              label="Project"
+              label={t('expenses.form.project')}
               value={projectId}
               onChange={(e) => setProjectId(Number(e.target.value))}
               required
             >
-              <MenuItem value={0}>Select a project</MenuItem>
+              <MenuItem value={0}>{t('expenses.form.projectPlaceholder')}</MenuItem>
               {projects.map((project) => (
                 <MenuItem key={project.id} value={project.id}>
                   {project.name}
@@ -819,7 +824,7 @@ export const ExpenseManager: React.FC = () => {
             </TextField>
 
             <DatePicker
-              label="Expense Date"
+              label={t('expenses.form.date')}
               value={expenseDate}
               onChange={(newValue) => setExpenseDate(newValue)}
               format={datePickerFormat}
@@ -834,28 +839,28 @@ export const ExpenseManager: React.FC = () => {
             <TextField
               select
               fullWidth
-              label="Expense Type"
+              label={t('expenses.form.type')}
               value={expenseType}
               onChange={(e) => setExpenseType(e.target.value as any)}
               required
             >
-              <MenuItem value="reimbursement">Reimbursement (Receipt Required)</MenuItem>
-              <MenuItem value="mileage">Mileage ({distanceUnit})</MenuItem>
-              <MenuItem value="company_card">Company Card</MenuItem>
+              <MenuItem value="reimbursement">{t('expenses.form.typeReimbursement')}</MenuItem>
+              <MenuItem value="mileage">{t('expenses.form.typeMileage', { unit: distanceUnit })}</MenuItem>
+              <MenuItem value="company_card">{t('expenses.form.typeCompanyCard')}</MenuItem>
             </TextField>
 
             <TextField
               select
               fullWidth
-              label="Category"
+              label={t('expenses.form.category')}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               required
             >
-              <MenuItem value="">Select a category</MenuItem>
+              <MenuItem value="">{t('expenses.form.categoryPlaceholder')}</MenuItem>
               {expenseCategories.map((option) => (
                 <MenuItem key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </MenuItem>
               ))}
             </TextField>
@@ -866,7 +871,7 @@ export const ExpenseManager: React.FC = () => {
                 <TextField
                   type="number"
                   fullWidth
-                  label={`Distance (${getTenantDistanceUnit(tenantContext)})`}
+                  label={t('expenses.form.distance', { unit: getTenantDistanceUnit(tenantContext) })}
                   value={Number.isFinite(distanceKm) ? kmToDisplayDistance(distanceKm, tenantContext) : 0}
                   onChange={(e) => setDistanceKm(displayDistanceToKm(Number(e.target.value), tenantContext))}
                   required
@@ -875,7 +880,10 @@ export const ExpenseManager: React.FC = () => {
                 <TextField
                   type="number"
                   fullWidth
-                  label={`Rate per ${getTenantDistanceUnit(tenantContext)} (${tenantContext?.currency_symbol || '$'})`}
+                  label={t('expenses.form.ratePerUnit', {
+                    unit: getTenantDistanceUnit(tenantContext),
+                    currency: tenantContext?.currency_symbol || '$',
+                  })}
                   value={Number.isFinite(ratePerKm) ? ratePerKmToDisplayRate(ratePerKm, tenantContext) : 0}
                   onChange={(e) => setRatePerKm(displayRateToRatePerKm(Number(e.target.value), tenantContext))}
                   required
@@ -885,24 +893,26 @@ export const ExpenseManager: React.FC = () => {
                 <TextField
                   select
                   fullWidth
-                  label="Vehicle Type"
+                  label={t('expenses.form.vehicleType')}
                   value={vehicleType}
                   onChange={(e) => setVehicleType(e.target.value)}
                   required
                 >
-                  <MenuItem value="car">Car</MenuItem>
-                  <MenuItem value="motorcycle">Motorcycle</MenuItem>
-                  <MenuItem value="bicycle">Bicycle</MenuItem>
+                  <MenuItem value="car">{t('expenses.form.vehicle.car')}</MenuItem>
+                  <MenuItem value="motorcycle">{t('expenses.form.vehicle.motorcycle')}</MenuItem>
+                  <MenuItem value="bicycle">{t('expenses.form.vehicle.bicycle')}</MenuItem>
                 </TextField>
                 <Typography color="info.main">
-                  Calculated amount: {formatTenantMoney(distanceKm * ratePerKm, tenantContext)}
+                  {t('expenses.form.calculatedAmount', {
+                    amount: formatTenantMoney(distanceKm * ratePerKm, tenantContext),
+                  })}
                 </Typography>
               </>
             ) : (
               <TextField
                 type="number"
                 fullWidth
-                label={`Amount (${tenantContext?.currency_symbol || '$'})`}
+                label={t('expenses.form.amount', { currency: tenantContext?.currency_symbol || '$' })}
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
                 required
@@ -912,7 +922,7 @@ export const ExpenseManager: React.FC = () => {
 
             <TextField
               fullWidth
-              label="Description"
+              label={t('expenses.form.description')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               multiline
@@ -926,7 +936,14 @@ export const ExpenseManager: React.FC = () => {
               startIcon={<AttachFile />}
               fullWidth
             >
-              {attachmentFile ? attachmentFile.name : `Upload Receipt ${expenseType === 'reimbursement' ? '(Recommended)' : '(Optional)'}`}
+              {attachmentFile
+                ? attachmentFile.name
+                : t('expenses.form.uploadReceipt', {
+                    hint:
+                      expenseType === 'reimbursement'
+                        ? t('expenses.form.uploadHintRecommended')
+                        : t('expenses.form.uploadHintOptional'),
+                  })}
               <input
                 type="file"
                 hidden
@@ -940,7 +957,7 @@ export const ExpenseManager: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions sx={{ flexWrap: 'wrap', gap: 1, p: 2 }}>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
           
           {/* Save/Update button (only for draft/rejected or new) */}
           {(!selectedExpense || selectedExpense.status === 'draft' || selectedExpense.status === 'rejected') && (
@@ -951,28 +968,28 @@ export const ExpenseManager: React.FC = () => {
               color="primary"
               disabled={isReadOnlyMode}
             >
-              {selectedExpense ? 'Update' : 'Save as Draft'}
+              {selectedExpense ? t('expenses.dialog.update') : t('expenses.dialog.saveDraft')}
             </Button>
           )}
           
           {/* Submit button (only for draft/rejected) */}
           {selectedExpense && (selectedExpense.status === 'draft' || selectedExpense.status === 'rejected') && (
             <Button onClick={handleSubmit} variant="contained" color="primary" disabled={isReadOnlyMode}>
-              Submit for Approval
+              {t('expenses.dialog.submitForApproval')}
             </Button>
           )}
           
           {/* Approve button (only for submitted - Manager) */}
           {selectedExpense && selectedExpense.status === 'submitted' && (
             <Button onClick={handleApprove} variant="contained" color="success" disabled={isReadOnlyMode}>
-              Approve (Send to Finance)
+              {t('expenses.dialog.approveSendToFinance')}
             </Button>
           )}
           
           {/* Reject button (only for submitted or finance_review) */}
           {selectedExpense && (selectedExpense.status === 'submitted' || selectedExpense.status === 'finance_review') && (
             <Button onClick={handleReject} variant="contained" color="error" disabled={isReadOnlyMode}>
-              Reject
+              {t('common.reject')}
             </Button>
           )}
         </DialogActions>
@@ -984,11 +1001,11 @@ export const ExpenseManager: React.FC = () => {
         open={inputDialog.open}
         title={inputDialog.title}
         message={inputDialog.message}
-        label="Rejection Reason"
+        label={t('common.rejectionReason')}
         multiline
         rows={3}
-        confirmText="Reject"
-        cancelText="Cancel"
+        confirmText={t('common.reject')}
+        cancelText={t('common.cancel')}
         onConfirm={inputDialog.action}
         onCancel={() => setInputDialog({ ...inputDialog, open: false })}
       />
@@ -1001,7 +1018,7 @@ export const ExpenseManager: React.FC = () => {
         fullWidth
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          Attachment Preview
+            {t('expenses.attachment.previewTitle')}
           <IconButton onClick={() => setAttachmentPreviewOpen(false)} size="small">
             <Close />
           </IconButton>
@@ -1028,7 +1045,7 @@ export const ExpenseManager: React.FC = () => {
           ) : (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography color="text.secondary">
-                Preview not available for this file type
+                {t('expenses.attachment.previewUnavailable')}
               </Typography>
               <Button
                 variant="outlined"
@@ -1036,7 +1053,7 @@ export const ExpenseManager: React.FC = () => {
                 target="_blank"
                 sx={{ mt: 2 }}
               >
-                Download File
+                {t('expenses.attachment.downloadFile')}
               </Button>
             </Box>
           )}

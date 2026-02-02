@@ -29,6 +29,7 @@ import { getTenantAiState } from '../Common/aiState';
 import ReportFiltersCard from '../Common/ReportFiltersCard';
 import ReportAISideTab from '../Common/ReportAISideTab';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate, formatTenantNumber, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 
@@ -191,13 +192,21 @@ const answerPivotQuestionDeterministically = (
   question: string,
   data: PivotResponse | null,
   rowDimension: Dimension,
-  columnDimension: Dimension
+  columnDimension: Dimension,
+  t: TFunction
 ): string => {
   const q = question.trim().toLowerCase();
 
   if (!data) {
-    return 'Load the pivot report first (select a range and wait for results), then ask again.';
+    return t('timesheetPivot.ai.loadFirst');
   }
+
+  const rowDimensionLabel = rowDimension === 'user'
+    ? t('timesheetPivot.dimensions.user')
+    : t('timesheetPivot.dimensions.project');
+  const columnDimensionLabel = columnDimension === 'user'
+    ? t('timesheetPivot.dimensions.user')
+    : t('timesheetPivot.dimensions.project');
 
   const rowLabelByKey = new Map(data.rows.map((r) => [r.key, r.label] as const));
   const colLabelByKey = new Map(data.columns.map((c) => [c.key, c.label] as const));
@@ -225,13 +234,21 @@ const answerPivotQuestionDeterministically = (
   }
 
   const baseSummaryLines = [
-    `Scope: ${scoped}. Dimensions: ${rowDimension} × ${columnDimension}.`,
-    grand !== null ? `Grand total hours: ${grand}.` : 'Grand total hours: —.',
+    t('timesheetPivot.ai.scopeLine', {
+      scoped,
+      row: rowDimensionLabel,
+      column: columnDimensionLabel,
+    }),
+    grand !== null
+      ? t('timesheetPivot.ai.grandTotal', { hours: grand })
+      : t('timesheetPivot.ai.grandTotalEmpty'),
     peak
-      ? `Peak cell: ${rowLabelByKey.get(peak.rowKey) ?? peak.rowKey} × ${
-          colLabelByKey.get(peak.colKey) ?? peak.colKey
-        } = ${peak.hours}h.`
-      : 'Peak cell: —.',
+      ? t('timesheetPivot.ai.peakCell', {
+          row: rowLabelByKey.get(peak.rowKey) ?? peak.rowKey,
+          column: colLabelByKey.get(peak.colKey) ?? peak.colKey,
+          hours: peak.hours,
+        })
+      : t('timesheetPivot.ai.peakCellEmpty'),
   ];
 
   if (q.includes('grand') || q.includes('total')) {
@@ -239,22 +256,32 @@ const answerPivotQuestionDeterministically = (
   }
 
   if (q.includes('top') || q.includes('highest') || q.includes('most')) {
-    const rowsLabel = rowDimension === 'user' ? 'Users' : 'Projects';
-    const colsLabel = columnDimension === 'user' ? 'Users' : 'Projects';
+    const rowsLabel = rowDimension === 'user'
+      ? t('timesheetPivot.dimensions.users')
+      : t('timesheetPivot.dimensions.projects');
+    const colsLabel = columnDimension === 'user'
+      ? t('timesheetPivot.dimensions.users')
+      : t('timesheetPivot.dimensions.projects');
     const lines = [...baseSummaryLines];
 
     if (topRowTotals.length > 0) {
       lines.push(
-        `${rowsLabel} by total: ${topRowTotals
-          .map((r) => `${r.label} (${r.hours}h)`)
-          .join(', ')}.`
+        t('timesheetPivot.ai.totalsLine', {
+          label: rowsLabel,
+          items: topRowTotals
+            .map((r) => `${r.label} (${t('common.hoursShort', { value: r.hours })})`)
+            .join(', '),
+        })
       );
     }
     if (topColTotals.length > 0) {
       lines.push(
-        `${colsLabel} by total: ${topColTotals
-          .map((c) => `${c.label} (${c.hours}h)`)
-          .join(', ')}.`
+        t('timesheetPivot.ai.totalsLine', {
+          label: colsLabel,
+          items: topColTotals
+            .map((c) => `${c.label} (${t('common.hoursShort', { value: c.hours })})`)
+            .join(', '),
+        })
       );
     }
 
@@ -383,7 +410,7 @@ const TimesheetPivotReport: React.FC = () => {
             ? e.response.data.message
             : typeof e?.message === 'string'
               ? e.message
-              : 'Failed to load pivot report';
+              : t('timesheetPivot.errors.loadFailed');
         setError(message);
         setData(null);
       } finally {
@@ -396,7 +423,7 @@ const TimesheetPivotReport: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [canQuery, payload]);
+  }, [canQuery, payload, t]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -445,7 +472,7 @@ const TimesheetPivotReport: React.FC = () => {
 
       const contentDisposition = response.headers?.['content-disposition'] as string | undefined;
       const filename =
-        getFilenameFromContentDisposition(contentDisposition) || `timesheets_pivot_export.${format}`;
+        getFilenameFromContentDisposition(contentDisposition) || `${t('timesheetPivot.export.filename')}.${format}`;
 
       const blob = response.data as Blob;
       const url = window.URL.createObjectURL(blob);
@@ -462,7 +489,7 @@ const TimesheetPivotReport: React.FC = () => {
           ? e.response.data.message
           : typeof e?.message === 'string'
             ? e.message
-            : 'Failed to export pivot report';
+            : t('timesheetPivot.errors.exportFailed');
       setError(message);
     } finally {
       setExporting(null);
@@ -473,19 +500,28 @@ const TimesheetPivotReport: React.FC = () => {
   const showColumnTotals = data?.totals?.columns && payload.include.column_totals;
   const showGrandTotal = typeof data?.totals?.grand === 'number' && payload.include.grand_total;
 
-  const rowHeaderLabel = rowDimension === 'user' ? 'User' : 'Project';
+  const rowDimensionLabel = rowDimension === 'user'
+    ? t('timesheetPivot.dimensions.user')
+    : t('timesheetPivot.dimensions.project');
+  const columnDimensionLabel = columnDimension === 'user'
+    ? t('timesheetPivot.dimensions.user')
+    : t('timesheetPivot.dimensions.project');
+  const rowHeaderLabel = rowDimensionLabel;
 
   const deterministicInsights = useMemo(() => {
-    const scoped = data?.meta?.scoped ? String(data.meta.scoped) : '—';
+    const scoped = data?.meta?.scoped ? String(data.meta.scoped) : t('rightPanel.insights.emptyValue');
     const grand = typeof data?.totals?.grand === 'number' ? data.totals.grand : null;
-    const dims = `${rowDimension} × ${columnDimension}`;
+    const dims = t('timesheetPivot.dimsLabel', {
+      row: rowDimensionLabel,
+      column: columnDimensionLabel,
+    });
 
     return {
       scoped,
       grand,
       dims,
     };
-  }, [data, rowDimension, columnDimension]);
+  }, [data, rowDimensionLabel, columnDimensionLabel, t]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -506,7 +542,7 @@ const TimesheetPivotReport: React.FC = () => {
   };
 
   const handleAskAi = async (question: string): Promise<string> => {
-    return answerPivotQuestionDeterministically(question, data, rowDimension, columnDimension);
+    return answerPivotQuestionDeterministically(question, data, rowDimension, columnDimension, t);
   };
 
   const fromPickerValue = useMemo(() => {
@@ -576,7 +612,9 @@ const TimesheetPivotReport: React.FC = () => {
   const aiInsightsNode = useMemo(() => {
     const emptyValue = t('rightPanel.insights.emptyValue');
     const formatHours = (value: number | null) =>
-      value !== null ? `${formatTenantNumber(value, tenantContext, 2)}h` : emptyValue;
+      value !== null
+        ? t('common.hoursShort', { value: formatTenantNumber(value, tenantContext, 2) })
+        : emptyValue;
 
     const metrics = [
       {
@@ -639,8 +677,8 @@ const TimesheetPivotReport: React.FC = () => {
     <Box sx={{ p: 3 }}>
       <Stack spacing={2}>
         <PageHeader
-          title="Timesheets Analysis"
-          subtitle="Hours by user × project"
+          title={t('timesheetPivot.title')}
+          subtitle={t('timesheetPivot.subtitle')}
         />
 
         <ReportFiltersCard
@@ -648,28 +686,28 @@ const TimesheetPivotReport: React.FC = () => {
           onToggleExpanded={() => setFiltersExpanded(!filtersExpanded)}
           activeFiltersCount={activeFiltersCount}
           onClearAll={clearAllFilters}
-          resultsLabel={data ? `${data.rows.length} rows` : undefined}
+          resultsLabel={data ? t('timesheetPivot.resultsLabel', { count: data.rows.length }) : undefined}
         >
           <Grid container spacing={1} alignItems="center">
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel id="pivot-period-label">Period</InputLabel>
+                <InputLabel id="pivot-period-label">{t('timesheetPivot.filters.period')}</InputLabel>
                 <Select
                   labelId="pivot-period-label"
-                  label="Period"
+                  label={t('timesheetPivot.filters.period')}
                   value={period}
                   onChange={(e) => setPeriod(e.target.value as Period)}
                 >
-                  <MenuItem value="day">day</MenuItem>
-                  <MenuItem value="week">week</MenuItem>
-                  <MenuItem value="month">month</MenuItem>
+                  <MenuItem value="day">{t('timesheetPivot.periods.day')}</MenuItem>
+                  <MenuItem value="week">{t('timesheetPivot.periods.week')}</MenuItem>
+                  <MenuItem value="month">{t('timesheetPivot.periods.month')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12} md={3}>
               <DatePicker
-                label="From"
+                label={t('timesheetPivot.filters.from')}
                 value={fromPickerValue}
                 onChange={(val) => val && setFrom(val.format('YYYY-MM-DD'))}
                 format={datePickerFormat}
@@ -679,7 +717,7 @@ const TimesheetPivotReport: React.FC = () => {
 
             <Grid item xs={12} md={3}>
               <DatePicker
-                label="To"
+                label={t('timesheetPivot.filters.to')}
                 value={toPickerValue}
                 onChange={(val) => val && setTo(val.format('YYYY-MM-DD'))}
                 format={datePickerFormat}
@@ -689,10 +727,10 @@ const TimesheetPivotReport: React.FC = () => {
 
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel id="pivot-rows-label">Rows</InputLabel>
+                <InputLabel id="pivot-rows-label">{t('timesheetPivot.filters.rows')}</InputLabel>
                 <Select
                   labelId="pivot-rows-label"
-                  label="Rows"
+                  label={t('timesheetPivot.filters.rows')}
                   value={rowDimension}
                   onChange={(e) => {
                     const next = e.target.value as Dimension;
@@ -702,18 +740,18 @@ const TimesheetPivotReport: React.FC = () => {
                     }
                   }}
                 >
-                  <MenuItem value="user">user</MenuItem>
-                  <MenuItem value="project">project</MenuItem>
+                  <MenuItem value="user">{t('timesheetPivot.dimensions.user')}</MenuItem>
+                  <MenuItem value="project">{t('timesheetPivot.dimensions.project')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel id="pivot-columns-label">Columns</InputLabel>
+                <InputLabel id="pivot-columns-label">{t('timesheetPivot.filters.columns')}</InputLabel>
                 <Select
                   labelId="pivot-columns-label"
-                  label="Columns"
+                  label={t('timesheetPivot.filters.columns')}
                   value={columnDimension}
                   onChange={(e) => {
                     const next = e.target.value as Dimension;
@@ -723,8 +761,8 @@ const TimesheetPivotReport: React.FC = () => {
                     }
                   }}
                 >
-                  <MenuItem value="user">user</MenuItem>
-                  <MenuItem value="project">project</MenuItem>
+                  <MenuItem value="user">{t('timesheetPivot.dimensions.user')}</MenuItem>
+                  <MenuItem value="project">{t('timesheetPivot.dimensions.project')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -737,7 +775,7 @@ const TimesheetPivotReport: React.FC = () => {
               <Grid item xs={12} md={4}>
                 <Stack spacing={0.3}>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                    SCOPE
+                    {t('timesheetPivot.labels.scope')}
                   </Typography>
                   <Typography variant="h6" fontWeight={700} color="white">
                     {deterministicInsights.scoped}
@@ -753,17 +791,17 @@ const TimesheetPivotReport: React.FC = () => {
                   <Grid item xs={6} sm={4}>
                     <Stack spacing={0.3}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                        PERIOD
+                        {t('timesheetPivot.labels.period')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
-                        {period}
+                        {t(`timesheetPivot.periods.${period}`)}
                       </Typography>
                     </Stack>
                   </Grid>
                   <Grid item xs={6} sm={4}>
                     <Stack spacing={0.3}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                        RANGE
+                        {t('timesheetPivot.labels.range')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
                         {formatTenantDate(from, tenantContext)} → {formatTenantDate(to, tenantContext)}
@@ -773,12 +811,14 @@ const TimesheetPivotReport: React.FC = () => {
                   <Grid item xs={12} sm={4}>
                     <Stack spacing={0.3}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                        GRAND TOTAL
+                        {t('timesheetPivot.labels.grandTotal')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
                         {deterministicInsights.grand !== null
-                          ? `${formatTenantNumber(deterministicInsights.grand, tenantContext, 2)}h`
-                          : '—'}
+                          ? t('common.hoursShort', {
+                              value: formatTenantNumber(deterministicInsights.grand, tenantContext, 2),
+                            })
+                          : t('rightPanel.insights.emptyValue')}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -796,7 +836,7 @@ const TimesheetPivotReport: React.FC = () => {
             disabled={!canQuery || exporting !== null}
             onClick={() => void handleExport('csv')}
           >
-            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+            {exporting === 'csv' ? t('timesheetPivot.export.exporting') : t('timesheetPivot.export.csv')}
           </Button>
           <Button
             variant="outlined"
@@ -805,12 +845,12 @@ const TimesheetPivotReport: React.FC = () => {
             disabled={!canQuery || exporting !== null}
             onClick={() => void handleExport('xlsx')}
           >
-            {exporting === 'xlsx' ? 'Exporting…' : 'Export XLSX'}
+            {exporting === 'xlsx' ? t('timesheetPivot.export.exporting') : t('timesheetPivot.export.xlsx')}
           </Button>
         </Box>
 
         {!canQuery && (
-          <Alert severity="info">Select a valid date range and different row/column dimensions.</Alert>
+          <Alert severity="info">{t('timesheetPivot.validation.invalidFilters')}</Alert>
         )}
 
         {error && <Alert severity="error">{error}</Alert>}
@@ -819,19 +859,19 @@ const TimesheetPivotReport: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <CircularProgress size={24} />
             <Typography variant="body2" color="text.secondary">
-              Loading…
+              {t('timesheetPivot.loading')}
             </Typography>
           </Box>
         )}
 
         {!loading && data && data.rows.length === 0 && (
-          <Alert severity="info">No data for the selected range.</Alert>
+          <Alert severity="info">{t('timesheetPivot.noData')}</Alert>
         )}
 
         {!loading && data && data.rows.length > 0 && (
           <>
             <Typography variant="body2" color="text.secondary">
-              Scoped: {String(data.meta?.scoped ?? '—')}
+              {t('timesheetPivot.labels.scoped')}: {String(data.meta?.scoped ?? t('rightPanel.insights.emptyValue'))}
             </Typography>
 
             <TableContainer>
@@ -846,7 +886,7 @@ const TimesheetPivotReport: React.FC = () => {
                     ))}
                     {showRowTotals && (
                       <TableCell align="right" sx={{ fontWeight: 700 }}>
-                        Total
+                        {t('timesheetPivot.labels.total')}
                       </TableCell>
                     )}
                   </TableRow>
@@ -879,7 +919,7 @@ const TimesheetPivotReport: React.FC = () => {
 
                   {(showColumnTotals || showGrandTotal) && (
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{t('timesheetPivot.labels.total')}</TableCell>
                       {data.columns.map((c) => (
                         <TableCell key={c.key} align="right" sx={{ fontWeight: 700 }}>
                           {formatTenantNumber(

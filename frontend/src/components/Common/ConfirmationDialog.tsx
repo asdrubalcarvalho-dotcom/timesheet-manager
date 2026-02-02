@@ -11,6 +11,7 @@ import {
   Divider
 } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { useTranslation } from 'react-i18next';
 
 interface RecordDetails {
   code?: string;
@@ -36,12 +37,17 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   title,
   message,
   recordDetails,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   confirmColor = 'error',
   onConfirm,
   onCancel,
 }) => {
+  const { t } = useTranslation();
+
+  const resolvedConfirmText = confirmText ?? t('common.confirm');
+  const resolvedCancelText = cancelText ?? t('common.cancel');
+
   return (
     <Dialog
       open={open}
@@ -61,25 +67,25 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
         {recordDetails && (
           <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              Record Details
+              {t('common.recordDetails')}
             </Typography>
             <Divider sx={{ my: 1 }} />
             
             {recordDetails.code && (
               <Typography variant="body2" sx={{ mb: 0.5 }}>
-                <strong>Code:</strong> {recordDetails.code}
+                <strong>{t('common.code')}:</strong> {recordDetails.code}
               </Typography>
             )}
             
             {recordDetails.name && (
               <Typography variant="body2" sx={{ mb: 0.5 }}>
-                <strong>Name:</strong> {recordDetails.name}
+                <strong>{t('common.name')}:</strong> {recordDetails.name}
               </Typography>
             )}
             
             {recordDetails.description && (
               <Typography variant="body2" sx={{ mb: 0.5 }}>
-                <strong>Description:</strong> {recordDetails.description}
+                <strong>{t('common.description')}:</strong> {recordDetails.description}
               </Typography>
             )}
             
@@ -96,10 +102,10 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} color="inherit">
-          {cancelText}
+          {resolvedCancelText}
         </Button>
         <Button onClick={onConfirm} color={confirmColor} variant="contained" autoFocus>
-          {confirmText}
+          {resolvedConfirmText}
         </Button>
       </DialogActions>
     </Dialog>

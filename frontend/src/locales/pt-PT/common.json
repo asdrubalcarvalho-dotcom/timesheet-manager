@@ -1,0 +1,1023 @@
+{
+  "rightPanel": {
+    "tabs": {
+      "insights": "Insights",
+      "help": "Ajuda",
+      "ai": "Chat IA"
+    },
+    "trigger": {
+      "tooltip": "Insights / Ajuda / IA",
+      "open": "Abrir {{tab}}",
+      "close": "Fechar {{tab}}"
+    },
+    "panelFallback": "Painel",
+    "closePanel": "Fechar painel",
+    "insights": {
+      "emptyValue": "—"
+    },
+    "help": {
+      "title": "Precisa de ajuda?",
+      "subtitle": "Consulte a documentação e dicas de IA para respostas mais rápidas.",
+      "tip": "Dica: use a aba de IA para resumos, anomalias e próximos passos.",
+      "fallbackTitle": "Ajuda",
+      "fallbackBody": "Ainda não há ajuda disponível para esta página.",
+      "timesheets": {
+        "title": "Ajuda de timesheets",
+        "intro": "Dicas rápidas para gerir o calendário e visualizar viagens.",
+        "sections": {
+          "calendar": {
+            "title": "Calendário",
+            "bullets": {
+              "switchViews": "Alterne entre Mês, Semana e Lista pela barra superior.",
+              "createEdit": "Clique num dia para adicionar; clique num lançamento para editar.",
+              "scope": "Gestores podem alternar Meu / Outros / Todos no cabeçalho."
+            }
+          },
+          "travels": {
+            "title": "Viagens",
+            "bullets": {
+              "indicators": "Indicadores de viagem aparecem nos dias com deslocações.",
+              "listView": "Na vista Lista, clique na linha ✈ para ver detalhes."
+            }
+          },
+          "insights": {
+            "title": "Insights",
+            "bullets": {
+              "alerts": "Alertas destacam sinais da IA e avisos de política.",
+              "weekly": "O resumo semanal aparece na vista Semana.",
+              "filters": "Use o chip de limite diário para filtrar excessos."
+            }
+          },
+          "ai": {
+            "title": "Chat IA",
+            "bullets": {
+              "chat": "Peça resumos de sinais ou tendências.",
+              "suggestions": "Use chips de sugestão para iniciar uma pergunta."
+            }
+          }
+        },
+        "comingSoon": {
+          "title": "Em breve",
+          "bullets": {
+            "dragRange": "Selecionar e arrastar um intervalo para criar registos em vários dias/horas.",
+            "aiDrafts": "Pedir à IA para gerar rascunhos de registos para um intervalo de datas (revê antes de gravar)."
+          }
+        }
+      },
+      "timesheetsReports": {
+        "title": "Relatórios de timesheets",
+        "intro": "Use os relatórios para analisar horas, custos e atividade por projeto, tarefa e técnico.",
+        "sections": {
+          "filters": {
+            "title": "Filtros e âmbito",
+            "bullets": {
+              "dateRange": "Use o intervalo de datas para focar num período específico.",
+              "projectTask": "Filtre por projeto e tarefa para analisar trabalho específico.",
+              "technicianScope": "Altere o âmbito (meu / outros / todos) se tiver permissões."
+            }
+          },
+          "analysis": {
+            "title": "Análise",
+            "bullets": {
+              "grouping": "Agrupe por projeto, tarefa, técnico ou dia para detetar padrões.",
+              "totals": "Veja os totais para validar horas e comparar períodos.",
+              "readResults": "Clique nas linhas para ver detalhes antes de agir."
+            }
+          },
+          "exports": {
+            "title": "Exportação e ações",
+            "bullets": {
+              "downloads": "Exporte a vista atual para partilha ou análise offline.",
+              "share": "Use filtros consistentes antes de partilhar resultados com a equipa."
+            }
+          },
+          "ai": {
+            "title": "Use IA nos relatórios",
+            "bullets": {
+              "questions": "Pergunte à IA: “porque aumentaram as horas na semana passada?”.",
+              "summaries": "Peça à IA um resumo de insights e anomalias do relatório."
+            }
+          }
+        }
+      },
+      "docsTitle": "Documentação",
+      "terms": "Termos de serviço",
+      "privacy": "Política de privacidade",
+      "acceptableUse": "Uso aceitável"
+    },
+    "ai": {
+      "title": "Pergunte à IA TimePerk",
+      "subtitle": "Resuma anomalias, aprovações e tendências.",
+      "suggestions": {
+        "flags": "Quais lançamentos foram sinalizados?",
+        "overtime": "Onde as horas extras aumentaram?",
+        "approvals": "Quais aprovações estão pendentes?",
+        "projectCosts": "Quais projetos excederam as horas previstas?"
+      },
+      "placeholderResponse": "Ainda estou a aprender. Por enquanto, posso resumir o relatório com base na tua pergunta.",
+      "errorFallback": "Algo errado ocorreu. Tente novamente.",
+      "viewBilling": "Ver faturação",
+      "addonNotice": "IA disponível como add-on no seu plano.",
+      "billingSettings": "Definições de faturação",
+      "disabledTitle": "IA desativada",
+      "disabledMessage": "Ative a IA nas definições de faturação do tenant para continuar.",
+      "disabledTenant": "A IA está desativada para este tenant.",
+      "unavailable": "A IA não está disponível para este tenant.",
+      "enabledNotice": "Faz uma pergunta para gerar insights.",
+      "errorLabel": "Erro: {{message}}",
+      "you": "Tu",
+      "assistant": "Assistente",
+      "placeholder": "Ainda sem mensagens.",
+      "inputLabel": "Pergunte à IA",
+      "inputPlaceholder": "Escreva uma pergunta…",
+      "sending": "A enviar…",
+      "send": "Enviar"
+    },
+    "reports": {
+      "aiIntro": "Pergunte sobre este relatório ou escolha uma sugestão para começar.",
+      "noInsights": "Sem insights ainda. Execute o relatório para preencher os insights."
+    },
+    "timesheets": {
+      "tabs": {
+        "alerts": "Alertas ({{count}})",
+        "weekly": "Semanal"
+      },
+      "aiReview": "Rever {{count}} sinalizados",
+      "aiAvailableTitle": "Alertas de IA disponíveis",
+      "aiAvailableBody": "{{count}} lançamentos foram sinalizados e estão prontos para revisão.",
+      "caOt2": {
+        "title": "Limite de OT2 atingido",
+        "noDays": "Nenhum dia excedeu o limite de OT2.",
+        "row": "{{date}} — OT2: {{ot2}}h (Total: {{total}}h)"
+      },
+      "noAlerts": "Sem alertas neste período.",
+      "alertExamples": {
+        "overtime": "Picos de horas extras",
+        "missingBreaks": "Pausas ausentes",
+        "policyDrift": "Desvio de política"
+      },
+      "weeklyOnlyInWeek": "O resumo semanal está disponível na vista Semana.",
+      "weeklyPreview": {
+        "regularHours": "Divisão entre horas regulares e extras",
+        "overtimeSplit": "Taxa de horas extras aplicada",
+        "policyKey": "Resumo da política"
+      },
+      "weeklyCta": "Mudar para a vista Semana",
+      "weeklyTitle": "Totais semanais",
+      "weeklyPolicy": "Política: {{policy}}",
+      "weeklyStart": "Semana de {{date}}",
+      "weeklyLoading": "A carregar totais semanais…",
+      "weeklyUnavailable": "Totais semanais indisponíveis.",
+      "weeklyRegular": "Horas regulares",
+      "weeklyOvertime": "Horas extras ({{rate}}x)",
+      "weeklyOvertime2": "Horas extras 2.0"
+    }
+  },
+  "timesheetPivot": {
+    "title": "Análise de folhas de horas",
+    "subtitle": "Horas por utilizador × projeto",
+    "resultsLabel": "{{count}} linhas",
+    "filters": {
+      "period": "Período",
+      "from": "De",
+      "to": "Até",
+      "rows": "Linhas",
+      "columns": "Colunas"
+    },
+    "periods": {
+      "day": "Dia",
+      "week": "Semana",
+      "month": "Mês"
+    },
+    "dimensions": {
+      "user": "Utilizador",
+      "project": "Projeto",
+      "users": "Utilizadores",
+      "projects": "Projetos"
+    },
+    "dimsLabel": "{{row}} × {{column}}",
+    "labels": {
+      "scope": "Âmbito",
+      "period": "Período",
+      "range": "Intervalo",
+      "grandTotal": "Total geral",
+      "scoped": "Âmbito",
+      "total": "Total"
+    },
+    "export": {
+      "csv": "Exportar CSV",
+      "xlsx": "Exportar XLSX",
+      "exporting": "A exportar…",
+      "filename": "timesheets_pivot_export"
+    },
+    "validation": {
+      "invalidFilters": "Seleciona um intervalo válido e dimensões de linhas/colunas diferentes."
+    },
+    "loading": "A carregar…",
+    "noData": "Sem dados para o intervalo selecionado.",
+    "errors": {
+      "exportFailed": "Falha ao exportar relatório de pivô",
+      "loadFailed": "Falha ao carregar relatório de pivô"
+    },
+    "ai": {
+      "loadFirst": "Carrega primeiro o relatório de pivô (seleciona um intervalo e aguarda resultados) e depois pergunta novamente.",
+      "scopeLine": "Âmbito: {{scoped}}. Dimensões: {{row}} × {{column}}.",
+      "grandTotal": "Total geral de horas: {{hours}}.",
+      "grandTotalEmpty": "Total geral de horas: —.",
+      "peakCell": "Célula de pico: {{row}} × {{column}} = {{hours}}h.",
+      "peakCellEmpty": "Célula de pico: —.",
+      "totalsLine": "{{label}} por total: {{items}}."
+    },
+    "insights": {
+      "summaryTitle": "Destaques do pivô",
+      "summaryHint": "Resumo rápido dos principais contribuintes e combinações de pico.",
+      "totalHours": "Total de horas",
+      "topUser": "Utilizador com mais horas",
+      "topProject": "Projeto com mais horas",
+      "peakCell": "Combinação de pico",
+      "suggestions": {
+        "topUsers": "Quem registrou mais horas?",
+        "topProjects": "Qual projeto teve mais horas?",
+        "peakCell": "Onde está a combinação mais movimentada?"
+      }
+    }
+  },
+  "common": {
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "continue": "Continuar",
+    "close": "Fechar",
+    "delete": "Eliminar",
+    "approve": "Aprovar",
+    "reject": "Rejeitar",
+    "refresh": "Atualizar",
+    "clear": "Limpar",
+    "save": "Guardar",
+    "saving": "A guardar…",
+    "today": "Hoje",
+    "week": "Semana",
+    "month": "Mês",
+    "filters": "Filtros",
+    "clearAll": "Limpar tudo",
+    "clearFilter": "Limpar filtro",
+    "forbidden": "Proibido",
+    "validationFailed": "Validação falhou: {{details}}",
+    "notAvailable": "N/D",
+    "currencyFallback": "$",
+    "unknown": "Desconhecido",
+    "unknownUpper": "DESCONHECIDO",
+    "otherUpper": "OUTRO",
+    "hoursShort": "{{value}} h",
+    "input": "Entrada",
+    "recordDetails": "Detalhes do registo",
+    "rejectionReason": "Motivo da rejeição",
+    "code": "Código",
+    "name": "Nome",
+    "description": "Descrição"
+  },
+  "auth": {
+    "login": {
+      "aiCortex": "AI CORTEX",
+      "tagline": "O cérebro por trás do tempo da tua equipa",
+      "title": "Iniciar sessão",
+      "signIn": "Iniciar sessão",
+      "signingIn": "A iniciar sessão…",
+      "tenantLabel": "Workspace",
+      "tenantPlaceholder": "ex.: demo",
+      "tenantHelper": "Identificador único da tua organização",
+      "emailLabel": "Endereço de email",
+      "passwordLabel": "Palavra-passe",
+      "continueWith": "continuar com",
+      "orContinueWith": "ou continuar com",
+      "microsoftSso": "Iniciar sessão com Microsoft (Trabalho ou Escola)",
+      "googleSso": "Iniciar sessão com Google",
+      "noWorkspace": "Ainda não tens um workspace?",
+      "createOne": "Criar",
+      "ssoOnlyNotice": "Esta organização exige Single Sign-On. Usa a tua conta empresarial.",
+      "usePasswordInstead": "Usar palavra-passe",
+      "errors": {
+        "workspaceRequired": "Indica o workspace primeiro.",
+        "rateLimited": "Muitas tentativas. Aguarda antes de tentar novamente.",
+        "securityCheck": "Conclui a verificação de segurança.",
+        "signInFailed": "Falha ao iniciar sessão. Tenta novamente.",
+        "ssoFailed": "Falha no login SSO. Tenta novamente ou usa email e palavra-passe.",
+        "ssoOnly": "Este workspace exige Single Sign-On. Usa os botões abaixo.",
+        "missingFields": "Indica email, palavra-passe e workspace."
+      }
+    },
+    "register": {
+      "title": "Criar workspace",
+      "subtitle": "Comece o teste gratuito de 14 dias • Sem cartão de crédito",
+      "sections": {
+        "companyInfo": "Informação da empresa",
+        "adminAccount": "Conta de administrador"
+      },
+      "fields": {
+        "companyName": "Nome da empresa",
+        "workspaceSlug": "Slug do workspace",
+        "workspaceSlugHelper": "Este será o identificador único do workspace (ex.: acme.vendaslive.com)",
+        "industryOptional": "Indústria (opcional)",
+        "selectIndustry": "Selecionar indústria",
+        "countryOptional": "País (opcional)",
+        "selectCountry": "Selecionar país",
+        "region": "Região",
+        "regionEU": "Europa (UE)",
+        "regionUS": "Estados Unidos (EUA)",
+        "adminName": "Nome do administrador",
+        "adminEmail": "Email do administrador",
+        "password": "Palavra-passe",
+        "passwordMinHelper": "Mínimo 8 caracteres",
+        "passwordConfirm": "Confirmar palavra-passe"
+      },
+      "captchaPrompt": "Só mais um passo: confirme que não é um robô.",
+      "legal": {
+        "prefix": "Concordo com os",
+        "terms": "Termos",
+        "privacy": "Política de privacidade",
+        "acceptableUse": "Política de uso aceitável"
+      },
+      "submit": "Criar workspace",
+      "sendingVerification": "A enviar email de verificação…",
+      "haveWorkspace": "Já tens um workspace?",
+      "signIn": "Iniciar sessão",
+      "successEmailSent": "Email de verificação enviado! Consulta a tua caixa de entrada.",
+      "checkEmailTitle": "Verifica o teu email",
+      "checkEmailSubtitle": "Enviámos um link de verificação para:",
+      "checkEmailBody": "Clica no link do email para ativar o teu workspace.",
+      "expiresIn": "O link de verificação expira em {{hours}} horas.",
+      "devLinkLabel": "🔧 MODO DEV - Link de verificação direto:",
+      "devLinkCopyButton": "Copiar URL de verificação + token",
+      "devLinkCopied": "URL de verificação + token copiados",
+      "devLinkCopyFailed": "Falha ao copiar",
+      "devLinkToken": "Token:",
+      "noEmailNotice": "Não recebeste o email? Verifica o spam ou",
+      "tryAgain": "tenta novamente",
+      "errors": {
+        "fixFormErrors": "Corrige os erros do formulário",
+        "signupFailed": "Falha no registo. Tenta novamente.",
+        "slugFormat": "O slug só pode conter letras minúsculas, números e hífenes",
+        "slugUnavailable": "Este slug não está disponível",
+        "companyRequired": "O nome da empresa é obrigatório",
+        "slugRequired": "O slug é obrigatório",
+        "slugChooseAvailable": "Escolhe um slug disponível",
+        "adminNameRequired": "O nome do administrador é obrigatório",
+        "adminEmailRequired": "O email do administrador é obrigatório",
+        "passwordRequired": "A palavra-passe é obrigatória",
+        "passwordMin": "A palavra-passe deve ter pelo menos 8 caracteres",
+        "passwordMismatch": "As palavras-passe não coincidem",
+        "legalRequired": "Tem de aceitar os Termos, a Política de Privacidade e a Política de Uso Aceitável"
+      }
+    },
+    "verify": {
+      "loadingTitle": "A verificar o teu email…",
+      "loadingBody": "Aguarde enquanto verificamos o teu endereço de email.",
+      "success": {
+        "title": "Email verificado!",
+        "created": "O teu workspace foi criado!",
+        "redirecting": "O teu workspace foi criado! A redirecionar para o login..."
+      },
+      "captcha": {
+        "title": "Verificação de segurança necessária",
+        "body": "Conclui a verificação de segurança para continuar.",
+        "submit": "Criar workspace"
+      },
+      "error": {
+        "title": "Falha na verificação",
+        "retryRegistration": "Reiniciar registo",
+        "goLogin": "Ir para o login"
+      },
+      "common": {
+        "goHome": "Ir para a página inicial"
+      },
+      "errors": {
+        "missingToken": "O token de verificação está em falta",
+        "missingTokenLink": "O token de verificação está em falta. Verifica o link do email.",
+        "invalidLink": "Link de verificação inválido",
+        "rateLimited": "Muitas tentativas. Aguarda antes de tentar novamente.",
+        "securityCheck": "Conclui a verificação de segurança.",
+        "emailNotVerified": "Verifica o teu email primeiro e tenta novamente.",
+        "emailNotVerifiedTitle": "Email não verificado",
+        "expired": "Este link de verificação expirou. Inicia o registo novamente.",
+        "notFound": "Link de verificação inválido. Verifica o email ou reinicia o registo.",
+        "slugTaken": "Este nome de workspace já não está disponível. Reinicia o registo com outro nome.",
+        "signupFailed": "Falha no registo. Tenta novamente ou contacta o suporte.",
+        "signupFailedTitle": "Falha no registo",
+        "verificationFailed": "Falha na verificação. Tenta novamente ou contacta o suporte."
+      }
+    }
+  },
+  "nav": {
+    "dashboard": "Painel",
+    "timesheets": "Timesheets",
+    "travels": "Viagens",
+    "expenses": "Despesas",
+    "approvals": "Aprovações",
+    "reports": "Relatórios",
+    "planning": "Planeamento",
+    "management": "Gestão",
+    "administration": "Administração",
+    "team": "Equipa",
+    "projects": "Projetos",
+    "tasks": "Tarefas",
+    "locations": "Localizações",
+    "countries": "Países",
+    "users": "Utilizadores",
+    "aiInsights": "Insights de IA",
+    "billing": "Faturação",
+    "resetData": "Repor dados",
+    "legal": "Legal",
+    "terms": "Termos",
+    "privacy": "Privacidade",
+    "acceptableUse": "Uso aceitável",
+    "logout": "Terminar sessão",
+    "userFallback": "Utilizador",
+    "tagline": "Folha de horas inteligente"
+  },
+  "language": {
+    "label": "Idioma",
+    "enUS": "Inglês (EUA)",
+    "enGB": "Inglês (Reino Unido)",
+    "ptPT": "Português (PT)"
+  },
+  "approvalHeatmap": {
+    "title": "Mapa de calor de aprovações",
+    "subtitle": "Aprovações pendentes por dia",
+    "filters": {
+      "from": "De",
+      "to": "Até",
+      "timesheets": "Timesheets",
+      "expenses": "Despesas"
+    },
+    "scopeLabel": "Âmbito",
+    "pendingLabel": "Pendentes",
+    "approvedTimesheetsLabel": "Aprovadas (timesheets)",
+    "approvedExpensesLabel": "Aprovadas (despesas)",
+    "invalidRange": "Seleciona um intervalo válido (máx. 62 dias) e inclui pelo menos um tipo.",
+    "loading": "A carregar mapa de calor…",
+    "errors": {
+      "loadFailed": "Falha ao carregar o mapa de calor de aprovações"
+    },
+    "tooltip": {
+      "timesheetsPending": "Timesheets: {{count}} pendentes",
+      "expensesPending": "Despesas: {{count}} pendentes"
+    },
+    "footer": {
+      "summary": "A mostrar {{from}} → {{to}} (âmbito: {{scoped}})"
+    },
+    "insights": {
+      "summaryTitle": "Destaques de aprovações",
+      "summaryHint": "Visão geral do volume pendente e dos dias mais cheios.",
+      "pendingTotal": "Aprovações pendentes",
+      "approvedTimesheets": "Timesheets aprovados",
+      "approvedExpenses": "Despesas aprovadas",
+      "peakDay": "Dia mais carregado",
+      "suggestions": {
+        "backlog": "Onde as aprovações estão a acumular?",
+        "worstDays": "Quais dias foram os piores?",
+        "compareTypes": "Comparar timesheets com despesas"
+      }
+    }
+  },
+  "approvals": {
+    "title": "Aprovações",
+    "badges": {
+      "pending": "{{count}} pendentes"
+    },
+    "tabs": {
+      "timesheets": "Timesheets",
+      "expenses": "Despesas"
+    },
+    "accessDenied": "Acesso negado. Esta página está disponível apenas para Gestores ou Admins.",
+    "filters": {
+      "aiAlerts": "Alertas de IA: {{count}}",
+      "overCapSummary": "Acima de 12h: {{overCap}} · Sobreposições: {{overlaps}}",
+      "results": "{{count}} resultados",
+      "searchPlaceholder": "Pesquisar técnico, projeto, tarefa, descrição...",
+      "sort": {
+        "date": "Data",
+        "hours": "Horas",
+        "project": "Projeto",
+        "technician": "Técnico",
+        "amount": "Valor"
+      },
+      "sortOrder": {
+        "ascending": "Ascendente",
+        "descending": "Descendente"
+      },
+      "fromDate": "Data inicial",
+      "toDate": "Data final",
+      "minHours": "Horas mín.",
+      "maxHours": "Horas máx."
+    },
+    "table": {
+      "status": "Estado",
+      "technician": "Técnico",
+      "projectRole": "Função no projeto",
+      "expenseRole": "Função em despesas",
+      "project": "Projeto",
+      "task": "Tarefa",
+      "date": "Data",
+      "start": "Início",
+      "end": "Fim",
+      "hours": "Horas",
+      "travels": "Viagens",
+      "travelTime": "Tempo de viagem",
+      "flags": "Alertas",
+      "aiScore": "Pontuação IA",
+      "description": "Descrição"
+    },
+    "roles": {
+      "member": "Membro",
+      "manager": "Gestor",
+      "none": "Nenhum"
+    },
+    "flags": {
+      "ok": "OK",
+      "travelWithoutWork": "Viagem sem horas de trabalho",
+      "excessiveTravelTime": "Tempo de viagem > 2x horas de trabalho",
+      "expensesWithoutWork": "Despesas sem horas de trabalho"
+    },
+    "timesheets": {
+      "loading": "A carregar timesheets...",
+      "emptyTitle": "Sem aprovações pendentes",
+      "emptySubtitle": "Todas as timesheets foram revistas ou não existem entradas submetidas",
+      "approveSelected": "Aprovar ({{count}})",
+      "rejectSelected": "Rejeitar ({{count}})",
+      "entry": "entrada",
+      "entries": "entradas",
+      "selectedCount": "{{count}} {{label}} selecionadas",
+      "ownEntryTooltip": "A sua própria entrada - não pode aprovar",
+      "ownEntriesWarningTitle": "Aviso: entradas próprias detetadas",
+      "ownEntriesWarningMessage": "{{ownCount}} de {{totalCount}} entradas selecionadas são suas. Não pode aprovar as suas próprias timesheets.\n\nContinuar com as restantes {{validCount}} entradas?",
+      "ownEntriesCannotApprove": "Não pode aprovar as suas próprias timesheets.",
+      "rejectEntryTitle": "Rejeitar entrada",
+      "rejectEntryMessage": "Indique o motivo para rejeitar esta entrada:",
+      "rejectSuccessSingle": "Entrada rejeitada com sucesso",
+      "rejectFailedSingle": "Falha ao rejeitar a entrada",
+      "rejectSelectedTitle": "Rejeitar entradas selecionadas",
+      "rejectSelectedMessage": "Indique o motivo para rejeitar as entradas selecionadas:",
+      "rejectSuccess": "Rejeitadas {{count}} entradas com sucesso",
+      "rejectFailed": "Falha na rejeição em massa.",
+      "rejectInvalidStatus": "Estado inválido. Apenas timesheets submetidas podem ser rejeitadas.",
+      "approveSuccess": "Aprovadas {{count}} entradas com sucesso",
+      "approveFailed": "Falha na aprovação em massa.",
+      "approveInvalidStatus": "Estado inválido. Apenas timesheets submetidas podem ser aprovadas."
+    },
+    "expenses": {
+      "loadFailedStatus": "Falha ao carregar despesas pendentes: {{status}}",
+      "loadFailed": "Falha ao carregar despesas pendentes. Tente novamente.",
+      "approveSuccess": "{{count}} despesa(s) aprovada(s) com sucesso",
+      "rejectSuccess": "{{count}} despesa(s) rejeitada(s)",
+      "markPaidSuccess": "{{count}} despesa(s) marcada(s) como paga(s)",
+      "approveFailed": "Falha ao aprovar despesas",
+      "rejectFailed": "Falha ao rejeitar despesas",
+      "markPaidFailed": "Falha ao marcar despesas como pagas",
+      "rejectionReasonRequired": "Indique o motivo da rejeição",
+      "paymentReferenceRequired": "Indique a referência de pagamento",
+      "searchPlaceholder": "Pesquisar descrição, categoria, projeto...",
+      "minAmount": "Valor mín.",
+      "maxAmount": "Valor máx.",
+      "statusLabel": "Estado",
+      "typeLabel": "Tipo",
+      "categoryLabel": "Categoria",
+      "projectLabel": "Projeto",
+      "countLabel": "{{count}} {{label}}",
+      "item": "despesa",
+      "items": "despesas",
+      "selectAll": "Selecionar tudo ({{count}})",
+      "deselectAll": "Desselecionar tudo ({{count}})",
+      "markPaid": "Marcar como pago",
+      "markPaidTitle": "Marcar como pago",
+      "paymentReference": "Referência de pagamento",
+      "paymentReferencePlaceholder": "ex.: TRF-2025-001234",
+      "rejectDialogTitle": "Rejeitar despesas",
+      "columns": {
+        "pendingReview": "Pendente",
+        "financeReview": "Revisão financeira",
+        "approved": "Aprovado",
+        "paid": "Pago"
+      },
+      "stats": {
+        "totalValue": "Valor total",
+        "totalCount": "{{count}} despesas",
+        "selected": "Selecionadas",
+        "selectedCount": "{{count}} selecionadas"
+      },
+      "type": {
+        "reimbursement": "Reembolso",
+        "mileage": "Quilometragem",
+        "companyCard": "Cartão da empresa",
+        "reimbursementLabel": "💰 Reembolso",
+        "mileageLabel": "🚗 Quilometragem"
+      },
+      "status": {
+        "submitted": "Submetido",
+        "financeReview": "Revisão financeira",
+        "financeApproved": "Aprovado (Finanças)",
+        "paid": "Pago"
+      },
+      "attachment": {
+        "viewReceipt": "Ver recibo",
+        "noReceipt": "Sem recibo",
+        "title": "Anexo do recibo",
+        "previewUnavailable": "Pré-visualização indisponível para este tipo de ficheiro",
+        "downloadFile": "Descarregar ficheiro",
+        "descriptionLabel": "Descrição",
+        "download": "Descarregar",
+        "receiptAlt": "Recibo",
+        "pdfTitle": "Recibo PDF"
+      }
+    },
+    "travels": {
+      "title": "Detalhes da viagem",
+      "empty": "Sem detalhes de viagem.",
+      "loadFailed": "Falha ao carregar detalhes de viagens",
+      "technician": "Técnico",
+      "project": "Projeto",
+      "departure": "Partida",
+      "arrival": "Chegada",
+      "direction": "Direção",
+      "duration": "Duração",
+      "durationValue": "{{hours}}h {{minutes}}m",
+      "status": "Estado",
+      "classificationReason": "Motivo da classificação",
+      "statusValues": {
+        "completed": "CONCLUÍDA",
+        "cancelled": "CANCELADA",
+        "planned": "PLANEADA",
+        "in_progress": "EM CURSO",
+        "pending": "PENDENTE"
+      },
+      "directions": {
+        "outbound": "IDA",
+        "return": "VOLTA",
+        "round_trip": "IDA E VOLTA",
+        "one_way": "SÓ IDA"
+      }
+    }
+  },
+  "expenses": {
+    "title": "Despesas",
+    "subtitle": "Submeta despesas com recibos para custos relacionados com projetos",
+    "loading": "A carregar despesas...",
+    "empty": {
+      "title": "Ainda não existem despesas",
+      "subtitle": "Clique no botão + para submeter a sua primeira despesa",
+      "action": "Adicionar despesa"
+    },
+    "validation": {
+      "projectForTechnician": "Selecione um projeto válido para o técnico escolhido."
+    },
+    "warning": {
+      "workerOverride": "Não tem permissão para criar/editar despesas desse trabalhador. O registo foi guardado para um técnico diferente."
+    },
+    "toast": {
+      "saved": "Despesa {{action}} com sucesso",
+      "created": "criada",
+      "updated": "atualizada",
+      "deleted": "Despesa eliminada com sucesso"
+    },
+    "errors": {
+      "saveFailed": "Falha ao {{action}} despesa",
+      "loadFailed": "Falha ao carregar despesas. Tente novamente.",
+      "loadFailedStatus": "Falha ao carregar despesas: {{status}}",
+      "deleteFailed": "Falha ao eliminar despesa",
+      "attachmentLoadFailed": "Falha ao carregar anexo"
+    },
+    "reject": {
+      "title": "Rejeitar despesa",
+      "message": "Indique o motivo para rejeitar esta despesa:"
+    },
+    "status": {
+      "draft": "Rascunho",
+      "submitted": "Submetida",
+      "approvedLegacy": "Aprovada (Legacy)",
+      "rejected": "Rejeitada",
+      "financeReview": "Revisão financeira",
+      "financeApproved": "Aprovada (Finanças)",
+      "paid": "Paga"
+    },
+    "table": {
+      "id": "ID",
+      "date": "Data",
+      "technician": "Técnico",
+      "project": "Projeto",
+      "amount": "Valor",
+      "description": "Descrição",
+      "attachment": "Anexo",
+      "status": "Estado",
+      "actions": "Ações",
+      "viewAttachment": "Ver anexo",
+      "rejectionReason": "Motivo: {{reason}}"
+    },
+    "delete": {
+      "confirm": "Tem a certeza que quer eliminar esta despesa?"
+    },
+    "dialog": {
+      "editTitle": "Editar despesa",
+      "newTitle": "Nova despesa",
+      "currentStatus": "Estado atual:",
+      "rejectionReasonTitle": "Motivo da rejeição",
+      "update": "Atualizar",
+      "saveDraft": "Guardar como rascunho",
+      "submitForApproval": "Submeter para aprovação",
+      "approveSendToFinance": "Aprovar (enviar para Finanças)"
+    },
+    "form": {
+      "technician": "Técnico",
+      "defaultTechnician": "(Por defeito)",
+      "project": "Projeto",
+      "projectPlaceholder": "Selecionar um projeto",
+      "date": "Data da despesa",
+      "type": "Tipo de despesa",
+      "typeReimbursement": "Reembolso (Recibo obrigatório)",
+      "typeMileage": "Quilometragem ({{unit}})",
+      "typeCompanyCard": "Cartão da empresa",
+      "category": "Categoria",
+      "categoryPlaceholder": "Selecionar uma categoria",
+      "distance": "Distância ({{unit}})",
+      "ratePerUnit": "Taxa por {{unit}} ({{currency}})",
+      "vehicleType": "Tipo de veículo",
+      "vehicle": {
+        "car": "Carro",
+        "motorcycle": "Mota",
+        "bicycle": "Bicicleta"
+      },
+      "calculatedAmount": "Valor calculado: {{amount}}",
+      "amount": "Valor ({{currency}})",
+      "description": "Descrição",
+      "uploadReceipt": "Carregar recibo {{hint}}",
+      "uploadHintRecommended": "(Recomendado)",
+      "uploadHintOptional": "(Opcional)"
+    },
+    "attachment": {
+      "previewTitle": "Pré-visualização do anexo",
+      "previewUnavailable": "Pré-visualização indisponível para este tipo de ficheiro",
+      "downloadFile": "Descarregar ficheiro"
+    },
+    "categories": {
+      "general": "Geral",
+      "travel": "Viagem",
+      "meals": "Refeições",
+      "lodging": "Alojamento",
+      "fuel": "Combustível",
+      "parking": "Estacionamento",
+      "materials": "Materiais",
+      "tools": "Ferramentas",
+      "other": "Outros"
+    }
+  },
+  "reports": {
+    "ai": {
+      "openPanel": "Abrir IA",
+      "closePanel": "Fechar IA"
+    },
+    "analysis": "Análise",
+    "heatmap": "Mapa de calor",
+    "expensesAnalysis": {
+      "title": "Análise de despesas",
+      "subtitle": "Gastos, tendências e aprovações",
+      "results": "{{count}} resultados",
+      "filters": {
+        "from": "De",
+        "to": "Até",
+        "status": "Estado",
+        "category": "Categoria",
+        "project": "Projeto",
+        "all": "Todos"
+      },
+      "validation": {
+        "range": "Selecione um intervalo de datas válido."
+      },
+      "loading": "A carregar despesas…",
+      "kpis": {
+        "totalValue": "Valor total",
+        "totalCount": "{{count}} despesas",
+        "pendingReview": "Pendente",
+        "financeReview": "Revisão financeira",
+        "approved": "Aprovado",
+        "paid": "Pago"
+      },
+      "trends": {
+        "title": "Tendências",
+        "subtitle": "Gasto e número de despesas ao longo do tempo para os filtros atuais",
+        "daily": "Diário",
+        "weekly": "Semanal",
+        "monthly": "Mensal",
+        "missingDates": "Tendências indisponíveis (faltam datas de despesa).",
+        "noExpenses": "Não existem despesas para os filtros atuais.",
+        "totalSpend": "Gasto total",
+        "expenseCount": "Número de despesas",
+        "peakPeriod": "Período de pico",
+        "lowestPeriod": "Período mais baixo",
+        "changeVsPrevious": "Variação vs anterior",
+        "spendVolatility": "Volatilidade do gasto"
+      },
+      "breakdown": {
+        "categoryTitle": "Distribuição por categoria",
+        "projectTitle": "Distribuição por projeto",
+        "spendLabel": "Gasto"
+      },
+      "outliers": {
+        "title": "Outliers",
+        "subtitle": "Detetar despesas invulgarmente elevadas com limiar IQR (Q3 + 1,5×IQR)",
+        "notEnoughVariation": "Variação insuficiente para calcular o limiar de outliers.",
+        "noneDetected": "Nenhum outlier detetado (limiar > {{threshold}}).",
+        "threshold": "Limiar de outlier > {{threshold}}",
+        "uncategorized": "Sem categoria"
+      },
+      "change": {
+        "title": "O que mudou",
+        "subtitle": "Comparação vs período anterior {{from}} → {{to}}",
+        "invalidRange": "Selecione um intervalo de datas válido para comparar.",
+        "totalSpend": "Gasto total",
+        "delta": "Variação",
+        "volume": "Volume",
+        "topCategory": "Categoria principal (atual → anterior)",
+        "topProject": "Projeto principal (atual → anterior)"
+      },
+      "statusFunnel": {
+        "title": "Funil de estados",
+        "subtitle": "Contagens e gasto por estado para os filtros atuais",
+        "countLabel": "Contagem",
+        "submittedToPaid": "Submetido → Pago",
+        "submittedToFinanceReview": "Submetido → Revisão financeira",
+        "financeReviewToApproved": "Revisão financeira → Aprovado"
+      },
+      "dataQuality": {
+        "title": "Qualidade dos dados",
+        "subtitle": "Indicadores de cobertura para o conjunto filtrado",
+        "missingCategory": "Categoria em falta",
+        "missingProject": "Nome de projeto em falta",
+        "unparseableDates": "Datas de tendência inválidas",
+        "results": "Resultados"
+      },
+      "spendMix": {
+        "title": "Mix de gastos",
+        "subtitle": "Quota do total por categoria e estado",
+        "categoryTitle": "Mix por categoria",
+        "statusTitle": "Mix por estado"
+      },
+      "movers": {
+        "title": "Maiores variações",
+        "invalidRange": "Selecione um intervalo de datas válido para comparar com o período anterior.",
+        "subtitle": "Maiores variações de gasto vs período anterior {{from}} → {{to}}",
+        "categories": "Categorias",
+        "increases": "Aumentos"
+      },
+      "noExpenses": "Não existem despesas para os filtros atuais.",
+      "ai": {
+        "noExpenses": "Não existem despesas para os filtros atuais.",
+        "spendMixUnavailable": "O mix de gastos não está disponível (gasto total é 0 para os filtros atuais).",
+        "spendMixHeader": "Mix de gastos (intervalo {{from}} → {{to}}): total {{total}}",
+        "topCategories": "Top categorias:",
+        "topStatuses": "Top estados:",
+        "summaryHeader": "Análise de despesas (intervalo {{from}} → {{to}}):",
+        "summaryTotal": "- Total: {{total}} ({{count}} despesas)",
+        "summaryPending": "- Pendente: {{count}}",
+        "summaryFinanceReview": "- Revisão financeira: {{count}}",
+        "summaryApproved": "- Aprovado: {{count}}",
+        "summaryPaid": "- Pago: {{count}}",
+        "summaryPrompt": "Pergunte sobre “categorias”, “projetos”, “outliers”, “o que mudou”, “funil de estados”, “qualidade de dados”, “variações”, ou “mix”."
+      }
+    }
+  },
+  "timesheets": {
+    "alerts": {
+      "viewFlaggedCta": "Ver entradas sinalizadas ({{count}})",
+      "aiFlaggedDetected": "Entradas sinalizadas por IA detetadas.",
+      "aiAlertsAvailableInInsights": "Alertas de IA disponíveis em Insights."
+    },
+    "insights": {
+      "noAlerts": "Sem alertas",
+      "weeklyBreakdown": "Resumo semanal",
+      "weeklyBreakdownAvailableInWeekView": "O resumo semanal está disponível na vista Semana."
+    },
+    "title": "Folhas de horas",
+    "status": {
+      "submitted": "Submetido",
+      "approved": "Aprovado",
+      "rejected": "Rejeitado",
+      "closed": "Fechado"
+    },
+    "roles": {
+      "member": "Membro",
+      "manager": "Gestor",
+      "none": "Nenhum"
+    },
+    "scope": {
+      "mine": "Meus",
+      "others": "Outros",
+      "all": "Todos"
+    },
+    "calendar": {
+      "weekList": "Lista semanal",
+      "monthList": "Lista mensal"
+    },
+    "validation": {
+      "overCapTooltip": "Dias em que o total do técnico excede {{cap}}h",
+      "overCapLabel": "Diário > {{cap}}h ({{count}})",
+      "projectRequired": "Projeto obrigatório",
+      "taskRequired": "Tarefa obrigatória",
+      "locationRequired": "Local obrigatório",
+      "descriptionRequired": "Descrição obrigatória (mín. 3 caracteres)",
+      "workerRequired": "Colaborador obrigatório",
+      "dateRequired": "Data obrigatória",
+      "timeRequired": "Hora de início e fim obrigatórias",
+      "hoursMin": "Horas trabalhadas devem ser maiores que 0",
+      "hoursMax": "Horas trabalhadas não podem exceder 24 horas"
+    },
+    "permissions": {
+      "editOwnOrManaged": "Só pode editar as suas folhas de horas ou as dos projetos que gere."
+    },
+    "toast": {
+      "created": "Folha de horas criada com sucesso",
+      "updated": "Folha de horas atualizada com sucesso",
+      "deleted": "Folha de horas eliminada com sucesso"
+    },
+    "warning": {
+      "workerOverride": "O colaborador selecionado não era permitido; a folha de horas foi guardada para o seu técnico."
+    },
+    "errors": {
+      "timeConflict": "⚠️ Conflito de horário detetado para {{timeRange}}. Já existe uma entrada neste período. Escolha outro intervalo ou verifique as entradas existentes.",
+      "saveFailed": "Falha ao guardar folha de horas",
+      "deleteFailed": "Falha ao eliminar folha de horas",
+      "loadTimesheets": "Falha ao carregar folhas de horas",
+      "loadTasks": "Falha ao carregar tarefas",
+      "loadLocations": "Falha ao carregar locais",
+      "loadWorkers": "Falha ao carregar colaboradores",
+      "loadProjects": "Falha ao carregar projetos"
+    },
+    "delete": {
+      "title": "Eliminar entrada de folha de horas",
+      "message": "Tem a certeza de que pretende eliminar esta entrada? Esta ação não pode ser anulada."
+    },
+    "entry": {
+      "newTitle": "Nova entrada",
+      "editTitle": "Editar entrada"
+    },
+    "ownerLabel": "Responsável: {{name}}",
+    "ai": {
+      "showSuggestions": "Mostrar sugestões de IA",
+      "hideSuggestions": "Ocultar sugestões de IA"
+    },
+    "sections": {
+      "worker": "👤 Colaborador",
+      "dateTime": "Data e hora",
+      "projectDetails": "Detalhes do projeto",
+      "description": "Descrição"
+    },
+    "labels": {
+      "worker": "Colaborador",
+      "date": "Data",
+      "startTime": "Hora de início",
+      "endTime": "Hora de fim",
+      "project": "Projeto",
+      "task": "Tarefa",
+      "location": "Local",
+      "workDescription": "Descrição do trabalho",
+      "entryOwner": "Dono da entrada",
+      "you": "Você",
+      "projectFallback": "Projeto"
+    },
+    "placeholders": {
+      "selectWorker": "Selecionar colaborador",
+      "selectProject": "Selecionar um projeto",
+      "selectTask": "Selecionar uma tarefa",
+      "selectLocation": "Selecionar um local",
+      "workDescription": "Descreva o trabalho realizado..."
+    },
+    "description": {
+      "count": "{{count}} caracteres"
+    },
+    "policy": {
+      "label": "Política: {{policy}}"
+    },
+    "summary": {
+      "loading": "Resumo: a carregar…",
+      "unavailable": "Resumo indisponível",
+      "format": "Regular {{regular}}h | OT{{overtimeRate}} {{overtime}}h | OT2.0 {{overtime2}}h"
+    },
+    "travels": {
+      "title": "Detalhes da viagem",
+      "titleWithDate": "Detalhes da viagem — {{date}}",
+      "empty": "Não foram encontradas viagens para esta data.",
+      "generic": "Viagem",
+      "viewDetails": "Clique para ver detalhes da viagem",
+      "indicatorTitle": "{{count}} viagem(ns) — clique para ver detalhes",
+      "count_one": "{{count}} viagem",
+      "count_other": "{{count}} viagens",
+      "durationValue": "{{hours}}h {{minutes}}min",
+      "fields": {
+        "technician": "Técnico",
+        "project": "Projeto",
+        "departure": "Partida",
+        "arrival": "Chegada",
+        "duration": "Duração",
+        "direction": "Direção",
+        "status": "Estado",
+        "classificationReason": "Motivo de classificação"
+      }
+    }
+  }
+}

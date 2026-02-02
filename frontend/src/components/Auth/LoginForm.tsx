@@ -15,10 +15,12 @@ import { useAuth } from './AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CaptchaWidget, type CaptchaChallenge } from './CaptchaWidget';
 import { API_URL } from '../../services/api';
+import { useTranslation } from 'react-i18next';
 
 type CaptchaStatus = 'idle' | 'required' | 'verifying' | 'verified' | 'expired';
 
 export const LoginForm: React.FC = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
@@ -46,7 +48,7 @@ export const LoginForm: React.FC = () => {
   const startSso = (provider: 'google' | 'microsoft') => {
     const slug = tenantSlug.trim();
     if (!slug) {
-      setError('Please enter your workspace (tenant) first.');
+      setError(t('auth.login.errors.workspaceRequired'));
       return;
     }
 
@@ -176,7 +178,7 @@ export const LoginForm: React.FC = () => {
 
       resetCaptcha();
       setSsoOnly(false);
-      setError('Too many attempts. Please wait before trying again.');
+      setError(t('auth.login.errors.rateLimited'));
 
       const until = Date.now() + seconds * 1000;
       setRateLimitedUntil(until);
@@ -209,7 +211,7 @@ export const LoginForm: React.FC = () => {
       setCaptchaToken(null);
       setCaptchaStatus('required');
       setCaptchaWidgetKey((k) => k + 1);
-      setError('Please complete the security check.');
+      setError(t('auth.login.errors.securityCheck'));
       setLoading(false);
       return;
     }
@@ -217,10 +219,10 @@ export const LoginForm: React.FC = () => {
     if ('error' in result) {
       setError(result.error);
     } else {
-      setError('Sign in failed. Please try again.');
+      setError(t('auth.login.errors.signInFailed'));
     }
     setLoading(false);
-  }, [email, isRateLimited, login, password, resetCaptcha, tenantSlug]);
+  }, [email, isRateLimited, login, password, resetCaptcha, t, tenantSlug]);
 
   const handleCaptchaToken = useCallback(
     (token: string) => {
@@ -248,24 +250,24 @@ export const LoginForm: React.FC = () => {
     setError('');
 
     if (isRateLimited) {
-      setError('Too many attempts. Please wait before trying again.');
+      setError(t('auth.login.errors.rateLimited'));
       return;
     }
 
     if (ssoOnly) {
-      setError('This workspace requires Single Sign-On. Please use the buttons below.');
+      setError(t('auth.login.errors.ssoOnly'));
       return;
     }
 
     // Basic validation
     if (!email || !password || !tenantSlug) {
-      setError('Please enter email, password, and tenant');
+      setError(t('auth.login.errors.missingFields'));
       return;
     }
 
     if (captcha) {
       if (captchaStatus !== 'verified' || !captchaToken) {
-        setError('Please complete the security check.');
+        setError(t('auth.login.errors.securityCheck'));
         return;
       }
       await attemptLogin(captchaToken);
@@ -330,7 +332,7 @@ export const LoginForm: React.FC = () => {
                       whiteSpace: 'nowrap'
                     }}
                   >
-                    AI CORTEX
+                    {t('auth.login.aiCortex')}
                   </Typography>
                 </Box>
               </Box>
@@ -344,10 +346,10 @@ export const LoginForm: React.FC = () => {
                   mb: 2
                 }}
               >
-                The brain behind your team's time
+                {t('auth.login.tagline')}
               </Typography>
               <Typography variant="h6" color="text.secondary">
-                Sign In
+                {t('auth.login.title')}
               </Typography>
             </Box>
 
@@ -363,13 +365,13 @@ export const LoginForm: React.FC = () => {
                 sx={{ mb: 2 }}
                 onClose={() => setSsoFailureNoticeOpen(false)}
               >
-                SSO login failed. Please try again or use email and password.
+                {t('auth.login.errors.ssoFailed')}
               </Alert>
             )}
 
             {ssoOnly && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                This organization requires Single Sign-On. Please use your company account.
+                {t('auth.login.ssoOnlyNotice')}
                 <Box sx={{ mt: 1 }}>
                   <Button
                     size="small"
@@ -383,7 +385,7 @@ export const LoginForm: React.FC = () => {
                     }}
                     sx={{ textTransform: 'none', p: 0, minWidth: 'auto' }}
                   >
-                    Use password instead
+                    {t('auth.login.usePasswordInstead')}
                   </Button>
                 </Box>
               </Alert>
@@ -396,10 +398,10 @@ export const LoginForm: React.FC = () => {
                 fullWidth
                 size="small"
                 id="tenant"
-                label="Tenant"
+                label={t('auth.login.tenantLabel')}
                 name="tenant"
-                placeholder="e.g., demo"
-                helperText="Your organization's unique identifier"
+                placeholder={t('auth.login.tenantPlaceholder')}
+                helperText={t('auth.login.tenantHelper')}
                 value={tenantSlug}
                 onChange={(e) => {
                   const next = e.target.value;
@@ -431,7 +433,7 @@ export const LoginForm: React.FC = () => {
                     fullWidth
                     size="small"
                     id="email"
-                    label="Email Address"
+                    label={t('auth.login.emailLabel')}
                     name="email"
                     autoComplete="email"
                     autoFocus
@@ -449,7 +451,7 @@ export const LoginForm: React.FC = () => {
                     fullWidth
                     size="small"
                     name="password"
-                    label="Password"
+                    label={t('auth.login.passwordLabel')}
                     type="password"
                     id="password"
                     autoComplete="current-password"
@@ -476,7 +478,7 @@ export const LoginForm: React.FC = () => {
                     sx={{ mt: 3, mb: 2 }}
                     disabled={loading || isRateLimited || captchaStatus === 'verifying'}
                   >
-                    {loading ? 'Signing in...' : 'Sign In'}
+                    {loading ? t('auth.login.signingIn') : t('auth.login.signIn')}
                   </Button>
                 </>
               )}
@@ -486,7 +488,7 @@ export const LoginForm: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <Box sx={{ flex: 1, height: '1px', bgcolor: 'grey.300' }} />
                   <Typography variant="caption" sx={{ px: 2, color: 'text.secondary' }}>
-                    {ssoOnly ? 'continue with' : 'or continue with'}
+                    {ssoOnly ? t('auth.login.continueWith') : t('auth.login.orContinueWith')}
                   </Typography>
                   <Box sx={{ flex: 1, height: '1px', bgcolor: 'grey.300' }} />
                 </Box>
@@ -503,7 +505,7 @@ export const LoginForm: React.FC = () => {
                     }}
                     onClick={() => startSso('microsoft')}
                   >
-                    Sign in with Microsoft (Work or School)
+                    {t('auth.login.microsoftSso')}
                   </Button>
                   <Button
                     fullWidth
@@ -516,7 +518,7 @@ export const LoginForm: React.FC = () => {
                     }}
                     onClick={() => startSso('google')}
                   >
-                    Sign in with Google
+                    {t('auth.login.googleSso')}
                   </Button>
                 </Box>
               </Box>
@@ -524,7 +526,7 @@ export const LoginForm: React.FC = () => {
               {/* Sign up link */}
               <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Don't have a workspace?{' '}
+                  {t('auth.login.noWorkspace')}{' '}
                   <Button
                     onClick={() => navigate('/register')}
                     sx={{ 
@@ -534,7 +536,7 @@ export const LoginForm: React.FC = () => {
                       minWidth: 'auto'
                     }}
                   >
-                    Create one
+                    {t('auth.login.createOne')}
                   </Button>
                 </Typography>
               </Box>

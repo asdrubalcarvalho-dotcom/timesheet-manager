@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
 import { CaptchaWidget, type CaptchaChallenge } from './CaptchaWidget';
+import { useTranslation } from 'react-i18next';
 
 type CaptchaStatus = 'idle' | 'required' | 'verifying' | 'verified' | 'expired';
 
@@ -40,6 +41,7 @@ interface RegistrationFormData {
 }
 
 const TenantRegistration: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
 
@@ -133,7 +135,7 @@ const TenantRegistration: React.FC = () => {
         setVerificationToken(data?.verification_token || '');
         setRegistrationComplete(true);
 
-        showSuccess(data?.message || 'Verification email sent! Please check your inbox.');
+        showSuccess(data?.message || t('auth.register.successEmailSent'));
         resetCaptcha();
         return;
       }
@@ -152,7 +154,7 @@ const TenantRegistration: React.FC = () => {
 
       if (data?.errors) {
         setErrors(data.errors);
-        showError('Please fix the form errors');
+        showError(t('auth.register.errors.fixFormErrors'));
         return;
       }
 
@@ -161,10 +163,10 @@ const TenantRegistration: React.FC = () => {
         return;
       }
 
-      showError('Signup failed. Please try again.');
+      showError(t('auth.register.errors.signupFailed'));
     } catch (error: any) {
       console.error('Registration failed:', error);
-      showError(error?.message || 'Signup failed. Please try again.');
+      showError(error?.message || t('auth.register.errors.signupFailed'));
     } finally {
       setLoading(false);
     }
@@ -201,7 +203,7 @@ const TenantRegistration: React.FC = () => {
 
     if (!/^[a-z0-9-]+$/.test(formData.slug)) {
       setSlugAvailable(false);
-      setSlugError('Slug can only contain lowercase letters, numbers, and hyphens');
+      setSlugError(t('auth.register.errors.slugFormat'));
       return;
     }
 
@@ -214,7 +216,7 @@ const TenantRegistration: React.FC = () => {
         });
         setSlugAvailable(res.data.available);
         if (!res.data.available) {
-          setSlugError(res.data.message || 'This slug is not available');
+          setSlugError(res.data.message || t('auth.register.errors.slugUnavailable'));
         }
       } catch {
         setSlugAvailable(null);
@@ -224,7 +226,7 @@ const TenantRegistration: React.FC = () => {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [formData.slug]);
+  }, [formData.slug, t]);
 
   const handleChange = (field: keyof RegistrationFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } },
@@ -250,22 +252,22 @@ const TenantRegistration: React.FC = () => {
     setErrors({});
 
     const newErrors: Record<string, string[]> = {};
-    if (!formData.company_name) newErrors.company_name = ['Company name is required'];
-    if (!formData.slug) newErrors.slug = ['Slug is required'];
-    if (!slugAvailable) newErrors.slug = ['Please choose an available slug'];
-    if (!formData.admin_name) newErrors.admin_name = ['Admin name is required'];
-    if (!formData.admin_email) newErrors.admin_email = ['Admin email is required'];
-    if (!formData.admin_password) newErrors.admin_password = ['Password is required'];
+    if (!formData.company_name) newErrors.company_name = [t('auth.register.errors.companyRequired')];
+    if (!formData.slug) newErrors.slug = [t('auth.register.errors.slugRequired')];
+    if (!slugAvailable) newErrors.slug = [t('auth.register.errors.slugChooseAvailable')];
+    if (!formData.admin_name) newErrors.admin_name = [t('auth.register.errors.adminNameRequired')];
+    if (!formData.admin_email) newErrors.admin_email = [t('auth.register.errors.adminEmailRequired')];
+    if (!formData.admin_password) newErrors.admin_password = [t('auth.register.errors.passwordRequired')];
     if (formData.admin_password.length < 8)
-      newErrors.admin_password = ['Password must be at least 8 characters'];
+      newErrors.admin_password = [t('auth.register.errors.passwordMin')];
     if (formData.admin_password !== formData.admin_password_confirmation)
-      newErrors.admin_password_confirmation = ['Passwords do not match'];
+      newErrors.admin_password_confirmation = [t('auth.register.errors.passwordMismatch')];
     if (!legalAccepted)
-      newErrors.legal_accepted = ['You must accept the Terms, Privacy Policy, and Acceptable Use Policy'];
+      newErrors.legal_accepted = [t('auth.register.errors.legalRequired')];
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      showError('Please fix the form errors');
+      showError(t('auth.register.errors.fixFormErrors'));
       return;
     }
 
@@ -343,11 +345,11 @@ const TenantRegistration: React.FC = () => {
           <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
 
           <Typography variant="h4" gutterBottom>
-            Check Your Email
+            {t('auth.register.checkEmailTitle')}
           </Typography>
 
           <Typography variant="body1" sx={{ mb: 1 }}>
-            We've sent a verification link to:
+            {t('auth.register.checkEmailSubtitle')}
           </Typography>
 
           <Typography variant="h6" sx={{ mb: 3 }}>
@@ -355,17 +357,17 @@ const TenantRegistration: React.FC = () => {
           </Typography>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Please click the link in the email to activate your workspace.
+            {t('auth.register.checkEmailBody')}
           </Typography>
 
           <Typography variant="caption" display="block" sx={{ mb: 3 }}>
-            The verification link will expire in {expiresInHours} hours.
+            {t('auth.register.expiresIn', { hours: expiresInHours })}
           </Typography>
 
           {verificationUrl && (
             <Box sx={{ mb: 3, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
               <Typography variant="caption" display="block" fontWeight="bold" sx={{ mb: 1 }}>
-                🔧 DEV MODE - Direct Verification Link:
+                {t('auth.register.devLinkLabel')}
               </Typography>
               <Button
                 variant="contained"
@@ -381,28 +383,28 @@ const TenantRegistration: React.FC = () => {
                       .filter(Boolean)
                       .join('\n');
                     await copyToClipboard(payload);
-                    showSuccess('Verification URL + token copied to clipboard');
+                    showSuccess(t('auth.register.devLinkCopied'));
                   } catch {
-                    showError('Failed to copy to clipboard');
+                    showError(t('auth.register.devLinkCopyFailed'));
                   }
                 }}
                 sx={{ textTransform: 'none' }}
               >
-                Copy verification URL + token
+                {t('auth.register.devLinkCopyButton')}
               </Button>
               <Typography variant="caption" display="block" sx={{ mt: 1, wordBreak: 'break-all' }}>
                 {verificationUrl}
               </Typography>
               {verificationToken && (
                 <Typography variant="caption" display="block" sx={{ mt: 1, wordBreak: 'break-all' }}>
-                  Token: {verificationToken}
+                  {t('auth.register.devLinkToken')} {verificationToken}
                 </Typography>
               )}
             </Box>
           )}
 
           <Typography variant="caption" display="block">
-            Didn't receive the email? Check your spam folder or{' '}
+            {t('auth.register.noEmailNotice')}{' '}
             <Button
               onClick={() => {
                 setRegistrationComplete(false);
@@ -411,7 +413,7 @@ const TenantRegistration: React.FC = () => {
               }}
               sx={{ textTransform: 'none', p: 0 }}
             >
-              try again
+              {t('auth.register.tryAgain')}
             </Button>
           </Typography>
         </Paper>
@@ -425,21 +427,21 @@ const TenantRegistration: React.FC = () => {
         <Box sx={{ textAlign: 'center', mb: 3 }}>
           <BusinessIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
           <Typography variant="h4" gutterBottom>
-            Create Your Workspace
+            {t('auth.register.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Start your 14-day free trial • No credit card required
+            {t('auth.register.subtitle')}
           </Typography>
         </Box>
 
         <Box component="form" onSubmit={handleSubmit} noValidate>
           <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
-            Company Information
+            {t('auth.register.sections.companyInfo')}
           </Typography>
 
           <TextField
             fullWidth
-            label="Company Name"
+            label={t('auth.register.fields.companyName')}
             value={formData.company_name}
             onChange={handleChange('company_name')}
             error={!!errors.company_name}
@@ -450,14 +452,14 @@ const TenantRegistration: React.FC = () => {
 
           <TextField
             fullWidth
-            label="Workspace Slug"
+            label={t('auth.register.fields.workspaceSlug')}
             value={formData.slug}
             onChange={handleChange('slug')}
             error={!!errors.slug || slugAvailable === false}
             helperText={
               slugError ||
               errors.slug?.[0] ||
-              'This will be your unique workspace identifier (e.g., acme.vendaslive.com)'
+              t('auth.register.fields.workspaceSlugHelper')
             }
             required
             InputProps={{
@@ -477,16 +479,16 @@ const TenantRegistration: React.FC = () => {
           />
 
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Industry (Optional)</InputLabel>
+            <InputLabel>{t('auth.register.fields.industryOptional')}</InputLabel>
             <Select
               value={formData.industry}
               onChange={(e) =>
                 handleChange('industry')({ target: { value: e.target.value } })
               }
-              label="Industry (Optional)"
+              label={t('auth.register.fields.industryOptional')}
             >
               <MenuItem value="">
-                <em>Select industry</em>
+                <em>{t('auth.register.fields.selectIndustry')}</em>
               </MenuItem>
               {industries.map((industry) => (
                 <MenuItem key={industry} value={industry}>
@@ -497,16 +499,16 @@ const TenantRegistration: React.FC = () => {
           </FormControl>
 
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Country (Optional)</InputLabel>
+            <InputLabel>{t('auth.register.fields.countryOptional')}</InputLabel>
             <Select
               value={formData.country}
               onChange={(e) =>
                 handleChange('country')({ target: { value: e.target.value } })
               }
-              label="Country (Optional)"
+              label={t('auth.register.fields.countryOptional')}
             >
               <MenuItem value="">
-                <em>Select country</em>
+                <em>{t('auth.register.fields.selectCountry')}</em>
               </MenuItem>
               {countries.map((country) => (
                 <MenuItem key={country.code} value={country.code}>
@@ -517,26 +519,26 @@ const TenantRegistration: React.FC = () => {
           </FormControl>
 
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Region</InputLabel>
+            <InputLabel>{t('auth.register.fields.region')}</InputLabel>
             <Select
               value={formData.region}
               onChange={(e) =>
                 handleChange('region')({ target: { value: e.target.value } })
               }
-              label="Region"
+              label={t('auth.register.fields.region')}
             >
-              <MenuItem value="EU">Europe (EU)</MenuItem>
-              <MenuItem value="US">United States (US)</MenuItem>
+              <MenuItem value="EU">{t('auth.register.fields.regionEU')}</MenuItem>
+              <MenuItem value="US">{t('auth.register.fields.regionUS')}</MenuItem>
             </Select>
           </FormControl>
 
           <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
-            Admin Account
+            {t('auth.register.sections.adminAccount')}
           </Typography>
 
           <TextField
             fullWidth
-            label="Admin Name"
+            label={t('auth.register.fields.adminName')}
             value={formData.admin_name}
             onChange={handleChange('admin_name')}
             error={!!errors.admin_name}
@@ -548,7 +550,7 @@ const TenantRegistration: React.FC = () => {
           <TextField
             fullWidth
             type="email"
-            label="Admin Email"
+            label={t('auth.register.fields.adminEmail')}
             value={formData.admin_email}
             onChange={handleChange('admin_email')}
             error={!!errors.admin_email}
@@ -560,11 +562,11 @@ const TenantRegistration: React.FC = () => {
           <TextField
             fullWidth
             type="password"
-            label="Password"
+            label={t('auth.register.fields.password')}
             value={formData.admin_password}
             onChange={handleChange('admin_password')}
             error={!!errors.admin_password}
-            helperText={errors.admin_password?.[0] || 'Minimum 8 characters'}
+            helperText={errors.admin_password?.[0] || t('auth.register.fields.passwordMinHelper')}
             required
             sx={{ mb: 2 }}
           />
@@ -572,7 +574,7 @@ const TenantRegistration: React.FC = () => {
           <TextField
             fullWidth
             type="password"
-            label="Confirm Password"
+            label={t('auth.register.fields.passwordConfirm')}
             value={formData.admin_password_confirmation}
             onChange={handleChange('admin_password_confirmation')}
             error={!!errors.admin_password_confirmation}
@@ -601,7 +603,7 @@ const TenantRegistration: React.FC = () => {
                 >
                   <ShieldOutlinedIcon sx={{ color: 'info.main' }} />
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    Just one more step: confirm you’re not a robot.
+                    {t('auth.register.captchaPrompt')}
                   </Typography>
                 </Box>
               )}
@@ -635,17 +637,17 @@ const TenantRegistration: React.FC = () => {
               }
               label={
                 <Typography variant="body2" color="text.secondary">
-                  I agree to the{' '}
+                  {t('auth.register.legal.prefix')}{' '}
                   <Link href="/legal/terms" target="_blank" rel="noopener noreferrer">
-                    Terms
+                    {t('auth.register.legal.terms')}
                   </Link>
                   ,{' '}
                   <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer">
-                    Privacy Policy
+                    {t('auth.register.legal.privacy')}
                   </Link>
                   , and{' '}
                   <Link href="/legal/acceptable-use" target="_blank" rel="noopener noreferrer">
-                    Acceptable Use Policy
+                    {t('auth.register.legal.acceptableUse')}
                   </Link>
                   .
                 </Typography>
@@ -670,21 +672,21 @@ const TenantRegistration: React.FC = () => {
             {loading ? (
               <>
                 <CircularProgress size={20} sx={{ mr: 1 }} />
-                Sending verification email...
+                {t('auth.register.sendingVerification')}
               </>
             ) : (
-              'Create Workspace'
+              t('auth.register.submit')
             )}
           </Button>
 
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              Already have a workspace?{' '}
+              {t('auth.register.haveWorkspace')}{' '}
               <Button
                 onClick={() => navigate('/login')}
                 sx={{ textTransform: 'none' }}
               >
-                Sign In
+                {t('auth.register.signIn')}
               </Button>
             </Typography>
           </Box>

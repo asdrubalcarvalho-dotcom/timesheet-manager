@@ -64,6 +64,7 @@ import type { Expense } from '../../types';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
+import { useTranslation } from 'react-i18next';
 import {
   formatTenantDate,
   formatTenantDistanceKm,
@@ -98,10 +99,12 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
   onMarkPaid,
   userRole
 }) => {
+  const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
-  const currencySymbol = tenantContext?.currency_symbol || '$';
+  const currencySymbol = tenantContext?.currency_symbol || t('common.currencyFallback');
+  const emptyValue = t('rightPanel.insights.emptyValue');
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('approvals-expenses');
   const [selectedExpenses, setSelectedExpenses] = useState<Set<number>>(new Set());
   const [dateFrom, setDateFrom] = useState<Dayjs>(dayjs().subtract(1, 'month'));
@@ -292,9 +295,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
     try {
       await onApprove(Array.from(selectedExpenses));
       clearSelection();
-      showSuccess(`${selectedExpenses.size} expense(s) approved successfully`);
+      showSuccess(t('approvals.expenses.approveSuccess', { count: selectedExpenses.size }));
     } catch (error) {
-      showError('Failed to approve expenses');
+      showError(t('approvals.expenses.approveFailed'));
     }
   };
 
@@ -304,7 +307,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       return;
     }
     if (!rejectReason.trim()) {
-      showError('Please provide a rejection reason');
+      showError(t('approvals.expenses.rejectionReasonRequired'));
       return;
     }
     
@@ -313,9 +316,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       clearSelection();
       setRejectDialogOpen(false);
       setRejectReason('');
-      showSuccess(`${selectedExpenses.size} expense(s) rejected`);
+      showSuccess(t('approvals.expenses.rejectSuccess', { count: selectedExpenses.size }));
     } catch (error) {
-      showError('Failed to reject expenses');
+      showError(t('approvals.expenses.rejectFailed'));
     }
   };
 
@@ -325,7 +328,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       return;
     }
     if (!paymentReference.trim()) {
-      showError('Please provide a payment reference');
+      showError(t('approvals.expenses.paymentReferenceRequired'));
       return;
     }
     
@@ -334,9 +337,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       clearSelection();
       setPaymentDialogOpen(false);
       setPaymentReference('');
-      showSuccess(`${selectedExpenses.size} expense(s) marked as paid`);
+      showSuccess(t('approvals.expenses.markPaidSuccess', { count: selectedExpenses.size }));
     } catch (error) {
-      showError('Failed to mark expenses as paid');
+      showError(t('approvals.expenses.markPaidFailed'));
     }
   };
 
@@ -360,6 +363,31 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       case 'paid': return <AccountBalanceWallet />;
       default: return <MoreHoriz />;
     }
+  };
+
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'submitted':
+        return t('approvals.expenses.status.submitted');
+      case 'finance_review':
+        return t('approvals.expenses.status.financeReview');
+      case 'finance_approved':
+        return t('approvals.expenses.status.financeApproved');
+      case 'paid':
+        return t('approvals.expenses.status.paid');
+      default:
+        return status.replace('_', ' ').toUpperCase();
+    }
+  };
+
+  const getCategoryLabel = (category?: string | null): string => {
+    if (!category) return emptyValue;
+    return t(`expenses.categories.${category}`, { defaultValue: category });
+  };
+
+  const getVehicleLabel = (vehicleType?: string | null): string => {
+    if (!vehicleType) return t('common.notAvailable');
+    return t(`expenses.form.vehicle.${vehicleType}`, { defaultValue: vehicleType });
   };
 
   // Get category icon
@@ -443,10 +471,12 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               
               <Box flex={1} minWidth={0}>
                 <Typography variant="caption" fontWeight={600} display="block" lineHeight={1.2}>
-                  {expense.expense_type === 'mileage' ? '🚗 Mileage' : '💰 Reimbursement'}
+                  {expense.expense_type === 'mileage'
+                    ? t('approvals.expenses.type.mileageLabel')
+                    : t('approvals.expenses.type.reimbursementLabel')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
-                  {expense.category?.replace('_', ' ').toUpperCase()}
+                  {getCategoryLabel(expense.category)}
                 </Typography>
               </Box>
 
@@ -472,7 +502,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <Person sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" noWrap fontSize="0.7rem">
-                    {expense.technician?.name || '—'}
+                    {expense.technician?.name || emptyValue}
                   </Typography>
                 </Stack>
               </Grid>
@@ -481,7 +511,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <Business sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" noWrap fontSize="0.7rem">
-                    {expense.project?.name || '—'}
+                    {expense.project?.name || emptyValue}
                   </Typography>
                 </Stack>
               </Grid>
@@ -489,7 +519,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {expense.expense_type === 'mileage' && (
                 <Grid item xs={12}>
                   <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
-                    🛣️ {formatTenantDistanceKm(Number(expense.distance_km ?? 0), tenantContext, 2)} × {formatTenantMoneyPerDistanceKm(Number(expense.rate_per_km ?? 0), tenantContext)} ({expense.vehicle_type})
+                    🛣️ {formatTenantDistanceKm(Number(expense.distance_km ?? 0), tenantContext, 2)} × {formatTenantMoneyPerDistanceKm(Number(expense.rate_per_km ?? 0), tenantContext)} ({getVehicleLabel(expense.vehicle_type)})
                   </Typography>
                 </Grid>
               )}
@@ -530,7 +560,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                     <Box
                       component="img"
                       src={getAttachmentUrl(expense.id)}
-                      alt="Receipt"
+                      alt={t('approvals.expenses.attachment.receiptAlt')}
                       sx={{
                         width: '100%',
                         height: 80,
@@ -561,7 +591,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Visibility sx={{ color: 'white', fontSize: 18 }} />
                         <Typography variant="caption" sx={{ color: 'white', fontWeight: 600 }}>
-                          View Receipt
+                          {t('approvals.expenses.attachment.viewReceipt')}
                         </Typography>
                       </Stack>
                     </Box>
@@ -574,7 +604,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
             <Box mt={1.5} display="flex" justifyContent="space-between" alignItems="center">
               <Chip
                 icon={getStatusIcon(expense.status)}
-                label={expense.status.replace('_', ' ').toUpperCase()}
+                label={getStatusLabel(expense.status)}
                 size="small"
                 sx={{
                   bgcolor: alpha(getStatusColor(expense.status), 0.1),
@@ -587,7 +617,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
 
               <Stack direction="row" spacing={0.5}>
                 {expense.attachment_path && (
-                  <Tooltip title="View Receipt">
+                  <Tooltip title={t('approvals.expenses.attachment.viewReceipt')}>
                     <IconButton 
                       size="small" 
                       onClick={(e) => {
@@ -604,7 +634,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 {expense.expense_type !== 'mileage' && !expense.attachment_path && (
                   <Chip 
                     icon={<ImageIcon sx={{ fontSize: 14 }} />}
-                    label="No receipt"
+                    label={t('approvals.expenses.attachment.noReceipt')}
                     size="small"
                     color="warning"
                     sx={{ 
@@ -648,7 +678,12 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   {title}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {expensesInStatus.length} expense{expensesInStatus.length !== 1 ? 's' : ''}
+                  {t('approvals.expenses.countLabel', {
+                    count: expensesInStatus.length,
+                    label: expensesInStatus.length === 1
+                      ? t('approvals.expenses.item')
+                      : t('approvals.expenses.items'),
+                  })}
                 </Typography>
               </Box>
               <Typography variant="h6" fontWeight={700} color={color} fontSize="1.1rem">
@@ -665,9 +700,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 sx={{ mt: 1, borderColor: color, color, py: 0.5 }}
                 startIcon={areAllSelectedInStatus(status) ? <Clear /> : <CheckCircle />}
               >
-                {areAllSelectedInStatus(status) 
-                  ? `Deselect All (${selectableExpenses.length})` 
-                  : `Select All (${selectableExpenses.length})`
+                {areAllSelectedInStatus(status)
+                  ? t('approvals.expenses.deselectAll', { count: selectableExpenses.length })
+                  : t('approvals.expenses.selectAll', { count: selectableExpenses.length })
                 }
               </Button>
             )}
@@ -698,13 +733,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
             <Grid item xs={12} md={3}>
               <Stack spacing={0.3}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                  TOTAL VALUE
+                  {t('approvals.expenses.stats.totalValue')}
                 </Typography>
                 <Typography variant="h5" fontWeight={700} color="white">
                   {formatTenantMoney(stats.total, tenantContext)}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
-                  {stats.count} expenses
+                  {t('approvals.expenses.stats.totalCount', { count: stats.count })}
                 </Typography>
               </Stack>
             </Grid>
@@ -714,13 +749,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Grid item xs={12} md={3}>
                   <Stack spacing={0.3}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                      SELECTED
+                      {t('approvals.expenses.stats.selected')}
                     </Typography>
                     <Typography variant="h6" fontWeight={600} color="white">
                       {formatTenantMoney(stats.selected, tenantContext)}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
-                      {stats.selectedCount} selected
+                      {t('approvals.expenses.stats.selectedCount', { count: stats.selectedCount })}
                     </Typography>
                   </Stack>
                 </Grid>
@@ -741,7 +776,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                       disabled={isReadOnly}
                       sx={{ bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}
                     >
-                      Reject
+                      {t('common.reject')}
                     </Button>
                     
                     {userRole !== 'finance' && (
@@ -753,7 +788,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                         disabled={isReadOnly}
                         sx={{ bgcolor: 'white', color: '#667eea', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
                       >
-                        Approve
+                        {t('common.approve')}
                       </Button>
                     )}
 
@@ -771,7 +806,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                         disabled={isReadOnly}
                         sx={{ bgcolor: 'white', color: '#667eea', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
                       >
-                        Mark Paid
+                        {t('approvals.expenses.markPaid')}
                       </Button>
                     )}
 
@@ -781,7 +816,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                       onClick={clearSelection}
                       sx={{ borderColor: 'white', color: 'white' }}
                     >
-                      Clear
+                      {t('common.clear')}
                     </Button>
                   </Stack>
                 </Grid>
@@ -801,11 +836,11 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <FilterList />
               </Badge>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Filters
+                {t('common.filters')}
               </Typography>
               {activeFiltersCount > 0 && (
                 <Chip 
-                  label={`${filteredExpenses.length} results`} 
+                  label={t('approvals.filters.results', { count: filteredExpenses.length })} 
                   size="small" 
                   color="primary" 
                   variant="outlined"
@@ -820,7 +855,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   onClick={clearAllFilters}
                   sx={{ textTransform: 'none' }}
                 >
-                  Clear All
+                  {t('common.clearAll')}
                 </Button>
               )}
               <IconButton size="small" onClick={() => setFiltersExpanded(!filtersExpanded)}>
@@ -836,7 +871,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="Search description, category, project..."
+                  placeholder={t('approvals.expenses.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   InputProps={{
@@ -859,15 +894,15 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {/* Sort */}
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Sort By</InputLabel>
+                  <InputLabel>{t('approvals.filters.sortBy')}</InputLabel>
                   <Select
                     value={sortBy}
-                    label="Sort By"
+                    label={t('approvals.filters.sortBy')}
                     onChange={(e) => setSortBy(e.target.value as any)}
                   >
-                    <MenuItem value="date">Date</MenuItem>
-                    <MenuItem value="amount">Amount</MenuItem>
-                    <MenuItem value="project">Project</MenuItem>
+                    <MenuItem value="date">{t('approvals.filters.sort.date')}</MenuItem>
+                    <MenuItem value="amount">{t('approvals.filters.sort.amount')}</MenuItem>
+                    <MenuItem value="project">{t('approvals.filters.sort.project')}</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -881,15 +916,15 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   size="small"
                   fullWidth
                 >
-                  <ToggleButton value="asc">Ascending</ToggleButton>
-                  <ToggleButton value="desc">Descending</ToggleButton>
+                  <ToggleButton value="asc">{t('approvals.filters.sortOrder.ascending')}</ToggleButton>
+                  <ToggleButton value="desc">{t('approvals.filters.sortOrder.descending')}</ToggleButton>
                 </ToggleButtonGroup>
               </Grid>
 
               {/* Date Range */}
               <Grid item xs={12} md={3}>
                 <DatePicker
-                  label="From Date"
+                  label={t('approvals.filters.fromDate')}
                   value={dateFrom}
                   onChange={(val) => val && setDateFrom(val)}
                   format={datePickerFormat}
@@ -898,7 +933,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               </Grid>
               <Grid item xs={12} md={3}>
                 <DatePicker
-                  label="To Date"
+                  label={t('approvals.filters.toDate')}
                   value={dateTo}
                   onChange={(val) => val && setDateTo(val)}
                   format={datePickerFormat}
@@ -912,7 +947,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   fullWidth
                   size="small"
                   type="number"
-                  label="Min Amount"
+                  label={t('approvals.expenses.minAmount')}
                   value={minAmount}
                   onChange={(e) => setMinAmount(e.target.value ? parseFloat(e.target.value) : '')}
                   InputProps={{
@@ -925,7 +960,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   fullWidth
                   size="small"
                   type="number"
-                  label="Max Amount"
+                  label={t('approvals.expenses.maxAmount')}
                   value={maxAmount}
                   onChange={(e) => setMaxAmount(e.target.value ? parseFloat(e.target.value) : '')}
                   InputProps={{
@@ -937,24 +972,24 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {/* Status Filter */}
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Status</InputLabel>
+                  <InputLabel>{t('approvals.expenses.statusLabel')}</InputLabel>
                   <Select
                     multiple
                     value={statusFilter}
-                    label="Status"
+                    label={t('approvals.expenses.statusLabel')}
                     onChange={(e) => setStatusFilter(e.target.value as string[])}
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                         {selected.map((value) => (
-                          <Chip key={value} label={value.replace('_', ' ')} size="small" />
+                          <Chip key={value} label={getStatusLabel(value)} size="small" />
                         ))}
                       </Box>
                     )}
                   >
-                    <MenuItem value="submitted">Submitted</MenuItem>
-                    <MenuItem value="finance_review">Finance Review</MenuItem>
-                    <MenuItem value="finance_approved">Finance Approved</MenuItem>
-                    <MenuItem value="paid">Paid</MenuItem>
+                    <MenuItem value="submitted">{t('approvals.expenses.status.submitted')}</MenuItem>
+                    <MenuItem value="finance_review">{t('approvals.expenses.status.financeReview')}</MenuItem>
+                    <MenuItem value="finance_approved">{t('approvals.expenses.status.financeApproved')}</MenuItem>
+                    <MenuItem value="paid">{t('approvals.expenses.status.paid')}</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -962,23 +997,23 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {/* Expense Type Filter */}
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Type</InputLabel>
+                  <InputLabel>{t('approvals.expenses.typeLabel')}</InputLabel>
                   <Select
                     multiple
                     value={typeFilter}
-                    label="Type"
+                    label={t('approvals.expenses.typeLabel')}
                     onChange={(e) => setTypeFilter(e.target.value as string[])}
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                         {selected.map((value) => (
-                          <Chip key={value} label={value.replace('_', ' ')} size="small" />
+                          <Chip key={value} label={t(`approvals.expenses.type.${value}`)} size="small" />
                         ))}
                       </Box>
                     )}
                   >
-                    <MenuItem value="reimbursement">Reimbursement</MenuItem>
-                    <MenuItem value="mileage">Mileage</MenuItem>
-                    <MenuItem value="company_card">Company Card</MenuItem>
+                    <MenuItem value="reimbursement">{t('approvals.expenses.type.reimbursement')}</MenuItem>
+                    <MenuItem value="mileage">{t('approvals.expenses.type.mileage')}</MenuItem>
+                    <MenuItem value="company_card">{t('approvals.expenses.type.companyCard')}</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -986,22 +1021,22 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {/* Category Filter */}
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Category</InputLabel>
+                  <InputLabel>{t('approvals.expenses.categoryLabel')}</InputLabel>
                   <Select
                     multiple
                     value={categoryFilter}
-                    label="Category"
+                    label={t('approvals.expenses.categoryLabel')}
                     onChange={(e) => setCategoryFilter(e.target.value as string[])}
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                         {selected.map((value) => (
-                          <Chip key={value} label={value} size="small" />
+                          <Chip key={value} label={getCategoryLabel(value)} size="small" />
                         ))}
                       </Box>
                     )}
                   >
                     {uniqueCategories.map((cat) => (
-                      <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                      <MenuItem key={cat} value={cat}>{getCategoryLabel(cat)}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1010,11 +1045,11 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               {/* Project Filter */}
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Project</InputLabel>
+                  <InputLabel>{t('approvals.expenses.projectLabel')}</InputLabel>
                   <Select
                     multiple
                     value={projectFilter}
-                    label="Project"
+                    label={t('approvals.expenses.projectLabel')}
                     onChange={(e) => setProjectFilter(e.target.value as string[])}
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -1041,10 +1076,10 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
       {/* Kanban Board */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         <Stack direction="row" spacing={2} sx={{ minHeight: '100%', pb: 2 }}>
-          {renderStatusColumn('submitted', 'Pending Review', <Pending />, '#2196f3')}
-          {renderStatusColumn('finance_review', 'Finance Review', <TrendingUp />, '#ff9800')}
-          {renderStatusColumn('finance_approved', 'Approved', <CheckCircle />, '#4caf50')}
-          {renderStatusColumn('paid', 'Paid', <AccountBalanceWallet />, '#9c27b0')}
+          {renderStatusColumn('submitted', t('approvals.expenses.columns.pendingReview'), <Pending />, '#2196f3')}
+          {renderStatusColumn('finance_review', t('approvals.expenses.columns.financeReview'), <TrendingUp />, '#ff9800')}
+          {renderStatusColumn('finance_approved', t('approvals.expenses.columns.approved'), <CheckCircle />, '#4caf50')}
+          {renderStatusColumn('paid', t('approvals.expenses.columns.paid'), <AccountBalanceWallet />, '#9c27b0')}
         </Stack>
       </Box>
 
@@ -1056,14 +1091,14 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
         fullWidth
         disableRestoreFocus
       >
-        <DialogTitle>Reject Expenses</DialogTitle>
+        <DialogTitle>{t('approvals.expenses.rejectDialogTitle')}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             multiline
             rows={4}
             fullWidth
-            label="Rejection Reason"
+            label={t('common.rejectionReason')}
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             disabled={isReadOnly}
@@ -1071,9 +1106,9 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setRejectDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleReject} variant="contained" color="error" disabled={isReadOnly}>
-            Reject
+            {t('common.reject')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1086,23 +1121,23 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
         fullWidth
         disableRestoreFocus
       >
-        <DialogTitle>Mark as Paid</DialogTitle>
+        <DialogTitle>{t('approvals.expenses.markPaidTitle')}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             fullWidth
-            label="Payment Reference"
+            label={t('approvals.expenses.paymentReference')}
             value={paymentReference}
             onChange={(e) => setPaymentReference(e.target.value)}
-            placeholder="e.g., TRF-2025-001234"
+            placeholder={t('approvals.expenses.paymentReferencePlaceholder')}
             disabled={isReadOnly}
             sx={{ mt: 2 }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPaymentDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setPaymentDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleMarkPaid} variant="contained" color="primary" disabled={isReadOnly}>
-            Mark Paid
+            {t('approvals.expenses.markPaid')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1121,10 +1156,10 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
           <Stack direction="row" spacing={2} alignItems="center">
             <Receipt color="primary" />
             <Box flex={1}>
-              <Typography variant="h6">Receipt Attachment</Typography>
+              <Typography variant="h6">{t('approvals.expenses.attachment.title')}</Typography>
               {selectedExpense && (
                 <Typography variant="caption" color="text.secondary">
-                  {selectedExpense.category?.replace('_', ' ').toUpperCase()} - {formatTenantMoney(parseFloat(String(selectedExpense.amount)) || 0, tenantContext)}
+                  {getCategoryLabel(selectedExpense.category)} - {formatTenantMoney(parseFloat(String(selectedExpense.amount)) || 0, tenantContext)}
                 </Typography>
               )}
             </Box>
@@ -1137,7 +1172,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Box
                   component="img"
                   src={getAttachmentUrl(selectedExpense.id)}
-                  alt="Receipt"
+                  alt={t('approvals.expenses.attachment.receiptAlt')}
                   sx={{
                     maxWidth: '100%',
                     maxHeight: '70vh',
@@ -1149,7 +1184,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               ) : selectedExpense.attachment_path.endsWith('.pdf') ? (
                 <iframe
                   src={getAttachmentUrl(selectedExpense.id)}
-                  title="PDF Receipt"
+                  title={t('approvals.expenses.attachment.pdfTitle')}
                   allow="fullscreen"
                   style={{ 
                     width: '100%', 
@@ -1167,7 +1202,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 }}>
                   <Typography variant="h1" sx={{ fontSize: 64, mb: 2 }}>📄</Typography>
                   <Typography variant="body1" color="text.secondary" mb={2}>
-                    Preview not available for this file type
+                    {t('approvals.expenses.attachment.previewUnavailable')}
                   </Typography>
                   <Button
                     variant="outlined"
@@ -1175,14 +1210,14 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                     href={getAttachmentUrl(selectedExpense.id)}
                     target="_blank"
                   >
-                    Download File
+                    {t('approvals.expenses.attachment.downloadFile')}
                   </Button>
                 </Box>
               )}
               {selectedExpense.description && (
                 <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
                   <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-                    DESCRIPTION
+                    {t('approvals.expenses.attachment.descriptionLabel')}
                   </Typography>
                   <Typography variant="body2">
                     {selectedExpense.description}
@@ -1191,8 +1226,8 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               )}
               <Stack direction="row" spacing={2} sx={{ mt: 3, justifyContent: 'center' }}>
                 <Chip icon={<CalendarToday />} label={formatTenantDate(selectedExpense.date, tenantContext)} />
-                <Chip icon={<Person />} label={selectedExpense.technician?.name || '—'} />
-                <Chip icon={<Business />} label={selectedExpense.project?.name || '—'} />
+                <Chip icon={<Person />} label={selectedExpense.technician?.name || emptyValue} />
+                <Chip icon={<Business />} label={selectedExpense.project?.name || emptyValue} />
               </Stack>
             </Box>
           )}
@@ -1202,13 +1237,13 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
             startIcon={<FileDownload />}
             onClick={() => selectedExpense?.id && window.open(getAttachmentUrl(selectedExpense.id), '_blank')}
           >
-            Download
+            {t('approvals.expenses.attachment.download')}
           </Button>
           <Button onClick={() => {
             setAttachmentDialogOpen(false);
             setSelectedExpense(null);
           }} variant="contained">
-            Close
+            {t('common.close')}
           </Button>
         </DialogActions>
       </Dialog>

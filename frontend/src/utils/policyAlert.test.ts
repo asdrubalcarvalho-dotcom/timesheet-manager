@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { getPolicyAlertModel, POLICY_ALERT_STRINGS } from './policyAlert';
-import type { TenantContext } from '../components/Auth/AuthContext';
+import type { TenantContext } from '../types/tenant';
 
 describe('getPolicyAlertModel', () => {
   it('returns warning when US region has no state', () => {
     const tenantContext: TenantContext = {
       region: 'US',
-      state: null,
+        state: undefined,
       policy_key: 'US-FLSA',
       timezone: 'America/Los_Angeles',
       locale: 'en-US',
@@ -42,7 +42,7 @@ describe('getPolicyAlertModel', () => {
   it('returns null for non-US region', () => {
     const tenantContext: TenantContext = {
       region: 'EU',
-      state: null,
+      state: undefined,
       policy_key: 'NON-US',
       timezone: 'Europe/Lisbon',
       locale: 'pt-PT',

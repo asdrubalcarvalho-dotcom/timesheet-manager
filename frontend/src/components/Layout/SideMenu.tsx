@@ -15,7 +15,10 @@ import {
   useTheme,
   useMediaQuery,
   alpha,
-  Collapse
+  Collapse,
+  Menu,
+  MenuItem,
+  Tooltip
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -38,14 +41,21 @@ import {
   Group as TeamIcon,
   FolderOpen as ProjectsIcon,
   AdminPanelSettings as AdminIcon,
-  DeleteSweep as ResetIcon
+  DeleteSweep as ResetIcon,
+  Language as LanguageIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../Auth/AuthContext';
 import { useApprovalCounts } from '../../hooks/useApprovalCounts';
 import { useFeatures } from '../../contexts/FeatureContext';
 import { useBilling } from '../../contexts/BillingContext';
 import ResetDataDialog from '../Admin/ResetDataDialog';
 import TenantContextBadge from '../TenantContext/TenantContextBadge';
+import {
+  UI_LANG_STORAGE_KEY,
+  normalizeUiLanguage,
+  type UiLanguage
+} from '../../utils/getTenantUiLang';
 
 interface SideMenuProps {
   currentPage: string;
@@ -56,6 +66,7 @@ const DRAWER_WIDTH = 280;
 const DRAWER_WIDTH_COLLAPSED = 72;
 
 export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange }) => {
+  const { t, i18n } = useTranslation();
   const { user, tenant, logout, isAdmin, hasPermission, isOwner } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para buscar counts
   const { hasTravels, hasAI, hasPlanning } = useFeatures(); // Billing-controlled feature flags
@@ -69,39 +80,64 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const [planningOpen, setPlanningOpen] = useState(true); // Planning starts open
   const [administrationOpen, setAdministrationOpen] = useState(true); // Start open for admins
   const [resetDataDialogOpen, setResetDataDialogOpen] = useState(false);
+  const [languageAnchorEl, setLanguageAnchorEl] = useState<null | HTMLElement>(null);
+
+  const languageMenuOpen = Boolean(languageAnchorEl);
+  const currentLanguage =
+    normalizeUiLanguage(i18n.resolvedLanguage ?? i18n.language) ?? 'en-US';
+
+  const languageOptions: Array<{ value: UiLanguage; label: string; flag: string }> = [
+    { value: 'en-US', label: t('language.enUS'), flag: '🇺🇸' },
+    { value: 'en-GB', label: t('language.enGB'), flag: '🇬🇧' },
+    { value: 'pt-PT', label: t('language.ptPT'), flag: '🇵🇹' }
+  ];
+
+  const handleLanguageMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setLanguageAnchorEl(event.currentTarget);
+  };
+
+  const handleLanguageMenuClose = () => {
+    setLanguageAnchorEl(null);
+  };
+
+  const handleLanguageSelect = (language: UiLanguage) => {
+    localStorage.setItem(UI_LANG_STORAGE_KEY, language);
+    void i18n.changeLanguage(language);
+    setLanguageAnchorEl(null);
+  };
 
   const menuItems = [
     {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: t('nav.dashboard'),
       icon: <DashboardIcon />,
       path: 'dashboard',
       show: true
     },
     {
       id: 'timesheets',
-      label: 'Timesheets',
+      label: t('nav.timesheets'),
       icon: <TimesheetIcon />,
       path: 'timesheets', 
       show: hasPermission('view-timesheets')
     },
     {
       id: 'travels',
-      label: 'Travels',
+      label: t('nav.travels'),
       icon: <TravelsIcon />,
       path: 'travels',
       show: hasTravels && (hasPermission('view-timesheets') || isAdmin())
     },
     {
       id: 'expenses',
-      label: 'Expenses', 
+      label: t('nav.expenses'), 
       icon: <ExpenseIcon />,
       path: 'expenses',
       show: hasPermission('view-expenses')
     },
     {
       id: 'approvals',
-      label: 'Approvals',
+      label: t('nav.approvals'),
       icon: <ApprovalIcon />,
       path: 'approvals',
       show: hasPermission('approve-timesheets') || hasPermission('approve-expenses'),
@@ -113,42 +149,42 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const managementItems = [
     {
       id: 'team',
-      label: 'Team',
+      label: t('nav.team'),
       icon: <TeamIcon />, 
       path: 'team',
       show: isAdmin()
     },
     {
       id: 'admin-projects',
-      label: 'Projects',
+      label: t('nav.projects'),
       icon: <ProjectsIcon />,
       path: 'admin-projects',
       show: hasPermission('view-projects') || hasPermission('manage-projects') || isAdmin()
     },
     {
       id: 'admin-tasks',
-      label: 'Tasks',
+      label: t('nav.tasks'),
       icon: <ApprovalIcon />,
       path: 'admin-tasks',
       show: hasPermission('view-tasks') || hasPermission('manage-tasks') || isAdmin()
     },
     {
       id: 'admin-locations',
-      label: 'Locations',
+      label: t('nav.locations'),
       icon: <SettingsIcon />,
       path: 'admin-locations',
       show: hasPermission('view-locations') || hasPermission('manage-locations') || isAdmin()
     },
     {
       id: 'admin-countries',
-      label: 'Countries',
+      label: t('nav.countries'),
       icon: <SettingsIcon />,
       path: 'admin-countries',
       show: hasPermission('view-locations') || hasPermission('manage-locations') || isAdmin()
     },
     {
       id: 'ai-insights',
-      label: 'AI Insights',
+      label: t('nav.aiInsights'),
       icon: <AIIcon />, 
       path: 'ai-insights',
       show: hasAI
@@ -160,7 +196,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const reportsTimesheetsItems = [
     {
       id: 'timesheets-pivot-report',
-      label: 'Analysis',
+      label: t('reports.analysis'),
       icon: <PivotTableChartIcon />,
       path: 'timesheets-pivot-report',
       show: hasPermission('view-timesheets')
@@ -170,7 +206,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const reportsExpensesItems = [
     {
       id: 'expenses-analysis-report',
-      label: 'Analysis',
+      label: t('reports.analysis'),
       icon: <PivotTableChartIcon />,
       path: 'expenses-analysis-report',
       show: hasPermission('view-expenses')
@@ -180,7 +216,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const reportsApprovalsItems = [
     {
       id: 'approvals-heatmap-report',
-      label: 'Heatmap',
+      label: t('reports.heatmap'),
       icon: <ApprovalIcon />,
       path: 'approvals-heatmap-report',
       show: hasPermission('approve-timesheets') || hasPermission('approve-expenses')
@@ -221,21 +257,21 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const planningItems = [
     {
       id: 'planning-projects',
-      label: 'Projects',
+      label: t('nav.projects'),
       icon: <ProjectsIcon />,
       path: 'planning',
       show: canSeeAnyPlanningSubmenu
     },
     {
       id: 'planning-locations',
-      label: 'Locations',
+      label: t('nav.locations'),
       icon: <SettingsIcon />,
       path: 'planning-locations',
       show: canSeeAnyPlanningSubmenu
     },
     {
       id: 'planning-users',
-      label: 'Users',
+      label: t('nav.users'),
       icon: <TeamIcon />,
       path: 'planning-users',
       show: canSeeAnyPlanningSubmenu
@@ -248,28 +284,28 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const administrationItems = [
     {
       id: 'admin-dashboard',
-      label: 'Dashboard',
+      label: t('nav.dashboard'),
       icon: <DashboardIcon />,
       path: 'admin',
       show: isAdmin()
     },
     {
       id: 'admin-users',
-      label: 'Users',
+      label: t('nav.users'),
       icon: <TeamIcon />,
       path: 'admin-users',
       show: isAdmin()
     },
     {
       id: 'billing',
-      label: 'Billing',
+      label: t('nav.billing'),
       icon: <SettingsIcon />,
       path: 'billing',
       show: isAdmin() || isOwner()
     },
     {
       id: 'reset-data',
-      label: 'Reset Data',
+      label: t('nav.resetData'),
       icon: <ResetIcon />,
       path: 'reset-data',
       show: isOwner() && billingSummary?.is_trial === true, // Only Owner in Trial plan
@@ -308,7 +344,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
   const isOwnerRole = user?.roles?.includes('Owner');
   const isSuperAdmin = user?.roles?.includes('Admin');
   const displayRole = isOwnerRole ? 'Owner' : (isSuperAdmin ? 'Admin' : null);
-  const displayName = user?.name || 'User';
+  const displayName = user?.name || t('nav.userFallback');
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
   const drawerContent = (
@@ -341,7 +377,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                 TimePerk
               </Typography>
               <Typography variant="caption" sx={{ color: 'grey.400' }}>
-                Smart Timesheet
+                {t('nav.tagline')}
               </Typography>
             </Box>
           </Box>
@@ -489,7 +525,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                     <ListItemIcon sx={{ color: 'inherit' }}>
                       <ReportsIcon />
                     </ListItemIcon>
-                    <ListItemText primary="Reports" />
+                    <ListItemText primary={t('nav.reports')} />
                     {reportsOpen ? <ExpandLess /> : <ExpandMore />}
                   </ListItemButton>
                 </ListItem>
@@ -529,7 +565,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                     <>
                       <ListItem sx={{ pt: 0.5, pb: 0 }}>
                         <ListItemText
-                          primary="Timesheets"
+                          primary={t('nav.timesheets')}
                           primaryTypographyProps={{
                             fontSize: '0.75rem',
                             fontWeight: 700,
@@ -569,7 +605,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                     <>
                       <ListItem sx={{ pt: 1, pb: 0 }}>
                         <ListItemText
-                          primary="Expenses"
+                          primary={t('nav.expenses')}
                           primaryTypographyProps={{
                             fontSize: '0.75rem',
                             fontWeight: 700,
@@ -609,7 +645,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                     <>
                       <ListItem sx={{ pt: 1, pb: 0 }}>
                         <ListItemText
-                          primary="Approvals"
+                          primary={t('nav.approvals')}
                           primaryTypographyProps={{
                             fontSize: '0.75rem',
                             fontWeight: 700,
@@ -663,7 +699,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                     <ListItemIcon sx={{ color: 'inherit' }}>
                       <PlanningIcon />
                     </ListItemIcon>
-                    <ListItemText primary="Planning" />
+                    <ListItemText primary={t('nav.planning')} />
                     {planningOpen ? <ExpandLess /> : <ExpandMore />}
                   </ListItemButton>
                 </ListItem>
@@ -749,7 +785,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                     <ListItemIcon sx={{ color: 'inherit' }}>
                       <SettingsIcon />
                     </ListItemIcon>
-                    <ListItemText primary="Management" />
+                    <ListItemText primary={t('nav.management')} />
                     {managementOpen ? <ExpandLess /> : <ExpandMore />}
                   </ListItemButton>
                 </ListItem>
@@ -833,7 +869,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                     <ListItemIcon sx={{ color: 'inherit' }}>
                       <AdminIcon />
                     </ListItemIcon>
-                    <ListItemText primary="Administration" />
+                    <ListItemText primary={t('nav.administration')} />
                     {administrationOpen ? <ExpandLess /> : <ExpandMore />}
                   </ListItemButton>
                 </ListItem>
@@ -918,7 +954,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
               variant="caption"
               sx={{ display: 'block', color: 'grey.500', mb: 1, px: 1 }}
             >
-              Legal
+              {t('nav.legal')}
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 1, mb: 1, px: 1, flexWrap: 'wrap' }}>
@@ -934,7 +970,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                 }}
               >
                 <Typography variant="caption" sx={{ color: 'grey.300', '&:hover': { color: 'common.white' } }}>
-                  Terms
+                  {t('nav.terms')}
                 </Typography>
               </Typography>
               <Typography variant="caption" sx={{ color: 'grey.600' }}>
@@ -952,7 +988,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                 }}
               >
                 <Typography variant="caption" sx={{ color: 'grey.300', '&:hover': { color: 'common.white' } }}>
-                  Privacy
+                  {t('nav.privacy')}
                 </Typography>
               </Typography>
               <Typography variant="caption" sx={{ color: 'grey.600' }}>
@@ -970,7 +1006,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
                 }}
               >
                 <Typography variant="caption" sx={{ color: 'grey.300', '&:hover': { color: 'common.white' } }}>
-                  Acceptable Use
+                  {t('nav.acceptableUse')}
                 </Typography>
               </Typography>
             </Box>
@@ -978,6 +1014,65 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
             <Divider sx={{ borderColor: alpha(theme.palette.common.white, 0.08), mb: 1 }} />
           </>
         )}
+
+        {collapsed ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+            <Tooltip title={t('language.label')} placement="right">
+              <IconButton
+                onClick={handleLanguageMenuOpen}
+                sx={{ color: 'grey.300' }}
+                aria-label={t('language.label')}
+              >
+                <LanguageIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ) : (
+          <ListItemButton
+            onClick={handleLanguageMenuOpen}
+            sx={{
+              borderRadius: 2,
+              color: 'grey.300',
+              mb: 1,
+              '&:hover': {
+                bgcolor: alpha(theme.palette.common.white, 0.05),
+                color: 'common.white'
+              }
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 40, color: 'inherit' }}>
+              <LanguageIcon />
+            </ListItemIcon>
+            <ListItemText
+              primary={t('language.label')}
+              secondary={
+                languageOptions.find((option) => option.value === currentLanguage)?.label ??
+                currentLanguage
+              }
+              primaryTypographyProps={{ fontSize: '0.875rem' }}
+              secondaryTypographyProps={{ fontSize: '0.75rem', color: 'grey.500' }}
+            />
+          </ListItemButton>
+        )}
+
+        <Menu
+          anchorEl={languageAnchorEl}
+          open={languageMenuOpen}
+          onClose={handleLanguageMenuClose}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          {languageOptions.map((option) => (
+            <MenuItem
+              key={option.value}
+              selected={option.value === currentLanguage}
+              onClick={() => handleLanguageSelect(option.value)}
+            >
+              <ListItemIcon sx={{ minWidth: 28 }}>{option.flag}</ListItemIcon>
+              <ListItemText primary={option.label} />
+            </MenuItem>
+          ))}
+        </Menu>
 
         <ListItemButton
           onClick={logout}
@@ -997,7 +1092,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
           }}>
             <LogoutIcon />
           </ListItemIcon>
-          {!collapsed && <ListItemText primary="Logout" />}
+          {!collapsed && <ListItemText primary={t('nav.logout')} />}
         </ListItemButton>
       </Box>
     </Box>

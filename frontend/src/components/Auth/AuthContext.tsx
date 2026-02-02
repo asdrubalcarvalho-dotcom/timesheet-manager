@@ -3,11 +3,15 @@ import React, {
   useContext,
   useState,
   useEffect,
-  useCallback
+  useCallback,
+  useMemo
 } from 'react';
 import { API_URL } from '../../services/api';
 import type { ReactNode } from 'react';
-import { setLanguage } from '../../i18n';
+import i18n from '../../i18n';
+import type { TenantContext } from '../../types/tenant';
+import { normalizeTenantContext } from '../../utils/normalizeTenantContext';
+import { getTenantUiLang } from '../../utils/getTenantUiLang';
 
 /* ===============================================================
    TYPES
@@ -44,19 +48,6 @@ interface Tenant {
   ai_enabled?: boolean;
   region?: string | null;
   week_start?: string | null;
-}
-
-export interface TenantContext {
-  region: string | null;
-  week_start?: string | null;
-  state?: string | null;
-  policy_key?: string | null;
-  timezone: string;
-  locale: string;
-  ui_locale?: string | null;
-  date_format: string;
-  currency: string;
-  currency_symbol: string;
 }
 
 export type CaptchaChallenge = {
@@ -183,7 +174,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const userData = await response.json();
       setUser(normalizeUser(userData));
       setTenant(userData?.tenant ?? null);
-      setTenantContext(userData?.tenant_context ?? null);
+      setTenantContext(userData?.tenant_context ? normalizeTenantContext(userData.tenant_context) : null);
       setTenantSlugState(storedTenant);
       return true;
     } catch (error) {
@@ -234,7 +225,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const userData = await response.json();
             setUser(normalizeUser(userData));
             setTenant(userData?.tenant ?? null);
-            setTenantContext(userData?.tenant_context ?? null);
+            setTenantContext(userData?.tenant_context ? normalizeTenantContext(userData.tenant_context) : null);
           } else if (response) {
             // Only clear stored auth when we're confident the session is invalid.
             // 401/419: invalid/expired token
@@ -260,11 +251,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth();
   }, [normalizeUser, API_URL]);
 
+  const tenantLang = useMemo(() => getTenantUiLang(tenantContext), [tenantContext]);
+
   useEffect(() => {
-    const browserLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
-    const targetLocale = tenantContext?.ui_locale ?? browserLocale ?? 'en';
-    void setLanguage(targetLocale);
-  }, [tenantContext?.ui_locale]);
+    if (!tenantLang) return;
+    if (i18n.language === tenantLang) return;
+    void i18n.changeLanguage(tenantLang);
+  }, [tenantLang]);
   /* ---------------------------------------------------------------
      LOGIN
   --------------------------------------------------------------- */
@@ -364,7 +357,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setTenantSlugState(tenantSlug);
 
       setTenant(data?.tenant ?? data?.user?.tenant ?? null);
-      setTenantContext(data?.user?.tenant_context ?? null);
+      setTenantContext(data?.user?.tenant_context ? normalizeTenantContext(data.user.tenant_context) : null);
 
       return { ok: true };
     } catch (error) {
