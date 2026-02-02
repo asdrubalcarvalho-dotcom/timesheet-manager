@@ -212,7 +212,7 @@ const ApprovalHeatmapReport: React.FC = () => {
             ? e.response.data.message
             : typeof e?.message === 'string'
               ? e.message
-              : 'Failed to load approval heatmap';
+              : t('approvalHeatmap.errors.loadFailed');
         setError(message);
         setData(null);
       } finally {
@@ -225,7 +225,7 @@ const ApprovalHeatmapReport: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [canQuery, payload]);
+  }, [canQuery, payload, t]);
 
   const allDates = useMemo(() => {
     if (!fromDate || !toDate) return [] as string[];
@@ -289,12 +289,12 @@ const ApprovalHeatmapReport: React.FC = () => {
     }
 
     return {
-      scoped: data?.meta?.scoped ? String(data.meta.scoped) : '—',
+      scoped: data?.meta?.scoped ? String(data.meta.scoped) : t('rightPanel.insights.emptyValue'),
       totalPending,
       totalApprovedTimesheets,
       totalApprovedExpenses,
     };
-  }, [data]);
+  }, [data, t]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -436,8 +436,8 @@ const ApprovalHeatmapReport: React.FC = () => {
     <Box sx={{ p: 3 }}>
       <Stack spacing={2}>
         <PageHeader
-          title="Approval Heatmap"
-          subtitle="Pending approvals by day"
+          title={t('approvalHeatmap.title')}
+          subtitle={t('approvalHeatmap.subtitle')}
         />
 
         <ReportFiltersCard
@@ -449,7 +449,7 @@ const ApprovalHeatmapReport: React.FC = () => {
           <Grid container spacing={1} alignItems="center">
             <Grid item xs={12} md={3}>
               <DatePicker
-                label="From"
+                label={t('approvalHeatmap.filters.from')}
                 value={fromPickerValue}
                 onChange={(val) => val && setFrom(val.format('YYYY-MM-DD'))}
                 format={datePickerFormat}
@@ -459,7 +459,7 @@ const ApprovalHeatmapReport: React.FC = () => {
 
             <Grid item xs={12} md={3}>
               <DatePicker
-                label="To"
+                label={t('approvalHeatmap.filters.to')}
                 value={toPickerValue}
                 onChange={(val) => val && setTo(val.format('YYYY-MM-DD'))}
                 format={datePickerFormat}
@@ -476,7 +476,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                     size="small"
                   />
                 }
-                label="Timesheets"
+                label={t('approvalHeatmap.filters.timesheets')}
                 sx={{ m: 0 }}
               />
             </Grid>
@@ -490,7 +490,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                     size="small"
                   />
                 }
-                label="Expenses"
+                label={t('approvalHeatmap.filters.expenses')}
                 sx={{ m: 0 }}
               />
             </Grid>
@@ -503,7 +503,7 @@ const ApprovalHeatmapReport: React.FC = () => {
               <Grid item xs={12} md={3}>
                 <Stack spacing={0.3}>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                    SCOPE
+                    {t('approvalHeatmap.scopeLabel')}
                   </Typography>
                   <Typography variant="h6" fontWeight={700} color="white">
                     {totals.scoped}
@@ -519,7 +519,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                   <Grid item xs={6} sm={4}>
                     <Stack spacing={0.3}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                        Pending
+                        {t('approvalHeatmap.pendingLabel')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
                         {totals.totalPending}
@@ -529,7 +529,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                   <Grid item xs={6} sm={4}>
                     <Stack spacing={0.3}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                        Approved (timesheets)
+                        {t('approvalHeatmap.approvedTimesheetsLabel')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
                         {totals.totalApprovedTimesheets}
@@ -539,7 +539,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                   <Grid item xs={6} sm={4}>
                     <Stack spacing={0.3}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}>
-                        Approved (expenses)
+                        {t('approvalHeatmap.approvedExpensesLabel')}
                       </Typography>
                       <Typography variant="h6" fontWeight={600} color="white">
                         {totals.totalApprovedExpenses}
@@ -554,7 +554,7 @@ const ApprovalHeatmapReport: React.FC = () => {
 
         {!canQuery && (
           <Alert severity="info">
-            Select a valid range (max 62 days) and include at least one type.
+            {t('approvalHeatmap.invalidRange')}
           </Alert>
         )}
 
@@ -564,7 +564,7 @@ const ApprovalHeatmapReport: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" color="text.secondary">
-              Loading heatmap…
+              {t('approvalHeatmap.loading')}
             </Typography>
           </Box>
         )}
@@ -632,10 +632,10 @@ const ApprovalHeatmapReport: React.FC = () => {
 
                   const lines: string[] = [header];
                   if (includeTimesheets) {
-                    lines.push(`Timesheets: ${tsPending} pending`);
+                    lines.push(t('approvalHeatmap.tooltip.timesheetsPending', { count: tsPending }));
                   }
                   if (includeExpenses) {
-                    lines.push(`Expenses: ${exPending} pending`);
+                    lines.push(t('approvalHeatmap.tooltip.expensesPending', { count: exPending }));
                   }
                   return lines.join('\n');
                 })();
@@ -682,7 +682,11 @@ const ApprovalHeatmapReport: React.FC = () => {
             </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              Showing {formatTenantDate(String(data.meta.from ?? ''), tenantContext)} → {formatTenantDate(String(data.meta.to ?? ''), tenantContext)} (scoped: {data.meta.scoped})
+              {t('approvalHeatmap.footer.summary', {
+                from: formatTenantDate(String(data.meta.from ?? ''), tenantContext),
+                to: formatTenantDate(String(data.meta.to ?? ''), tenantContext),
+                scoped: String(data.meta.scoped ?? t('rightPanel.insights.emptyValue')),
+              })}
             </Typography>
           </Box>
         )}

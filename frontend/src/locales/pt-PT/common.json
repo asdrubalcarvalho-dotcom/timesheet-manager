@@ -263,6 +263,7 @@
     "forbidden": "Proibido",
     "validationFailed": "Validação falhou: {{details}}",
     "notAvailable": "N/D",
+    "currencyFallback": "$",
     "unknown": "Desconhecido",
     "unknownUpper": "DESCONHECIDO",
     "otherUpper": "OUTRO",
@@ -453,6 +454,16 @@
     "approvedExpensesLabel": "Aprovadas (despesas)",
     "invalidRange": "Seleciona um intervalo válido (máx. 62 dias) e inclui pelo menos um tipo.",
     "loading": "A carregar mapa de calor…",
+    "errors": {
+      "loadFailed": "Falha ao carregar o mapa de calor de aprovações"
+    },
+    "tooltip": {
+      "timesheetsPending": "Timesheets: {{count}} pendentes",
+      "expensesPending": "Despesas: {{count}} pendentes"
+    },
+    "footer": {
+      "summary": "A mostrar {{from}} → {{to}} (âmbito: {{scoped}})"
+    },
     "insights": {
       "summaryTitle": "Destaques de aprovações",
       "summaryHint": "Visão geral do volume pendente e dos dias mais cheios.",
@@ -482,7 +493,6 @@
       "overCapSummary": "Acima de 12h: {{overCap}} · Sobreposições: {{overlaps}}",
       "results": "{{count}} resultados",
       "searchPlaceholder": "Pesquisar técnico, projeto, tarefa, descrição...",
-      "sortBy": "Ordenar por",
       "sort": {
         "date": "Data",
         "hours": "Horas",
@@ -621,14 +631,29 @@
     "travels": {
       "title": "Detalhes da viagem",
       "empty": "Sem detalhes de viagem.",
+      "loadFailed": "Falha ao carregar detalhes de viagens",
       "technician": "Técnico",
       "project": "Projeto",
       "departure": "Partida",
       "arrival": "Chegada",
       "direction": "Direção",
       "duration": "Duração",
+      "durationValue": "{{hours}}h {{minutes}}m",
       "status": "Estado",
-      "classificationReason": "Motivo da classificação"
+      "classificationReason": "Motivo da classificação",
+      "statusValues": {
+        "completed": "CONCLUÍDA",
+        "cancelled": "CANCELADA",
+        "planned": "PLANEADA",
+        "in_progress": "EM CURSO",
+        "pending": "PENDENTE"
+      },
+      "directions": {
+        "outbound": "IDA",
+        "return": "VOLTA",
+        "round_trip": "IDA E VOLTA",
+        "one_way": "SÓ IDA"
+      }
     }
   },
   "expenses": {

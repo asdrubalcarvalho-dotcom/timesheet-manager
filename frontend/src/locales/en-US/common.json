@@ -396,6 +396,7 @@
     "forbidden": "Forbidden",
     "validationFailed": "Validation failed: {{details}}",
     "notAvailable": "N/A",
+    "currencyFallback": "$",
     "unknown": "Unknown",
     "unknownUpper": "UNKNOWN",
     "otherUpper": "OTHER",
@@ -586,6 +587,16 @@
     "approvedExpensesLabel": "Approved (expenses)",
     "invalidRange": "Select a valid range (max 62 days) and include at least one type.",
     "loading": "Loading heatmap…",
+    "errors": {
+      "loadFailed": "Failed to load approval heatmap"
+    },
+    "tooltip": {
+      "timesheetsPending": "Timesheets: {{count}} pending",
+      "expensesPending": "Expenses: {{count}} pending"
+    },
+    "footer": {
+      "summary": "Showing {{from}} → {{to}} (scoped: {{scoped}})"
+    },
     "insights": {
       "summaryTitle": "Approval highlights",
       "summaryHint": "Overview of pending volume and busiest days.",
@@ -759,14 +770,29 @@
     "travels": {
       "title": "Travel details",
       "empty": "No travel details found.",
+      "loadFailed": "Failed to load travel details",
       "technician": "Technician",
       "project": "Project",
       "departure": "Departure",
       "arrival": "Arrival",
       "direction": "Direction",
       "duration": "Duration",
+      "durationValue": "{{hours}}h {{minutes}}m",
       "status": "Status",
-      "classificationReason": "Classification reason"
+      "classificationReason": "Classification reason",
+      "statusValues": {
+        "completed": "COMPLETED",
+        "cancelled": "CANCELLED",
+        "planned": "PLANNED",
+        "in_progress": "IN PROGRESS",
+        "pending": "PENDING"
+      },
+      "directions": {
+        "outbound": "OUTBOUND",
+        "return": "RETURN",
+        "round_trip": "ROUND TRIP",
+        "one_way": "ONE WAY"
+      }
     }
   },
   "expenses": {

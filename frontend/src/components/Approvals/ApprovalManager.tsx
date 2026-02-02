@@ -56,12 +56,15 @@ import ConfirmationDialog from '../Common/ConfirmationDialog';
 import InputDialog from '../Common/InputDialog';
 import ExpenseApprovalPanel from './ExpenseApprovalPanel';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useTranslation } from 'react-i18next';
 
 type TabKey = 'timesheets' | 'expenses';
 
 const formatDate = (value: Dayjs) => value.format('YYYY-MM-DD');
 
 const ApprovalManager: React.FC = () => {
+  const { t } = useTranslation();
+  const emptyValue = t('rightPanel.insights.emptyValue');
   const { isManager, isAdmin, user, tenantContext } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para counts
   useTenantGuard(); // Ensure tenant_slug exists
@@ -227,17 +230,17 @@ const ApprovalManager: React.FC = () => {
         console.error('Failed to load pending expenses - Status:', response.status);
         setExpenses([]); // Set empty array on error
         if (response.status !== 404) {
-          showError(`Failed to load pending expenses: ${response.statusText}`);
+          showError(t('approvals.expenses.loadFailedStatus', { status: response.statusText }));
         }
       }
     } catch (error) {
       console.error('Failed to load pending expenses:', error);
       setExpenses([]); // Set empty array on error
-      showError('Failed to load pending expenses. Please try again.');
+      showError(t('approvals.expenses.loadFailed'));
     } finally {
       setExpenseLoading(false);
     }
-  }, [showError]);
+  }, [showError, t]);
 
   useEffect(() => {
     if (tabValue === 'expenses') {
@@ -259,17 +262,17 @@ const ApprovalManager: React.FC = () => {
     if (!ensureWritable()) return;
     setInputDialog({
       open: true,
-      title: 'Reject Entry',
-      message: 'Please provide a reason for rejecting this entry:',
+      title: t('approvals.timesheets.rejectEntryTitle'),
+      message: t('approvals.timesheets.rejectEntryMessage'),
       action: async (reason: string) => {
         try {
           if (!ensureWritable()) return;
           await timesheetsApi.reject(id, reason);
           fetchManagerData();
-          showSuccess('Entry rejected successfully');
+          showSuccess(t('approvals.timesheets.rejectSuccessSingle'));
         } catch (error) {
           console.error(error);
-          showError('Failed to reject entry');
+          showError(t('approvals.timesheets.rejectFailedSingle'));
         }
         setInputDialog({ ...inputDialog, open: false });
       }
@@ -290,14 +293,18 @@ const ApprovalManager: React.FC = () => {
       const validCount = selectionModel.length - ownEntries.length;
       setConfirmDialog({
         open: true,
-        title: 'Warning: Own Entries Detected',
-        message: `${ownEntries.length} of ${selectionModel.length} selected entries are yours. You cannot approve your own timesheets.\n\nContinue with the remaining ${validCount} entries?`,
+        title: t('approvals.timesheets.ownEntriesWarningTitle'),
+        message: t('approvals.timesheets.ownEntriesWarningMessage', {
+          ownCount: ownEntries.length,
+          totalCount: selectionModel.length,
+          validCount,
+        }),
         action: async () => {
           const validIds = selectionModel.filter(id => 
             !ownEntries.some(own => own.id === id)
           );
           if (validIds.length === 0) {
-            showError('Cannot approve your own timesheets.');
+            showError(t('approvals.timesheets.ownEntriesCannotApprove'));
             setConfirmDialog({ ...confirmDialog, open: false });
             return;
           }
@@ -324,8 +331,8 @@ const ApprovalManager: React.FC = () => {
       // Open input dialog for rejection reason
       setInputDialog({
         open: true,
-        title: 'Reject Selected Entries',
-        message: 'Please provide a reason for rejecting the selected entries:',
+        title: t('approvals.timesheets.rejectSelectedTitle'),
+        message: t('approvals.timesheets.rejectSelectedMessage'),
         action: async (rejectionReason: string) => {
           try {
             if (!ensureWritable()) return;
@@ -333,17 +340,17 @@ const ApprovalManager: React.FC = () => {
               await timesheetsApi.reject(Number(id), rejectionReason);
             }
             setSelectionModel([]);
-            showSuccess(`Successfully rejected ${ids.length} entries`);
+            showSuccess(t('approvals.timesheets.rejectSuccess', { count: ids.length }));
             fetchManagerData();
           } catch (error: any) {
             console.error(error);
             
-            let errorMessage = 'Bulk rejection failed.';
+            let errorMessage = t('approvals.timesheets.rejectFailed');
             
             if (error.response?.data?.message) {
               errorMessage = error.response.data.message;
             } else if (error.response?.status === 422) {
-              errorMessage = 'Invalid timesheet status. Only submitted timesheets can be rejected.';
+              errorMessage = t('approvals.timesheets.rejectInvalidStatus');
             }
             
             showError(errorMessage);
@@ -360,17 +367,17 @@ const ApprovalManager: React.FC = () => {
         await timesheetsApi.approve(Number(id));
       }
       setSelectionModel([]);
-      showSuccess(`Successfully approved ${ids.length} entries`);
+      showSuccess(t('approvals.timesheets.approveSuccess', { count: ids.length }));
       fetchManagerData();
     } catch (error: any) {
       console.error(error);
       
-      let errorMessage = 'Bulk approval failed.';
+      let errorMessage = t('approvals.timesheets.approveFailed');
       
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.response?.status === 422) {
-        errorMessage = 'Invalid timesheet status. Only submitted timesheets can be approved.';
+        errorMessage = t('approvals.timesheets.approveInvalidStatus');
       }
       
       showError(errorMessage);
@@ -410,7 +417,7 @@ const ApprovalManager: React.FC = () => {
       }
       
       await loadExpensePending();
-      showSuccess(`${expenseIds.length} expense(s) approved successfully`);
+      showSuccess(t('approvals.expenses.approveSuccess', { count: expenseIds.length }));
     } catch (error) {
       console.error('Expense approval error:', error);
       throw error;
@@ -432,7 +439,7 @@ const ApprovalManager: React.FC = () => {
       }
       
       await loadExpensePending();
-      showSuccess(`${expenseIds.length} expense(s) rejected`);
+      showSuccess(t('approvals.expenses.rejectSuccess', { count: expenseIds.length }));
     } catch (error) {
       console.error('Expense rejection error:', error);
       throw error;
@@ -454,7 +461,7 @@ const ApprovalManager: React.FC = () => {
       }
       
       await loadExpensePending();
-      showSuccess(`${expenseIds.length} expense(s) marked as paid`);
+      showSuccess(t('approvals.expenses.markPaidSuccess', { count: expenseIds.length }));
     } catch (error) {
       console.error('Mark paid error:', error);
       throw error;
@@ -524,7 +531,7 @@ const ApprovalManager: React.FC = () => {
       setSelectedTravels(travels.filter(Boolean));
 
       if (sawNonUpgradeError && !sawUpgradeRequired) {
-        showError('Failed to load travel details');
+        showError(t('approvals.travels.loadFailed'));
       }
     } catch (error) {
       console.error('Error loading travel details:', error);
@@ -532,24 +539,50 @@ const ApprovalManager: React.FC = () => {
       const data = (error as any)?.response?.data;
       const isUpgradeRequired = status === 403 && data?.upgrade_required === true;
       if (!isUpgradeRequired) {
-        showError('Failed to load travel details');
+        showError(t('approvals.travels.loadFailed'));
       }
     } finally {
       setLoadingTravels(false);
     }
   };
 
+  const getTravelDirectionLabel = (direction?: string | null): string => {
+    if (!direction) return t('common.notAvailable');
+    return t(`approvals.travels.directions.${direction}`, {
+      defaultValue: direction.replace('_', ' ').toUpperCase(),
+    });
+  };
+
+  const getTravelStatusLabel = (status?: string | null): string => {
+    if (!status) return t('common.notAvailable');
+    return t(`approvals.travels.statusValues.${status}`, {
+      defaultValue: status.replace('_', ' ').toUpperCase(),
+    });
+  };
+
   // Section 14.3 - Flag translation helper
   const getFlagLabel = (flag: string): string => {
     const labels: Record<string, string> = {
-      'travels_without_work': 'Travel without work hours',
-      'excessive_travel_time': 'Travel time > 2x work hours',
-      'expenses_without_work': 'Expenses without work hours',
+      'travels_without_work': t('approvals.flags.travelWithoutWork'),
+      'excessive_travel_time': t('approvals.flags.excessiveTravelTime'),
+      'expenses_without_work': t('approvals.flags.expensesWithoutWork'),
     };
     return labels[flag] || flag;
   };
 
   const statusChip = (status: string) => {
+    const statusLabel = (() => {
+      switch (status) {
+        case 'draft':
+        case 'submitted':
+        case 'approved':
+        case 'rejected':
+        case 'closed':
+          return t(`timesheets.status.${status}`);
+        default:
+          return status;
+      }
+    })();
     const colors: Record<string, 'success' | 'warning' | 'default' | 'error'> = {
       draft: 'default',
       submitted: 'warning',
@@ -557,23 +590,23 @@ const ApprovalManager: React.FC = () => {
       rejected: 'error',
       closed: 'default'
     };
-    return <Chip label={status} color={colors[status] ?? 'default'} size="small" />;
+    return <Chip label={statusLabel} color={colors[status] ?? 'default'} size="small" />;
   };
 
   const columns = useMemo<GridColDef<TimesheetManagerRow>[]>(() => [
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('approvals.table.status'),
       width: 100,
       renderCell: ({ value }) => statusChip(value as string),
       filterable: true,
     },
     {
       field: 'technician',
-      headerName: 'Technician',
+      headerName: t('approvals.table.technician'),
       flex: 1,
       minWidth: 140,
-      valueGetter: (_value: any, row: any) => row?.technician?.name ?? '—',
+      valueGetter: (_value: any, row: any) => row?.technician?.name ?? emptyValue,
       filterable: true,
       renderCell: ({ row }) => {
         const isOwnEntry = row?.technician?.email === user?.email;
@@ -586,11 +619,11 @@ const ApprovalManager: React.FC = () => {
                   color: 'warning.main',
                   opacity: 0.7
                 }} 
-                titleAccess="Your own entry - cannot approve"
+                titleAccess={t('approvals.timesheets.ownEntryTooltip')}
               />
             )}
             <span style={{ fontWeight: isOwnEntry ? 600 : 400, fontSize: '0.875rem' }}>
-              {row?.technician?.name ?? '—'}
+              {row?.technician?.name ?? emptyValue}
             </span>
           </Box>
         );
@@ -598,19 +631,19 @@ const ApprovalManager: React.FC = () => {
     },
     {
       field: 'technician_project_role',
-      headerName: 'Project Role',
+      headerName: t('approvals.table.projectRole'),
       width: 110,
       renderCell: ({ value }) => {
-        if (!value) return '—';
+        if (!value) return emptyValue;
         const roleColors: Record<string, string> = {
           'member': 'default',
           'manager': 'primary',
           'none': 'default',
         };
         const roleLabels: Record<string, string> = {
-          'member': 'Member',
-          'manager': 'Manager',
-          'none': 'None',
+          'member': t('approvals.roles.member'),
+          'manager': t('approvals.roles.manager'),
+          'none': t('approvals.roles.none'),
         };
         return (
           <Chip
@@ -626,19 +659,19 @@ const ApprovalManager: React.FC = () => {
     },
     {
       field: 'technician_expense_role',
-      headerName: 'Expense Role',
+      headerName: t('approvals.table.expenseRole'),
       width: 120,
       renderCell: ({ value }) => {
-        if (!value) return '—';
+        if (!value) return emptyValue;
         const roleColors: Record<string, string> = {
           'member': 'default',
           'manager': 'secondary',
           'none': 'default',
         };
         const roleLabels: Record<string, string> = {
-          'member': 'Member',
-          'manager': 'Manager',
-          'none': 'None',
+          'member': t('approvals.roles.member'),
+          'manager': t('approvals.roles.manager'),
+          'none': t('approvals.roles.none'),
         };
         return (
           <Chip
@@ -654,70 +687,70 @@ const ApprovalManager: React.FC = () => {
     },
     {
       field: 'project',
-      headerName: 'Project',
+      headerName: t('approvals.table.project'),
       flex: 1,
       minWidth: 130,
-      valueGetter: (_value: any, row: any) => row?.project?.name ?? '—',
+      valueGetter: (_value: any, row: any) => row?.project?.name ?? emptyValue,
       filterable: true,
     },
     {
       field: 'task',
-      headerName: 'Task',
+      headerName: t('approvals.table.task'),
       flex: 1,
       minWidth: 130,
-      valueGetter: (_value: any, row: any) => row?.task?.name ?? '—',
+      valueGetter: (_value: any, row: any) => row?.task?.name ?? emptyValue,
       filterable: true,
     },
     {
       field: 'date',
-      headerName: 'Date',
+      headerName: t('approvals.table.date'),
       width: 100,
       valueGetter: (value: any) => value ?? '',
       renderCell: ({ value }) => {
         const ymd = typeof value === 'string' ? value.slice(0, 10) : '';
-        const label = ymd ? formatTenantDate(ymd, tenantContext) : '—';
+        const label = ymd ? formatTenantDate(ymd, tenantContext) : emptyValue;
         return <Typography variant="body2">{label}</Typography>;
       },
       filterable: true,
     },
     {
       field: 'start_time',
-      headerName: 'Start',
+      headerName: t('approvals.table.start'),
       width: 80,
       valueGetter: (value: any) => value ?? null,
       renderCell: ({ value }) => {
-        if (!value) return <Typography variant="body2">—</Typography>;
+        if (!value) return <Typography variant="body2">{emptyValue}</Typography>;
         const formatted = formatTenantTime(value, tenantContext);
-        return <Typography variant="body2">{formatted === '-' ? '—' : formatted}</Typography>;
+        return <Typography variant="body2">{formatted === '-' ? emptyValue : formatted}</Typography>;
       },
       filterable: true,
     },
     {
       field: 'end_time',
-      headerName: 'End',
+      headerName: t('approvals.table.end'),
       width: 80,
       valueGetter: (value: any) => value ?? null,
       renderCell: ({ value }) => {
-        if (!value) return <Typography variant="body2">—</Typography>;
+        if (!value) return <Typography variant="body2">{emptyValue}</Typography>;
         const formatted = formatTenantTime(value, tenantContext);
-        return <Typography variant="body2">{formatted === '-' ? '—' : formatted}</Typography>;
+        return <Typography variant="body2">{formatted === '-' ? emptyValue : formatted}</Typography>;
       },
       filterable: true,
     },
     {
       field: 'hours_worked',
-      headerName: 'Hours',
+      headerName: t('approvals.table.hours'),
       width: 80,
-      valueFormatter: (value: any) => `${value}h`,
+      valueFormatter: (value: any) => t('common.hoursShort', { value }),
       filterable: true,
     },
     {
       field: 'travels',
-      headerName: 'Travels',
+      headerName: t('approvals.table.travels'),
       width: 90,
       renderCell: ({ row }) => {
         if (!row.travels || row.travels.count === 0) {
-          return <Typography variant="body2" color="text.secondary">—</Typography>;
+          return <Typography variant="body2" color="text.secondary">{emptyValue}</Typography>;
         }
         return (
           <Box
@@ -740,12 +773,12 @@ const ApprovalManager: React.FC = () => {
     },
     {
       field: 'travel_time',
-      headerName: 'Travel Time',
+      headerName: t('approvals.table.travelTime'),
       width: 110,
-      valueGetter: (_value: any, row: any) => row?.travels?.duration_formatted ?? '—',
+      valueGetter: (_value: any, row: any) => row?.travels?.duration_formatted ?? emptyValue,
       renderCell: ({ row }) => {
         if (!row.travels || row.travels.count === 0) {
-          return <Typography variant="body2" color="text.secondary">—</Typography>;
+          return <Typography variant="body2" color="text.secondary">{emptyValue}</Typography>;
         }
         return (
           <Typography variant="body2" fontWeight={500}>
@@ -757,12 +790,12 @@ const ApprovalManager: React.FC = () => {
     },
     {
       field: 'consistency_flags',
-      headerName: 'Flags',
+      headerName: t('approvals.table.flags'),
       width: 90,
       renderCell: ({ row }) => {
         const flags = row.consistency_flags || [];
         if (flags.length === 0) {
-          return <Chip label="OK" size="small" color="success" sx={{ fontSize: '0.7rem', height: 20 }} />;
+          return <Chip label={t('approvals.flags.ok')} size="small" color="success" sx={{ fontSize: '0.7rem', height: 20 }} />;
         }
         const hasWarning = flags.some((f: string) => f.includes('travel') || f.includes('expense'));
         const tooltipText = flags.map((f: string) => getFlagLabel(f)).join('\n');
@@ -788,11 +821,11 @@ const ApprovalManager: React.FC = () => {
     },
     {
       field: 'ai_score',
-      headerName: 'AI Score',
+      headerName: t('approvals.table.aiScore'),
       width: 90,
       renderCell: ({ row }) => (
         <Chip
-          label={row.ai_score !== null && row.ai_score !== undefined ? row.ai_score.toFixed(2) : '—'}
+          label={row.ai_score !== null && row.ai_score !== undefined ? row.ai_score.toFixed(2) : emptyValue}
           color={row.ai_flagged ? 'error' : 'default'}
           size="small"
           sx={{ fontWeight: 600, fontSize: '0.75rem', height: 24 }}
@@ -802,19 +835,19 @@ const ApprovalManager: React.FC = () => {
     },
     {
       field: 'description',
-      headerName: 'Description',
+      headerName: t('approvals.table.description'),
       flex: 1.5,
       minWidth: 180,
-      valueGetter: (value: any) => value ?? '—',
+      valueGetter: (value: any) => value ?? emptyValue,
       filterable: true,
     },
-  ], []);
+  ], [t, user, tenantContext, handleTravelCellClick, emptyValue]);
 
   if (!canManageTimesheets) {
     return (
       <Box sx={{ p: 3 }}>
         <Typography variant="h6" color="warning.main">
-          Access denied. This page is only available to Managers or Admins.
+          {t('approvals.accessDenied')}
         </Typography>
       </Box>
     );
@@ -831,15 +864,18 @@ const ApprovalManager: React.FC = () => {
             </Badge>
             <Box>
               <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
-                AI Alerts: {managerSummary?.flagged_count ?? 0}
+                {t('approvals.filters.aiAlerts', { count: managerSummary?.flagged_count ?? 0 })}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Over 12h: {managerSummary?.over_cap_count ?? 0} · Overlaps: {managerSummary?.overlap_count ?? 0}
+                {t('approvals.filters.overCapSummary', {
+                  overCap: managerSummary?.over_cap_count ?? 0,
+                  overlaps: managerSummary?.overlap_count ?? 0,
+                })}
               </Typography>
             </Box>
             {activeFiltersCount > 0 && (
               <Chip 
-                label={`${filteredRows.length} results`} 
+                label={t('approvals.filters.results', { count: filteredRows.length })} 
                 size="small" 
                 color="primary" 
                 variant="outlined"
@@ -854,7 +890,7 @@ const ApprovalManager: React.FC = () => {
               size="small"
               sx={{ textTransform: 'none' }}
             >
-              Refresh
+              {t('common.refresh')}
             </Button>
             {activeFiltersCount > 0 && (
               <Button
@@ -863,7 +899,7 @@ const ApprovalManager: React.FC = () => {
                 onClick={clearAllFilters}
                 sx={{ textTransform: 'none' }}
               >
-                Clear All
+                {t('common.clearAll')}
               </Button>
             )}
             <IconButton size="small" onClick={() => setFiltersExpanded(!filtersExpanded)}>
@@ -879,7 +915,7 @@ const ApprovalManager: React.FC = () => {
               <TextField
                 fullWidth
                 size="small"
-                placeholder="Search technician, project, task, description..."
+                placeholder={t('approvals.filters.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
@@ -902,16 +938,16 @@ const ApprovalManager: React.FC = () => {
             {/* Sort */}
             <Grid item xs={12} md={3}>
               <FormControl fullWidth size="small">
-                <InputLabel>Sort By</InputLabel>
+                <InputLabel>{t('approvals.filters.sortBy')}</InputLabel>
                 <Select
                   value={sortBy}
-                  label="Sort By"
+                  label={t('approvals.filters.sortBy')}
                   onChange={(e) => setSortBy(e.target.value as any)}
                 >
-                  <MenuItem value="date">Date</MenuItem>
-                  <MenuItem value="hours">Hours</MenuItem>
-                  <MenuItem value="project">Project</MenuItem>
-                  <MenuItem value="technician">Technician</MenuItem>
+                  <MenuItem value="date">{t('approvals.filters.sort.date')}</MenuItem>
+                  <MenuItem value="hours">{t('approvals.filters.sort.hours')}</MenuItem>
+                  <MenuItem value="project">{t('approvals.filters.sort.project')}</MenuItem>
+                  <MenuItem value="technician">{t('approvals.filters.sort.technician')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -925,15 +961,15 @@ const ApprovalManager: React.FC = () => {
                 size="small"
                 fullWidth
               >
-                <ToggleButton value="asc">Ascending</ToggleButton>
-                <ToggleButton value="desc">Descending</ToggleButton>
+                <ToggleButton value="asc">{t('approvals.filters.sortOrder.ascending')}</ToggleButton>
+                <ToggleButton value="desc">{t('approvals.filters.sortOrder.descending')}</ToggleButton>
               </ToggleButtonGroup>
             </Grid>
 
             {/* Date Range */}
             <Grid item xs={12} sm={6} md={3}>
               <DatePicker
-                label="From Date"
+                label={t('approvals.filters.fromDate')}
                 value={dateFrom}
                 onChange={(newValue) => newValue && setDateFrom(newValue)}
                 format={datePickerFormat}
@@ -947,7 +983,7 @@ const ApprovalManager: React.FC = () => {
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <DatePicker
-                label="To Date"
+                label={t('approvals.filters.toDate')}
                 value={dateTo}
                 onChange={(newValue) => newValue && setDateTo(newValue)}
                 format={datePickerFormat}
@@ -966,7 +1002,7 @@ const ApprovalManager: React.FC = () => {
                 fullWidth
                 size="small"
                 type="number"
-                label="Min Hours"
+                label={t('approvals.filters.minHours')}
                 value={minHours}
                 onChange={(e) => setMinHours(e.target.value ? parseFloat(e.target.value) : '')}
                 InputProps={{
@@ -979,7 +1015,7 @@ const ApprovalManager: React.FC = () => {
                 fullWidth
                 size="small"
                 type="number"
-                label="Max Hours"
+                label={t('approvals.filters.maxHours')}
                 value={maxHours}
                 onChange={(e) => setMaxHours(e.target.value ? parseFloat(e.target.value) : '')}
                 InputProps={{
@@ -1040,7 +1076,7 @@ const ApprovalManager: React.FC = () => {
     if (managerLoading) {
       return (
         <Paper elevation={0} sx={{ p: 4, textAlign: 'center' }}>
-          <Typography color="text.secondary">Loading timesheets...</Typography>
+          <Typography color="text.secondary">{t('approvals.timesheets.loading')}</Typography>
         </Paper>
       );
     }
@@ -1050,10 +1086,10 @@ const ApprovalManager: React.FC = () => {
         <Paper elevation={0} sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}>
           <Check sx={{ fontSize: 64, color: 'success.light', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
-            No pending approvals
+            {t('approvals.timesheets.emptyTitle')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            All timesheets have been reviewed or no submitted entries found
+            {t('approvals.timesheets.emptySubtitle')}
           </Typography>
         </Paper>
       );
@@ -1071,7 +1107,9 @@ const ApprovalManager: React.FC = () => {
             onClick={() => handleBulkAction('approve')}
             sx={{ px: 2, fontSize: '0.875rem' }}
           >
-            Approve {selectionModel.length > 0 && `(${selectionModel.length})`}
+            {selectionModel.length > 0
+              ? t('approvals.timesheets.approveSelected', { count: selectionModel.length })
+              : t('common.approve')}
           </Button>
           <Button
             variant="contained"
@@ -1082,11 +1120,16 @@ const ApprovalManager: React.FC = () => {
             onClick={() => handleBulkAction('reject')}
             sx={{ px: 2, fontSize: '0.875rem' }}
           >
-            Reject {selectionModel.length > 0 && `(${selectionModel.length})`}
+            {selectionModel.length > 0
+              ? t('approvals.timesheets.rejectSelected', { count: selectionModel.length })
+              : t('common.reject')}
           </Button>
           {selectionModel.length > 0 && (
             <Typography variant="caption" color="text.secondary">
-              {selectionModel.length} {selectionModel.length === 1 ? 'entry' : 'entries'} selected
+              {t('approvals.timesheets.selectedCount', {
+                count: selectionModel.length,
+                label: selectionModel.length === 1 ? t('approvals.timesheets.entry') : t('approvals.timesheets.entries'),
+              })}
             </Typography>
           )}
         </Box>
@@ -1134,13 +1177,13 @@ const ApprovalManager: React.FC = () => {
       overflow: 'hidden'
     }}>
       <PageHeader
-        title="Approvals"
+        title={t('approvals.title')}
         badges={
           <>
             {counts.total > 0 && (
               <Chip 
                 size="small" 
-                label={`${counts.total} pending`} 
+                label={t('approvals.badges.pending', { count: counts.total })} 
                 color="info" 
                 sx={{ ml: 0.5, height: 20, fontWeight: 600 }} 
               />
@@ -1158,7 +1201,7 @@ const ApprovalManager: React.FC = () => {
           <Tab 
             label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                Timesheets
+                {t('approvals.tabs.timesheets')}
                 {counts.timesheets > 0 && (
                   <Chip size="small" label={counts.timesheets} color="error" sx={{ height: 18, fontSize: '0.7rem', minWidth: 18 }} />
                 )}
@@ -1169,7 +1212,7 @@ const ApprovalManager: React.FC = () => {
           <Tab 
             label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                Expenses
+                {t('approvals.tabs.expenses')}
                 {counts.expenses > 0 && (
                   <Chip size="small" label={counts.expenses} color="error" sx={{ height: 18, fontSize: '0.7rem', minWidth: 18 }} />
                 )}
@@ -1219,8 +1262,8 @@ const ApprovalManager: React.FC = () => {
         open={confirmDialog.open}
         title={confirmDialog.title}
         message={confirmDialog.message}
-        confirmText="Continue"
-        cancelText="Cancel"
+        confirmText={t('common.continue')}
+        cancelText={t('common.cancel')}
         confirmColor="warning"
         onConfirm={confirmDialog.action}
         onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}
@@ -1231,11 +1274,11 @@ const ApprovalManager: React.FC = () => {
         open={inputDialog.open}
         title={inputDialog.title}
         message={inputDialog.message}
-        label="Rejection Reason"
+        label={t('common.rejectionReason')}
         multiline
         rows={3}
-        confirmText="Reject"
-        cancelText="Cancel"
+        confirmText={t('common.reject')}
+        cancelText={t('common.cancel')}
         onConfirm={inputDialog.action}
         onCancel={() => setInputDialog({ ...inputDialog, open: false })}
       />
@@ -1247,14 +1290,14 @@ const ApprovalManager: React.FC = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Travel Details</DialogTitle>
+        <DialogTitle>{t('approvals.travels.title')}</DialogTitle>
         <DialogContent>
           {loadingTravels ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
               <CircularProgress />
             </Box>
           ) : selectedTravels.length === 0 ? (
-            <Typography>No travel details found.</Typography>
+            <Typography>{t('approvals.travels.empty')}</Typography>
           ) : (
             <Box sx={{ mt: 2 }}>
               {selectedTravels.map((travel) => (
@@ -1271,28 +1314,28 @@ const ApprovalManager: React.FC = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Technician
+                        {t('approvals.travels.technician')}
                       </Typography>
                       <Typography variant="body1">
-                        {travel.technician?.name || 'Unknown'}
+                        {travel.technician?.name || t('common.unknown')}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Project
+                        {t('approvals.travels.project')}
                       </Typography>
                       <Typography variant="body1">
-                        {travel.project?.name || 'Unknown'}
+                        {travel.project?.name || t('common.unknown')}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Departure
+                        {t('approvals.travels.departure')}
                       </Typography>
                       <Typography variant="body1">
                         {travel.start_at 
                           ? formatTenantDateTime(travel.start_at, tenantContext)
-                          : 'N/A'}
+                          : t('common.notAvailable')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {travel.origin_city}, {travel.origin_country}
@@ -1300,12 +1343,12 @@ const ApprovalManager: React.FC = () => {
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Arrival
+                        {t('approvals.travels.arrival')}
                       </Typography>
                       <Typography variant="body1">
                         {travel.end_at 
                           ? formatTenantDateTime(travel.end_at, tenantContext)
-                          : 'N/A'}
+                          : t('common.notAvailable')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {travel.destination_city}, {travel.destination_country}
@@ -1313,28 +1356,31 @@ const ApprovalManager: React.FC = () => {
                     </Grid>
                     <Grid item xs={12} sm={4}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Direction
+                        {t('approvals.travels.direction')}
                       </Typography>
                       <Typography variant="body1">
-                        {travel.direction?.replace('_', ' ').toUpperCase()}
+                        {getTravelDirectionLabel(travel.direction)}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={4}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Duration
+                        {t('approvals.travels.duration')}
                       </Typography>
                       <Typography variant="body1" fontWeight={600}>
                         {travel.duration_minutes 
-                          ? `${Math.floor(travel.duration_minutes / 60)}h ${travel.duration_minutes % 60}m`
-                          : 'N/A'}
+                          ? t('approvals.travels.durationValue', {
+                              hours: Math.floor(travel.duration_minutes / 60),
+                              minutes: travel.duration_minutes % 60,
+                            })
+                          : t('common.notAvailable')}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={4}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        Status
+                        {t('approvals.travels.status')}
                       </Typography>
                       <Chip
-                        label={travel.status?.toUpperCase()}
+                        label={getTravelStatusLabel(travel.status)}
                         size="small"
                         color={travel.status === 'completed' ? 'success' : 'default'}
                       />
@@ -1342,7 +1388,7 @@ const ApprovalManager: React.FC = () => {
                     {travel.classification_reason && (
                       <Grid item xs={12}>
                         <Typography variant="subtitle2" color="text.secondary">
-                          Classification Reason
+                          {t('approvals.travels.classificationReason')}
                         </Typography>
                         <Typography variant="body2">
                           {travel.classification_reason}
@@ -1357,7 +1403,7 @@ const ApprovalManager: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTravelDetailsOpen(false)} variant="outlined">
-            Close
+            {t('common.close')}
           </Button>
         </DialogActions>
       </Dialog>
