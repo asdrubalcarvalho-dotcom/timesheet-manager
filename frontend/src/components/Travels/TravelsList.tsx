@@ -27,11 +27,13 @@ import PageHeader from '../Common/PageHeader';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDateTime } from '../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
 
 const TravelsList: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const { tenantContext } = useAuth();
   const { isReadOnly, ensureWritable, warn } = useReadOnlyGuard('travels');
+  const { t } = useTranslation();
   const [travels, setTravels] = useState<TravelSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -57,7 +59,7 @@ const TravelsList: React.FC = () => {
       const message =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
-        'Failed to load travel segments';
+        t('travels.errors.loadFailed');
       showError(message);
     } finally {
       setLoading(false);
@@ -82,20 +84,20 @@ const TravelsList: React.FC = () => {
       return;
     }
     const travel = travels.find(t => t.id === id);
-    const originName = travel?.origin_location?.name || travel?.origin_country || 'origin';
-    const destName = travel?.destination_location?.name || travel?.destination_country || 'destination';
+    const originName = travel?.origin_location?.name || travel?.origin_country || t('travels.fallbacks.origin');
+    const destName = travel?.destination_location?.name || travel?.destination_country || t('travels.fallbacks.destination');
     
     setConfirmDialog({
       open: true,
-      title: 'Delete Travel Segment',
-      message: `Are you sure you want to delete this travel from ${originName} to ${destName}?`,
+      title: t('travels.delete.title'),
+      message: t('travels.delete.message', { origin: originName, destination: destName }),
       action: async () => {
         try {
           await travelsApi.delete(id);
-          showSuccess('Travel segment deleted successfully');
+          showSuccess(t('travels.toast.deleted'));
           fetchTravels();
         } catch (error: any) {
-          showError(error?.response?.data?.message || 'Failed to delete travel segment');
+          showError(error?.response?.data?.message || t('travels.errors.deleteFailed'));
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       },
@@ -125,47 +127,50 @@ const TravelsList: React.FC = () => {
   const columns: GridColDef[] = [
     {
       field: 'start_at',
-      headerName: 'Start',
+      headerName: t('travels.table.start'),
       width: 160,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => 
-        row.start_at ? formatTenantDateTime(row.start_at, tenantContext) : '-',
+        row.start_at ? formatTenantDateTime(row.start_at, tenantContext) : t('common.notAvailable'),
     },
     {
       field: 'end_at',
-      headerName: 'End',
+      headerName: t('travels.table.end'),
       width: 160,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => 
-        row.end_at ? formatTenantDateTime(row.end_at, tenantContext) : '-',
+        row.end_at ? formatTenantDateTime(row.end_at, tenantContext) : t('common.notAvailable'),
     },
     {
       field: 'duration_minutes',
-      headerName: 'Duration',
+      headerName: t('travels.table.duration'),
       width: 100,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => {
-        if (!row.duration_minutes) return '-';
+        if (!row.duration_minutes) return t('common.notAvailable');
         const hours = Math.floor(row.duration_minutes / 60);
         const minutes = row.duration_minutes % 60;
-        return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+        return t('travels.durationValue', {
+          hours,
+          minutes: String(minutes).padStart(2, '0')
+        });
       },
     },
     {
       field: 'technician',
-      headerName: 'Technician',
+      headerName: t('travels.table.technician'),
       flex: 1,
       minWidth: 150,
       valueGetter: (_value, row: TravelSegment) => row.technician?.name || '',
-      renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => row.technician?.name || '-',
+      renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => row.technician?.name || t('common.notAvailable'),
     },
     {
       field: 'project',
-      headerName: 'Project',
+      headerName: t('travels.table.project'),
       flex: 1,
       minWidth: 150,
-      renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => row.project?.name || '-',
+      renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => row.project?.name || t('common.notAvailable'),
     },
     {
       field: 'route',
-      headerName: 'Route',
+      headerName: t('travels.table.route'),
       flex: 1.5,
       minWidth: 200,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => (
@@ -175,7 +180,7 @@ const TravelsList: React.FC = () => {
           </Typography>
           {(row.origin_location || row.destination_location) && (
             <Typography variant="caption" color="text.secondary">
-              {row.origin_location?.name || '—'} → {row.destination_location?.name || '—'}
+              {row.origin_location?.name || t('common.notAvailable')} → {row.destination_location?.name || t('common.notAvailable')}
             </Typography>
           )}
         </Box>
@@ -183,11 +188,11 @@ const TravelsList: React.FC = () => {
     },
     {
       field: 'direction',
-      headerName: 'Direction',
+      headerName: t('travels.table.direction'),
       width: 160,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => (
         <Chip
-          label={row.direction.replace('_', ' ')}
+          label={t(`travels.directionLabels.${row.direction}`)}
           size="small"
           sx={{
             bgcolor: `${getDirectionColor(row.direction)}15`,
@@ -200,11 +205,11 @@ const TravelsList: React.FC = () => {
     },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('travels.table.status'),
       width: 130,
       renderCell: ({ row }: GridRenderCellParams<TravelSegment>) => (
         <Chip
-          label={row.status}
+          label={t(`travels.statusLabels.${row.status}`)}
           size="small"
           sx={{
             bgcolor: `${getStatusColor(row.status)}15`,
@@ -217,7 +222,7 @@ const TravelsList: React.FC = () => {
     },
     {
       field: 'actions',
-      headerName: 'Actions',
+      headerName: t('travels.table.actions'),
       width: 120,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => {
@@ -252,8 +257,8 @@ const TravelsList: React.FC = () => {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <PageHeader
-        title="Travel Management"
-        subtitle="Track technician travel segments and movement between project locations"
+        title={t('travels.management.title')}
+        subtitle={t('travels.management.subtitle')}
       />
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
@@ -264,9 +269,9 @@ const TravelsList: React.FC = () => {
         ) : travels.length === 0 ? (
           <EmptyState
             icon={FlightIcon}
-            title="No travel segments yet"
-            subtitle="Create your first travel segment to start tracking technician movements"
-            actionLabel="New Travel"
+            title={t('travels.management.emptyTitle')}
+            subtitle={t('travels.management.emptySubtitle')}
+            actionLabel={t('travels.management.newTravel')}
             onAction={isReadOnly ? warn : () => handleOpenDialog()}
           />
         ) : (
@@ -300,7 +305,7 @@ const TravelsList: React.FC = () => {
       {travels.length > 0 && (
                 <Fab
           color="primary"
-          aria-label="add travel"
+                  aria-label={t('travels.management.addAria')}
           onClick={() => handleOpenDialog()}
           disabled={isReadOnly}
           sx={{ 

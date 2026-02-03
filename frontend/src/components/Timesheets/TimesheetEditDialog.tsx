@@ -11,6 +11,7 @@ import {
   Description as DescriptionIcon, Schedule as DurationIcon
 } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import type { Timesheet, Project, Task, Location } from '../../types';
 import { useAuth } from '../Auth/AuthContext';
 import { getTenantDatePickerFormat, getTenantHourCycle, getTenantTimeFormat } from '../../utils/tenantFormatting';
@@ -41,6 +42,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
   readOnly = false
 }) => {
   const { tenantContext } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
 
   const datePickerFormat = useMemo(() => getTenantDatePickerFormat(tenantContext), [tenantContext]);
@@ -189,7 +191,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {timesheet ? <EditIcon fontSize="small" /> : <AddIcon fontSize="small" />}
             <Typography variant="h6" fontWeight={600} fontSize="1.1rem">
-              {timesheet ? 'Edit Entry' : 'New Entry'}
+              {timesheet ? t('timesheets.entry.editTitle') : t('timesheets.entry.newTitle')}
             </Typography>
           </Box>
           
@@ -254,13 +256,13 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                 <Paper sx={{ p: 2, borderRadius: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
                     <TimeIcon color="primary" fontSize="small" />
-                    Date & Time
+                    {t('timesheets.sections.dateTime')}
                   </Typography>
                   
                   <Grid container spacing={1.5}>
                     <Grid item xs={12}>
                       <DatePicker
-                        label="Date"
+                        label={t('timesheets.labels.date')}
                         value={selectedDate}
                         onChange={(newDate) => setSelectedDate(newDate)}
                         format={datePickerFormat}
@@ -271,7 +273,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                     
                     <Grid item xs={4}>
                       <TimePicker
-                        label="Start Time"
+                        label={t('timesheets.labels.startTime')}
                         value={startTimeObj}
                         onChange={(newTime) => {
                           setStartTimeObj(newTime);
@@ -290,7 +292,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                     
                     <Grid item xs={4}>
                       <TimePicker
-                        label="End Time"
+                        label={t('timesheets.labels.endTime')}
                         value={endTimeObj}
                         onChange={(newTime) => setEndTimeObj(newTime)}
                         ampm={timePickerAmpm}
@@ -304,7 +306,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                     <Grid item xs={4}>
                       <TextField
                         fullWidth
-                        label="Duration"
+                        label={t('timesheets.labels.duration')}
                         value={`${hoursWorked}h`}
                         InputProps={{ readOnly: true }}
                         size="small"
@@ -327,7 +329,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                 <Paper sx={{ p: 2, borderRadius: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
                     <ProjectIcon color="primary" fontSize="small" />
-                    Project Details
+                    {t('timesheets.sections.projectDetails')}
                   </Typography>
                   
                   <Grid container spacing={1.5}>
@@ -335,7 +337,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                       <TextField
                         select
                         fullWidth
-                        label="Project"
+                        label={t('timesheets.labels.project')}
                         value={projectId}
                         onChange={(e) => {
                           setProjectId(Number(e.target.value));
@@ -344,7 +346,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                         disabled={!isEditable}
                         size="small"
                       >
-                        <MenuItem value={0}>Select a project</MenuItem>
+                        <MenuItem value={0}>{t('timesheets.placeholders.selectProject')}</MenuItem>
                         {projects.map((project) => (
                           <MenuItem key={project.id} value={project.id}>
                             {project.name}
@@ -357,13 +359,13 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                       <TextField
                         select
                         fullWidth
-                        label="Task"
+                        label={t('timesheets.labels.task')}
                         value={taskId}
                         onChange={(e) => setTaskId(Number(e.target.value))}
                         size="small"
                         disabled={!projectId || !isEditable}
                       >
-                        <MenuItem value={0}>Select a task</MenuItem>
+                        <MenuItem value={0}>{t('timesheets.placeholders.selectTask')}</MenuItem>
                         {filteredTasks.map((task) => (
                           <MenuItem key={task.id} value={task.id}>
                             {task.name}
@@ -376,13 +378,13 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                       <TextField
                         select
                         fullWidth
-                        label="Location"
+                        label={t('timesheets.labels.location')}
                         value={locationId}
                         onChange={(e) => setLocationId(Number(e.target.value))}
                         disabled={!isEditable}
                         size="small"
                       >
-                        <MenuItem value={0}>Select a location</MenuItem>
+                        <MenuItem value={0}>{t('timesheets.placeholders.selectLocation')}</MenuItem>
                         {filteredLocations.map((location) => (
                           <MenuItem key={location.id} value={location.id}>
                             {location.name} - {location.city}, {location.country}
@@ -399,17 +401,17 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
                 <Paper sx={{ p: 2, borderRadius: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
                     <DescriptionIcon color="primary" fontSize="small" />
-                    Description
+                    {t('timesheets.sections.description')}
                   </Typography>
                   
                   <TextField
                     fullWidth
                     multiline
                     rows={2}
-                    label="Work Description"
+                    label={t('timesheets.labels.workDescription')}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the work performed..."
+                    placeholder={t('timesheets.placeholders.workDescription')}
                     disabled={!isEditable}
                     size="small"
                   />
@@ -422,7 +424,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
 
       <DialogActions sx={{ p: 2, bgcolor: '#f5f5f5', gap: 1.5 }}>
         <Button onClick={onClose} variant="outlined">
-          Cancel
+          {t('common.cancel')}
         </Button>
 
         {isEditable && (
@@ -432,7 +434,7 @@ const TimesheetEditDialog: React.FC<TimesheetEditDialogProps> = ({
             variant="contained"
             disabled={loading}
           >
-            {loading ? 'Saving...' : 'Save'}
+            {loading ? t('common.saving') : t('common.save')}
           </Button>
         )}
       </DialogActions>

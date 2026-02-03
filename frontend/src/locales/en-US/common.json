@@ -258,6 +258,7 @@
       "date": "Date",
       "startTime": "Start time",
       "endTime": "End time",
+      "duration": "Duration",
       "project": "Project",
       "task": "Task",
       "location": "Location",
@@ -386,6 +387,10 @@
     "clear": "Clear",
     "save": "Save",
     "saving": "Saving…",
+    "update": "Update",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "loading": "Loading...",
     "today": "Today",
     "week": "Week",
     "month": "Month",
@@ -537,6 +542,17 @@
       }
     }
   },
+  "superAdmin": {
+    "portalTitle": "Management Portal",
+    "portalPrompt": "Please authenticate to continue"
+  },
+  "team": {
+    "title": "👥 Team",
+    "comingSoon": "Team management coming soon..."
+  },
+  "header": {
+    "tagline": "The brain behind your team's time"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "timesheets": "Timesheets",
@@ -560,9 +576,128 @@
     "terms": "Terms",
     "privacy": "Privacy",
     "acceptableUse": "Acceptable use",
+    "profile": "Profile",
     "logout": "Logout",
+    "logoutWithName": "Logout ({{name}})",
     "userFallback": "User",
     "tagline": "Smart Timesheet"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Welcome back, {{name}}! Here's your overview for the last {{days}} days.",
+    "userFallback": "User",
+    "noData": "No data available",
+    "errors": {
+      "loadFailed": "Failed to load dashboard statistics"
+    },
+    "cards": {
+      "totalHours": "Total hours",
+      "totalExpenses": "Total expenses",
+      "pendingDetail": "Pending ({{timesheets}}T + {{expenses}}E)",
+      "approvedDetail": "Approved ({{timesheets}}T + {{expenses}}E)"
+    },
+    "charts": {
+      "hoursByProject": "Hours by project",
+      "expensesByProject": "Expenses by project",
+      "timesheetsByStatus": "Timesheets by status",
+      "expensesByStatus": "Expenses by status",
+      "dailyHoursTrend": "Daily hours trend",
+      "dailyExpensesTrend": "Daily expenses trend"
+    },
+    "tooltips": {
+      "hours": "Hours: {{value}}",
+      "amount": "Amount: {{value}}",
+      "hoursValue": "{{value}} hours"
+    },
+    "legends": {
+      "hours": "Hours",
+      "amount": "Amount"
+    }
+  },
+  "billing": {
+    "paymentMethods": {
+      "title": "Payment methods",
+      "subtitle": "Manage your credit and debit cards",
+      "addCard": "Add card",
+      "empty": "No payment methods added yet. Add a card to enable paid plan upgrades.",
+      "defaultLabel": "Default",
+      "expires": "Expires {{month}}/{{year}}",
+      "setDefault": "Set default",
+      "cannotRemoveOnly": "Cannot remove the only payment method",
+      "removeCard": "Remove card",
+      "confirmRemove": "Are you sure you want to remove this payment method?",
+      "toast": {
+        "added": "Card added successfully",
+        "removed": "Payment method removed",
+        "defaultUpdated": "Default payment method updated"
+      },
+      "errors": {
+        "loadFailed": "Failed to load payment methods",
+        "setDefaultFailed": "Failed to set default payment method",
+        "removeFailed": "Failed to remove payment method"
+      }
+    },
+    "addons": {
+      "upgradeTooltip": "Add-ons are not available on the Starter plan.",
+      "requiresUpgrade": "Requires upgrade",
+      "active": "Active",
+      "priceOfBase": "{{percent}}% of base price",
+      "planning": {
+        "name": "Planning module",
+        "description": "Gantt charts, project planning, resource allocation",
+        "tooltip": "Plan tasks and resources on a shared calendar.",
+        "addonTooltip": "Enable advanced planning with a {{percent}}% markup over the base value.",
+        "features": {
+          "ganttCharts": "Gantt charts",
+          "taskDependencies": "Task dependencies",
+          "resourcePlanning": "Resource planning",
+          "timelineViews": "Timeline views"
+        }
+      },
+      "ai": {
+        "name": "AI assistant",
+        "description": "AI-powered insights, predictions, and automation",
+        "tooltip": "Intelligent suggestions based on usage data.",
+        "addonTooltip": "Enable AI features with a {{percent}}% markup over the base value.",
+        "features": {
+          "smartSuggestions": "Smart suggestions",
+          "patternAnalysis": "Pattern analysis",
+          "anomalyDetection": "Anomaly detection",
+          "predictiveAnalytics": "Predictive analytics"
+        }
+      }
+    }
+  },
+  "planning": {
+    "gantt": {
+      "tooltips": {
+        "showGrid": "Show grid",
+        "hideGrid": "Hide grid",
+        "toggleColumns": "Show/Hide columns",
+        "fitToView": "Fit all tasks in view",
+        "goToToday": "Go to today",
+        "resetZoom": "Reset zoom to Month view"
+      },
+      "columns": {
+        "label": "Columns",
+        "alwaysVisible": "{{column}} (always visible)",
+        "location": "Location",
+        "task": "Task",
+        "users": "Users",
+        "project": "Project",
+        "start": "Start",
+        "end": "End",
+        "progress": "Progress"
+      },
+      "manageTaskLocations": "Manage task locations",
+      "manageProjectMembers": "Manage project members",
+      "viewModes": {
+        "day": "Day",
+        "week": "Week",
+        "month": "Month",
+        "year": "Year"
+      }
+    }
   },
   "language": {
     "label": "Language",
@@ -585,6 +720,11 @@
     "approvedExpensesLabel": "Approved (expenses)",
     "invalidRange": "Select a valid range (max 62 days) and include at least one type.",
     "loading": "Loading heatmap…",
+    "tooltip": {
+      "timesheetsPending": "Timesheets: {{count}} pending",
+      "expensesPending": "Expenses: {{count}} pending"
+    },
+    "rangeLabel": "Showing {{from}} → {{to}} (scoped: {{scope}})",
     "insights": {
       "summaryTitle": "Approval highlights",
       "summaryHint": "Overview of pending volume and busiest days.",
@@ -753,6 +893,7 @@
     "travels": {
       "title": "Travel details",
       "empty": "No travel details found.",
+      "loadFailed": "Failed to load travel details.",
       "technician": "Technician",
       "project": "Project",
       "departure": "Departure",
@@ -760,7 +901,85 @@
       "direction": "Direction",
       "duration": "Duration",
       "status": "Status",
-      "classificationReason": "Classification reason"
+      "classificationReason": "Classification reason",
+      "management": {
+        "title": "Travel management",
+        "subtitle": "Track technician travel segments and movement between project locations",
+        "emptyTitle": "No travel segments yet",
+        "emptySubtitle": "Create your first travel segment to start tracking technician movements",
+        "newTravel": "New travel",
+        "addAria": "Add travel"
+      },
+      "table": {
+        "start": "Start",
+        "end": "End",
+        "duration": "Duration",
+        "technician": "Technician",
+        "project": "Project",
+        "route": "Route",
+        "direction": "Direction",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "directionLabels": {
+        "departure": "Departure",
+        "arrival": "Arrival",
+        "project_to_project": "Project to project",
+        "internal": "Internal"
+      },
+      "statusLabels": {
+        "completed": "Completed",
+        "planned": "Planned",
+        "cancelled": "Cancelled"
+      },
+      "durationValue": "{{hours}}h {{minutes}}m",
+      "delete": {
+        "title": "Delete travel segment",
+        "message": "Are you sure you want to delete this travel from {{origin}} to {{destination}}?"
+      },
+      "errors": {
+        "loadFailed": "Failed to load travel segments",
+        "deleteFailed": "Failed to delete travel segment",
+        "saveFailed": "Failed to save travel segment"
+      },
+      "toast": {
+        "deleted": "Travel segment deleted successfully"
+      },
+      "fallbacks": {
+        "origin": "origin",
+        "destination": "destination"
+      },
+      "form": {
+        "newTitle": "New travel segment",
+        "editTitle": "Edit travel segment",
+        "technician": "Technician",
+        "technicianPlaceholder": "Search technicians...",
+        "technicianHelper": "Only team members from managed projects",
+        "project": "Project",
+        "projectPlaceholder": "Search projects...",
+        "startDate": "Start date",
+        "endDate": "End date",
+        "endDateRequired": "Required for completed status",
+        "status": "Status",
+        "origin": "Origin",
+        "destination": "Destination",
+        "originCountry": "Origin country",
+        "destinationCountry": "Destination country",
+        "originLocationOptional": "Origin location (optional)",
+        "destinationLocationOptional": "Destination location (optional)",
+        "originLocationPlaceholder": "Select origin location",
+        "destinationLocationPlaceholder": "Select destination location",
+        "selectTechnicianProject": "Select technician and project first",
+        "selectOriginCountryFirst": "Select origin country first",
+        "selectDestinationCountryFirst": "Select destination country first",
+        "projectLocationsOnly": "Project locations only",
+        "showingAllLocations": "Showing all locations",
+        "allAvailableLocations": "All available locations",
+        "aiSuggestion": "Get AI suggestion",
+        "aiSuggestionFailed": "Failed to get AI suggestion",
+        "aiSuggestionApplied": "AI suggestion applied",
+        "durationLabel": "⏱️ Duration: {{duration}}"
+      }
     }
   },
   "expenses": {
@@ -771,6 +990,9 @@
       "title": "No expenses yet",
       "subtitle": "Click the + button to submit your first expense entry",
       "action": "Add expense"
+    },
+    "fab": {
+      "addAria": "Add expense"
     },
     "validation": {
       "projectForTechnician": "Please select a valid project for the chosen technician."
@@ -859,6 +1081,7 @@
     },
     "attachment": {
       "previewTitle": "Attachment preview",
+      "previewAlt": "Expense attachment",
       "previewUnavailable": "Preview not available for this file type",
       "downloadFile": "Download file"
     },
@@ -877,7 +1100,17 @@
   "reports": {
     "ai": {
       "openPanel": "Open AI",
-      "closePanel": "Close AI"
+      "closePanel": "Close AI",
+      "title": "AI"
+    },
+    "aiDrawer": {
+      "emptyPrompt": "Ask a question about the current report and date range.",
+      "you": "You",
+      "ai": "AI",
+      "questionLabel": "Question",
+      "thinking": "Thinking…",
+      "send": "Send",
+      "errorFallback": "Failed to get AI response"
     },
     "analysis": "Analysis",
     "heatmap": "Heatmap",
@@ -896,6 +1129,11 @@
       "validation": {
         "range": "Select a valid date range."
       },
+      "errors": {
+        "loadFailed": "Failed to load expenses.",
+        "loadFailedStatus": "Failed to load expenses: {{status}}"
+      },
+      "projectFallback": "Project #{{id}}",
       "loading": "Loading expenses…",
       "kpis": {
         "totalValue": "Total value",
@@ -908,6 +1146,7 @@
       "trends": {
         "title": "Trends",
         "subtitle": "Spend and expense count over time for the current filters",
+        "granularityAria": "Trends granularity",
         "daily": "Daily",
         "weekly": "Weekly",
         "monthly": "Monthly",
@@ -963,22 +1202,63 @@
         "title": "Spend mix",
         "subtitle": "Share of total spend by category and status",
         "categoryTitle": "Category mix",
-        "statusTitle": "Status mix"
+        "statusTitle": "Status mix",
+        "shareLabel": "Share"
       },
       "movers": {
         "title": "Top movers",
         "invalidRange": "Select a valid date range to compare with the previous period.",
         "subtitle": "Biggest spend deltas vs previous period {{from}} → {{to}}",
         "categories": "Categories",
-        "increases": "Increases"
+        "increases": "Increases",
+        "increasesUpper": "INCREASES",
+        "decreasesUpper": "DECREASES",
+        "projects": "Projects"
       },
       "noExpenses": "No expenses match the current filters.",
       "ai": {
+        "hint": "Try asking about “categories”, “projects”, “outliers”, “what changed”, “status funnel”, “data quality”, “movers”, or “mix”.",
         "noExpenses": "No expenses match the current filters.",
         "spendMixUnavailable": "Spend mix is not available (total spend is 0 for the current filters).",
         "spendMixHeader": "Spend mix (range {{from}} → {{to}}): total {{total}}",
         "topCategories": "Top categories:",
         "topStatuses": "Top statuses:",
+        "spendMixRow": "- {{label}}: {{share}}% ({{total}})",
+        "totalValue": "Total value is {{total}} across {{count}} expenses (range {{from}} → {{to}}).",
+        "statuses": "Statuses (range {{from}} → {{to}}): Pending Review {{pendingReview}}, Finance Review {{financeReview}}, Approved {{approved}}, Paid {{paid}}.",
+        "topCategoriesHeader": "Top categories (range {{from}} → {{to}}):",
+        "topCategoriesRow": "- {{category}}: {{total}} ({{count}})",
+        "topProjectsHeader": "Top projects (range {{from}} → {{to}}):",
+        "topProjectsRow": "- {{project}}: {{total}} ({{count}})",
+        "outliersUnavailable": "Outliers need more spend variation (IQR unavailable for the current result set).",
+        "outliersNone": "No outliers detected (threshold > {{threshold}}).",
+        "outliersHeader": "Outliers (threshold > {{threshold}}):",
+        "outliersRow": "- {{amount}} · {{project}} · {{category}} · {{date}}",
+        "compareMissingRange": "Select a valid date range to compare.",
+        "compareHeader": "Change vs previous period ({{from}} → {{to}}):",
+        "compareTotalLine": "Total: {{current}} vs {{previous}} ({{from}} → {{to}})",
+        "compareDeltaLine": "- {{totalLine}} · Δ {{delta}} · {{pct}}",
+        "compareCountLine": "- Count: {{current}} vs {{previous}} · Δ {{delta}} · {{pct}}",
+        "funnelHeader": "Status funnel (range {{from}} → {{to}}):",
+        "funnelLine": "- {{status}}: {{count}} · {{total}}",
+        "funnelRates": "Key rates: submitted→paid {{submittedToPaid}} · finance_review→finance_approved {{financeReviewToApproved}}",
+        "dataQualityHeader": "Data quality (range {{from}} → {{to}}):",
+        "dataQualityResults": "- Results: {{count}}",
+        "dataQualityMissingCategory": "- Missing category: {{count}}",
+        "dataQualityMissingProject": "- Missing project name: {{count}}",
+        "dataQualityUnparseableDates": "- Unparseable dates for trends: {{count}}",
+        "moversMissingRange": "Select a valid date range to compare.",
+        "moversHeader": "Top movers vs previous period ({{from}} → {{to}}):",
+        "moversCategoryIncreases": "Category increases:",
+        "moversCategoryDecreases": "Category decreases:",
+        "moversCategoryNone": "{{label}} {{fallback}}",
+        "moversCategoryRowIncrease": "- {{category}}: +{{delta}} (Δ {{countDelta}})",
+        "moversCategoryRowDecrease": "- {{category}}: {{delta}} (Δ {{countDelta}})",
+        "moversProjectIncreases": "Project increases:",
+        "moversProjectDecreases": "Project decreases:",
+        "moversProjectNone": "{{label}} {{fallback}}",
+        "moversProjectRowIncrease": "- {{project}}: +{{delta}} (Δ {{countDelta}})",
+        "moversProjectRowDecrease": "- {{project}}: {{delta}} (Δ {{countDelta}})",
         "summaryHeader": "Expenses analysis (range {{from}} → {{to}}):",
         "summaryTotal": "- Total: {{total}} ({{count}} expenses)",
         "summaryPending": "- Pending review: {{count}}",

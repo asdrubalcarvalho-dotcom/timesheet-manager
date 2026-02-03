@@ -242,6 +242,7 @@ import { useTenantGuard } from '../../hooks/useTenantGuard';
 import ProjectMembersDialog from './ProjectMembersDialog';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate } from '../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
 
 interface User {
   id: number;
@@ -712,6 +713,7 @@ const buildUsersPlanning = (
 };
 
 const PlanningGanttUsers: React.FC = () => {
+  const { t } = useTranslation();
   useTenantGuard();
   const { hasPermission, tenantContext } = useAuth();
   const canCreatePlanning = hasPermission('create-planning');
@@ -1417,7 +1419,7 @@ const PlanningGanttUsers: React.FC = () => {
 
         {/* Controls Row */}
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Tooltip title={gridVisible ? 'Hide grid' : 'Show grid'}>
+          <Tooltip title={gridVisible ? t('planning.gantt.tooltips.hideGrid') : t('planning.gantt.tooltips.showGrid')}>
             <IconButton
               size="small"
               onClick={() => {
@@ -1442,14 +1444,14 @@ const PlanningGanttUsers: React.FC = () => {
           </Tooltip>
 
           {/* Column Manager */}
-          <Tooltip title="Show/Hide Columns">
+          <Tooltip title={t('planning.gantt.tooltips.toggleColumns')}>
             <Button
               variant="outlined"
               size="small"
               startIcon={<ViewColumnIcon />}
               onClick={handleColumnMenuOpen}
             >
-              Columns
+              {t('planning.gantt.columns.label')}
             </Button>
           </Tooltip>
 
@@ -1460,26 +1462,28 @@ const PlanningGanttUsers: React.FC = () => {
               disabled={!selectedProjectForMembers}
               onClick={() => setOpenMembersDialog(true)}
             >
-              Manage Project Members
+              {t('planning.gantt.manageProjectMembers')}
             </Button>
           )}
 
           <Menu anchorEl={columnMenuAnchor} open={Boolean(columnMenuAnchor)} onClose={handleColumnMenuClose}>
             <MenuItem onClick={() => toggleColumn('text')} disabled>
               <Checkbox checked={visibleColumns.text} disabled size="small" />
-              Users (always visible)
+              {t('planning.gantt.columns.alwaysVisible', {
+                column: t('planning.gantt.columns.users')
+              })}
             </MenuItem>
             <MenuItem onClick={() => toggleColumn('start_date')}>
               <Checkbox checked={visibleColumns.start_date} size="small" />
-              Start
+              {t('planning.gantt.columns.start')}
             </MenuItem>
             <MenuItem onClick={() => toggleColumn('end_date')}>
               <Checkbox checked={visibleColumns.end_date} size="small" />
-              End
+              {t('planning.gantt.columns.end')}
             </MenuItem>
             <MenuItem onClick={() => toggleColumn('progress')}>
               <Checkbox checked={visibleColumns.progress} size="small" />
-              Progress
+              {t('planning.gantt.columns.progress')}
             </MenuItem>
           </Menu>
 
@@ -1491,31 +1495,31 @@ const PlanningGanttUsers: React.FC = () => {
                 onClick={() => handleViewModeChange(mode)}
                 variant={viewMode === mode ? 'contained' : 'outlined'}
               >
-                {mode}
+                {t(`planning.gantt.viewModes.${mode.toLowerCase()}`)}
               </Button>
             ))}
           </ButtonGroup>
 
           {/* Expand / Collapse */}
           <Button variant="outlined" size="small" onClick={handleToggleExpandCollapse}>
-            {allExpanded ? 'Collapse' : 'Expand'}
+            {allExpanded ? t('common.collapse') : t('common.expand')}
           </Button>
 
 
           {/* Timeline Utility Buttons */}
-          <Tooltip title="Fit all tasks in view">
+          <Tooltip title={t('planning.gantt.tooltips.fitToView')}>
             <IconButton size="small" onClick={handleFitTasks} color="primary">
               <FitScreenIcon />
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Go to today">
+          <Tooltip title={t('planning.gantt.tooltips.goToToday')}>
             <IconButton size="small" onClick={handleShowToday} color="primary">
               <TodayIcon />
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Reset zoom to Month view">
+          <Tooltip title={t('planning.gantt.tooltips.resetZoom')}>
             <IconButton size="small" onClick={handleResetZoom} color="primary">
               <ZoomOutMapIcon />
             </IconButton>

@@ -7,10 +7,12 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/en';
+import 'dayjs/locale/en-gb';
 import 'dayjs/locale/pt';
 import 'dayjs/locale/es';
 import 'dayjs/locale/fr';
 import 'dayjs/locale/de';
+import { useTranslation } from 'react-i18next';
 
 import { getTenantUiLocale } from './utils/tenantFormatting';
 
@@ -178,6 +180,7 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const { open: openRightPanel } = useRightPanel();
   const { hasFloatingTrigger } = useRightPanelEntrypoint();
+  const { t } = useTranslation();
 
   const hasStoredSession = (() => {
     try {
@@ -215,8 +218,8 @@ const AppContent: React.FC = () => {
     if (!user) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="h5">Management Portal</Typography>
-          <Typography variant="body2" color="text.secondary">Please authenticate to continue</Typography>
+          <Typography variant="h5">{t('superAdmin.portalTitle')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('superAdmin.portalPrompt')}</Typography>
           <LoginForm />
         </Box>
       );
@@ -249,7 +252,7 @@ const AppContent: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 2 }}>
           <CircularProgress size={32} />
           <Typography variant="body2" color="text.secondary">
-            Signing you in...
+            {t('auth.login.signingIn')}
           </Typography>
         </Box>
       );
@@ -259,7 +262,7 @@ const AppContent: React.FC = () => {
     if (currentPage === 'legal-terms' || currentPage === 'legal-privacy' || currentPage === 'legal-acceptable-use') {
       return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
-          <Suspense fallback={<ModuleLoader label="Loading..." />}>
+          <Suspense fallback={<ModuleLoader label={t('common.loading')} />}>
             {renderPublicPage()}
           </Suspense>
         </Box>
@@ -313,8 +316,8 @@ const AppContent: React.FC = () => {
       case 'team':
         return (
           <Box sx={{ p: 3 }}>
-            <h1>👥 Team</h1>
-            <p>Team management coming soon...</p>
+            <h1>{t('team.title')}</h1>
+            <p>{t('team.comingSoon')}</p>
           </Box>
         );
       case 'planning':

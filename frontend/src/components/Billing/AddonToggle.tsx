@@ -14,6 +14,7 @@ import {
   SmartToy as AIIcon,
   Lock as LockIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 interface AddonToggleProps {
   addon: 'planning' | 'ai';
@@ -29,29 +30,40 @@ interface AddonToggleProps {
  * Pricing calculation happens in backend
  */
 const AddonToggle: React.FC<AddonToggleProps> = ({ addon, enabled, onToggle, disabled = false }) => {
+  const { t } = useTranslation();
   const getAddonConfig = () => {
     switch (addon) {
       case 'planning':
         return {
-          name: 'Planning Module',
+          name: t('billing.addons.planning.name'),
           icon: <PlanningIcon sx={{ fontSize: 32 }} />,
           color: '#ff9800',
-          description: 'Gantt charts, project planning, resource allocation',
-          tooltip: 'Plan tasks and resources on a shared calendar.',
-          addonTooltip: 'Enable advanced planning with an 18% markup over the base value.',
-          price: '+18%',
-          features: ['Gantt charts', 'Task dependencies', 'Resource planning', 'Timeline views'],
+          description: t('billing.addons.planning.description'),
+          tooltip: t('billing.addons.planning.tooltip'),
+          addonTooltip: t('billing.addons.planning.addonTooltip', { percent: 18 }),
+          priceLabel: t('billing.addons.priceOfBase', { percent: 18 }),
+          features: [
+            t('billing.addons.planning.features.ganttCharts'),
+            t('billing.addons.planning.features.taskDependencies'),
+            t('billing.addons.planning.features.resourcePlanning'),
+            t('billing.addons.planning.features.timelineViews'),
+          ],
         };
       case 'ai':
         return {
-          name: 'AI Assistant',
+          name: t('billing.addons.ai.name'),
           icon: <AIIcon sx={{ fontSize: 32 }} />,
           color: '#9c27b0',
-          description: 'AI-powered insights, predictions, and automation',
-          tooltip: 'Intelligent suggestions based on usage data.',
-          addonTooltip: 'Enable AI features with an 18% markup over the base value.',
-          price: '+18%',
-          features: ['Smart suggestions', 'Pattern analysis', 'Anomaly detection', 'Predictive analytics'],
+          description: t('billing.addons.ai.description'),
+          tooltip: t('billing.addons.ai.tooltip'),
+          addonTooltip: t('billing.addons.ai.addonTooltip', { percent: 18 }),
+          priceLabel: t('billing.addons.priceOfBase', { percent: 18 }),
+          features: [
+            t('billing.addons.ai.features.smartSuggestions'),
+            t('billing.addons.ai.features.patternAnalysis'),
+            t('billing.addons.ai.features.anomalyDetection'),
+            t('billing.addons.ai.features.predictiveAnalytics'),
+          ],
         };
     }
   };
@@ -72,12 +84,12 @@ const AddonToggle: React.FC<AddonToggleProps> = ({ addon, enabled, onToggle, dis
     >
       {disabled && (
         <Tooltip
-          title="Add-ons are not available on the Starter plan."
+          title={t('billing.addons.upgradeTooltip')}
           arrow
         >
           <Chip
             icon={<LockIcon />}
-            label="Requires upgrade"
+            label={t('billing.addons.requiresUpgrade')}
             size="small"
             color="warning"
             sx={{
@@ -133,7 +145,7 @@ const AddonToggle: React.FC<AddonToggleProps> = ({ addon, enabled, onToggle, dis
                 </Tooltip>
                 {enabled && (
                   <Chip
-                    label="Active"
+                    label={t('billing.addons.active')}
                     size="small"
                     sx={{
                       bgcolor: config.color,
@@ -148,7 +160,7 @@ const AddonToggle: React.FC<AddonToggleProps> = ({ addon, enabled, onToggle, dis
                 {config.description}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600, color: config.color }}>
-                {config.price} of base price
+                {config.priceLabel}
               </Typography>
             </Box>
           </Box>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import dayjs from 'dayjs';
 import {
   Drawer,
   List,
@@ -100,9 +101,22 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
     setLanguageAnchorEl(null);
   };
 
-  const handleLanguageSelect = (language: UiLanguage) => {
+  const resolveDayjsLocale = (language: UiLanguage): string => {
+    switch (language) {
+      case 'en-GB':
+        return 'en-gb';
+      case 'pt-PT':
+        return 'pt';
+      case 'en-US':
+      default:
+        return 'en';
+    }
+  };
+
+  const handleLanguageSelect = async (language: UiLanguage) => {
     localStorage.setItem(UI_LANG_STORAGE_KEY, language);
-    void i18n.changeLanguage(language);
+    await i18n.changeLanguage(language);
+    dayjs.locale(resolveDayjsLocale(language));
     setLanguageAnchorEl(null);
   };
 

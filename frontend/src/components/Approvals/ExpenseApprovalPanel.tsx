@@ -491,7 +491,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <Person sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" noWrap fontSize="0.7rem">
-                    {expense.technician?.name || '—'}
+                    {expense.technician?.name || t('common.notAvailable')}
                   </Typography>
                 </Stack>
               </Grid>
@@ -500,7 +500,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <Business sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" noWrap fontSize="0.7rem">
-                    {expense.project?.name || '—'}
+                    {expense.project?.name || t('common.notAvailable')}
                   </Typography>
                 </Stack>
               </Grid>
@@ -1161,7 +1161,7 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                 <Box
                   component="img"
                   src={getAttachmentUrl(selectedExpense.id)}
-                  alt="Receipt"
+                  alt={t('approvals.expenses.attachment.receiptAlt')}
                   sx={{
                     maxWidth: '100%',
                     maxHeight: '70vh',
@@ -1215,8 +1215,8 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
               )}
               <Stack direction="row" spacing={2} sx={{ mt: 3, justifyContent: 'center' }}>
                 <Chip icon={<CalendarToday />} label={formatTenantDate(selectedExpense.date, tenantContext)} />
-                <Chip icon={<Person />} label={selectedExpense.technician?.name || '—'} />
-                <Chip icon={<Business />} label={selectedExpense.project?.name || '—'} />
+                <Chip icon={<Person />} label={selectedExpense.technician?.name || t('common.notAvailable')} />
+                <Chip icon={<Business />} label={selectedExpense.project?.name || t('common.notAvailable')} />
               </Stack>
             </Box>
           )}

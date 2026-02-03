@@ -150,6 +150,8 @@ const ExpensesAnalysisReport: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const { tenantContext } = useAuth();
+  const uncategorizedLabel = t('reports.expensesAnalysis.outliers.uncategorized');
+  const notAvailableLabel = t('common.notAvailable');
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { billingSummary, tenantAiEnabled, openCheckoutForAddon } = useBilling();
   const aiState = getTenantAiState(billingSummary, tenantAiEnabled);
@@ -223,7 +225,7 @@ const ExpensesAnalysisReport: React.FC = () => {
           const message =
             (typeof errorData?.message === 'string' && errorData.message) ||
             (typeof errorData?.error === 'string' && errorData.error) ||
-            `Failed to load expenses: ${response.status}`;
+            t('reports.expensesAnalysis.errors.loadFailedStatus', { status: response.status });
           throw new Error(message);
         }
 
@@ -233,7 +235,7 @@ const ExpensesAnalysisReport: React.FC = () => {
       } catch (e: any) {
         if (!mounted) return;
         setExpenses([]);
-        setError(typeof e?.message === 'string' ? e.message : 'Failed to load expenses');
+        setError(typeof e?.message === 'string' ? e.message : t('reports.expensesAnalysis.errors.loadFailed'));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -335,7 +337,9 @@ const ExpensesAnalysisReport: React.FC = () => {
     const byId = new Map<number, string>();
     for (const exp of expenses) {
       if (typeof exp.project_id !== 'number') continue;
-      const name = exp.project?.name ? String(exp.project.name) : `Project #${exp.project_id}`;
+      const name = exp.project?.name
+        ? String(exp.project.name)
+        : t('reports.expensesAnalysis.projectFallback', { id: exp.project_id });
       if (!byId.has(exp.project_id)) byId.set(exp.project_id, name);
     }
     return Array.from(byId.entries())
@@ -447,7 +451,7 @@ const ExpensesAnalysisReport: React.FC = () => {
   const breakdownByCategory = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
     for (const exp of filteredExpenses) {
-      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
+      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : uncategorizedLabel;
       const cur = map.get(key) ?? { count: 0, total: 0 };
       cur.count += 1;
       cur.total += safeAmount(exp.amount);
@@ -463,7 +467,7 @@ const ExpensesAnalysisReport: React.FC = () => {
     const map = new Map<number, { name: string; count: number; total: number }>();
     for (const exp of filteredExpenses) {
       const id = exp.project_id;
-      const name = exp.project?.name ? String(exp.project.name) : `Project #${id}`;
+      const name = exp.project?.name ? String(exp.project.name) : t('reports.expensesAnalysis.projectFallback', { id });
       const cur = map.get(id) ?? { name, count: 0, total: 0 };
       cur.count += 1;
       cur.total += safeAmount(exp.amount);
@@ -490,7 +494,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
     const prevByCategory = new Map<string, { count: number; total: number }>();
     for (const exp of previousFilteredExpenses) {
-      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
+      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : uncategorizedLabel;
       const cur = prevByCategory.get(key) ?? { count: 0, total: 0 };
       cur.count += 1;
       cur.total += safeAmount(exp.amount);
@@ -503,7 +507,7 @@ const ExpensesAnalysisReport: React.FC = () => {
     const prevByProject = new Map<number, { name: string; count: number; total: number }>();
     for (const exp of previousFilteredExpenses) {
       const id = exp.project_id;
-      const name = exp.project?.name ? String(exp.project.name) : `Project #${id}`;
+      const name = exp.project?.name ? String(exp.project.name) : t('reports.expensesAnalysis.projectFallback', { id });
       const cur = prevByProject.get(id) ?? { name, count: 0, total: 0 };
       cur.count += 1;
       cur.total += safeAmount(exp.amount);
@@ -648,7 +652,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
     const current = new Map<string, { total: number; count: number }>();
     for (const exp of filteredExpenses) {
-      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
+      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : uncategorizedLabel;
       const cur = current.get(key) ?? { total: 0, count: 0 };
       cur.total += safeAmount(exp.amount);
       cur.count += 1;
@@ -657,7 +661,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
     const previous = new Map<string, { total: number; count: number }>();
     for (const exp of previousFilteredExpenses) {
-      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
+      const key = typeof exp.category === 'string' && exp.category.trim() ? exp.category : uncategorizedLabel;
       const cur = previous.get(key) ?? { total: 0, count: 0 };
       cur.total += safeAmount(exp.amount);
       cur.count += 1;
@@ -691,7 +695,7 @@ const ExpensesAnalysisReport: React.FC = () => {
     const current = new Map<number, { name: string; total: number; count: number }>();
     for (const exp of filteredExpenses) {
       const id = exp.project_id;
-      const name = exp.project?.name ? String(exp.project.name) : `Project #${id}`;
+      const name = exp.project?.name ? String(exp.project.name) : t('reports.expensesAnalysis.projectFallback', { id });
       const cur = current.get(id) ?? { name, total: 0, count: 0 };
       cur.total += safeAmount(exp.amount);
       cur.count += 1;
@@ -701,7 +705,7 @@ const ExpensesAnalysisReport: React.FC = () => {
     const previous = new Map<number, { name: string; total: number; count: number }>();
     for (const exp of previousFilteredExpenses) {
       const id = exp.project_id;
-      const name = exp.project?.name ? String(exp.project.name) : `Project #${id}`;
+      const name = exp.project?.name ? String(exp.project.name) : t('reports.expensesAnalysis.projectFallback', { id });
       const cur = previous.get(id) ?? { name, total: 0, count: 0 };
       cur.total += safeAmount(exp.amount);
       cur.count += 1;
@@ -710,7 +714,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
     const ids = new Set<number>([...current.keys(), ...previous.keys()]);
     const rows = Array.from(ids.values()).map((id) => {
-      const c = current.get(id) ?? { name: `Project #${id}`, total: 0, count: 0 };
+      const c = current.get(id) ?? { name: t('reports.expensesAnalysis.projectFallback', { id }), total: 0, count: 0 };
       const p = previous.get(id) ?? { name: c.name, total: 0, count: 0 };
       return {
         id,
@@ -765,98 +769,175 @@ const ExpensesAnalysisReport: React.FC = () => {
   const aiInsightsNode = useMemo(() => {
     return (
       <Typography variant="body2" color="text.secondary">
-        Try asking about “categories”, “projects”, “outliers”, “what changed”, “status funnel”, “data quality”, “movers”, or “mix”.
+        {t('reports.expensesAnalysis.ai.hint')}
       </Typography>
     );
-  }, []);
+  }, [t]);
 
   const handleAskAi = async (question: string): Promise<string> => {
     const q = question.trim().toLowerCase();
 
     if (q.includes('total') || q.includes('value') || q.includes('amount')) {
-      return `Total value is ${formatMoney(kpis.totalValue)} across ${kpis.count} expenses (range ${rangeDisplay.from} → ${rangeDisplay.to}).`;
+      return t('reports.expensesAnalysis.ai.totalValue', {
+        total: formatMoney(kpis.totalValue),
+        count: kpis.count,
+        from: rangeDisplay.from,
+        to: rangeDisplay.to,
+      });
     }
 
     if (q.includes('status') || q.includes('pending') || q.includes('finance') || q.includes('paid') || q.includes('approved')) {
-      return `Statuses (range ${rangeDisplay.from} → ${rangeDisplay.to}): Pending Review ${kpis.pendingReview}, Finance Review ${kpis.financeReview}, Approved ${kpis.approved}, Paid ${kpis.paid}.`;
+      return t('reports.expensesAnalysis.ai.statuses', {
+        from: rangeDisplay.from,
+        to: rangeDisplay.to,
+        pendingReview: kpis.pendingReview,
+        financeReview: kpis.financeReview,
+        approved: kpis.approved,
+        paid: kpis.paid,
+      });
     }
 
     if (q.includes('category')) {
       const top = breakdownByCategory.slice(0, 5);
-      if (top.length === 0) return 'No expenses match the current filters.';
+      if (top.length === 0) return t('reports.expensesAnalysis.ai.noExpenses');
       return [
-        `Top categories (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
-        ...top.map((c) => `- ${c.key}: ${formatMoney(c.total)} (${c.count})`),
+        t('reports.expensesAnalysis.ai.topCategoriesHeader', {
+          from: rangeDisplay.from,
+          to: rangeDisplay.to,
+        }),
+        ...top.map((c) =>
+          t('reports.expensesAnalysis.ai.topCategoriesRow', {
+            category: c.key,
+            total: formatMoney(c.total),
+            count: c.count,
+          })
+        ),
       ].join('\n');
     }
 
     if (q.includes('project')) {
       const top = breakdownByProject.slice(0, 5);
-      if (top.length === 0) return 'No expenses match the current filters.';
+      if (top.length === 0) return t('reports.expensesAnalysis.ai.noExpenses');
       return [
-        `Top projects (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
-        ...top.map((p) => `- ${p.name}: ${formatMoney(p.total)} (${p.count})`),
+        t('reports.expensesAnalysis.ai.topProjectsHeader', {
+          from: rangeDisplay.from,
+          to: rangeDisplay.to,
+        }),
+        ...top.map((p) =>
+          t('reports.expensesAnalysis.ai.topProjectsRow', {
+            project: p.name,
+            total: formatMoney(p.total),
+            count: p.count,
+          })
+        ),
       ].join('\n');
     }
 
     if (q.includes('outlier') || q.includes('anomal') || q.includes('unusual')) {
-      if (filteredExpenses.length === 0) return 'No expenses match the current filters.';
-      if (outliers.threshold === null) return 'Outliers need more spend variation (IQR unavailable for the current result set).';
-      if (outliers.rows.length === 0) return `No outliers detected (threshold > ${formatMoney(outliers.threshold)}).`;
+      if (filteredExpenses.length === 0) return t('reports.expensesAnalysis.ai.noExpenses');
+      if (outliers.threshold === null) return t('reports.expensesAnalysis.ai.outliersUnavailable');
+      if (outliers.rows.length === 0)
+        return t('reports.expensesAnalysis.ai.outliersNone', {
+          threshold: formatMoney(outliers.threshold),
+        });
       return [
-        `Outliers (threshold > ${formatMoney(outliers.threshold)}):`,
+        t('reports.expensesAnalysis.ai.outliersHeader', {
+          threshold: formatMoney(outliers.threshold),
+        }),
         ...outliers.rows.map(({ exp, amount }) => {
-          const name = exp.project?.name ? String(exp.project.name) : `Project #${exp.project_id}`;
-          const cat = typeof exp.category === 'string' && exp.category.trim() ? exp.category : 'Uncategorized';
+          const name = exp.project?.name
+            ? String(exp.project.name)
+            : t('reports.expensesAnalysis.projectFallback', { id: exp.project_id });
+          const cat = typeof exp.category === 'string' && exp.category.trim() ? exp.category : uncategorizedLabel;
           const ymd = typeof exp.date === 'string' ? exp.date.slice(0, 10) : '';
-          return `- ${formatMoney(amount)} · ${name} · ${cat} · ${formatTenantDate(ymd, tenantContext)}`;
+          return t('reports.expensesAnalysis.ai.outliersRow', {
+            amount: formatMoney(amount),
+            project: name,
+            category: cat,
+            date: formatTenantDate(ymd, tenantContext),
+          });
         }),
       ].join('\n');
     }
 
     if (q.includes('what changed') || q.includes('changed') || q.includes('compare') || q.includes('previous')) {
-      if (!previousRange) return 'Select a valid date range to compare.';
+      if (!previousRange) return t('reports.expensesAnalysis.ai.compareMissingRange');
       const previousFrom = formatTenantDate(previousRange.from, tenantContext);
       const previousTo = formatTenantDate(previousRange.to, tenantContext);
-      const totalLine = `Total: ${formatMoney(comparison.current.total)} vs ${formatMoney(comparison.previous.total)} (${previousFrom} → ${previousTo})`;
-      const pct = typeof comparison.pct.total === 'number' ? `${comparison.pct.total >= 0 ? '+' : ''}${comparison.pct.total.toFixed(1)}%` : '—';
-      const countPct = typeof comparison.pct.count === 'number' ? `${comparison.pct.count >= 0 ? '+' : ''}${comparison.pct.count.toFixed(1)}%` : '—';
+      const totalLine = t('reports.expensesAnalysis.ai.compareTotalLine', {
+        current: formatMoney(comparison.current.total),
+        previous: formatMoney(comparison.previous.total),
+        from: previousFrom,
+        to: previousTo,
+      });
+      const pct = typeof comparison.pct.total === 'number'
+        ? `${comparison.pct.total >= 0 ? '+' : ''}${comparison.pct.total.toFixed(1)}%`
+        : notAvailableLabel;
+      const countPct = typeof comparison.pct.count === 'number'
+        ? `${comparison.pct.count >= 0 ? '+' : ''}${comparison.pct.count.toFixed(1)}%`
+        : notAvailableLabel;
       return [
-        `Change vs previous period (${previousFrom} → ${previousTo}):`,
-        `- ${totalLine} · Δ ${formatMoney(comparison.delta.total)} · ${pct}`,
-        `- Count: ${comparison.current.count} vs ${comparison.previous.count} · Δ ${comparison.delta.count} · ${countPct}`,
+        t('reports.expensesAnalysis.ai.compareHeader', { from: previousFrom, to: previousTo }),
+        t('reports.expensesAnalysis.ai.compareDeltaLine', {
+          totalLine,
+          delta: formatMoney(comparison.delta.total),
+          pct,
+        }),
+        t('reports.expensesAnalysis.ai.compareCountLine', {
+          current: comparison.current.count,
+          previous: comparison.previous.count,
+          delta: comparison.delta.count,
+          pct: countPct,
+        }),
       ].join('\n');
     }
 
     if (q.includes('funnel') || (q.includes('status') && (q.includes('breakdown') || q.includes('distribution')))) {
-      if (filteredExpenses.length === 0) return 'No expenses match the current filters.';
+      if (filteredExpenses.length === 0) return t('reports.expensesAnalysis.ai.noExpenses');
 
-      const lines = statusBreakdown.map((s) => `- ${s.statusKey}: ${s.count} · ${formatMoney(s.total)}`);
-      const r1 = typeof statusFunnel.rates.submittedToPaid === 'number' ? `${statusFunnel.rates.submittedToPaid.toFixed(1)}%` : '—';
+      const lines = statusBreakdown.map((s) =>
+        t('reports.expensesAnalysis.ai.funnelLine', {
+          status: getStatusLabel(s.statusKey),
+          count: s.count,
+          total: formatMoney(s.total),
+        })
+      );
+      const r1 = typeof statusFunnel.rates.submittedToPaid === 'number'
+        ? `${statusFunnel.rates.submittedToPaid.toFixed(1)}%`
+        : notAvailableLabel;
       const r2 =
         typeof statusFunnel.rates.financeReviewToFinanceApproved === 'number'
           ? `${statusFunnel.rates.financeReviewToFinanceApproved.toFixed(1)}%`
-          : '—';
+          : notAvailableLabel;
       return [
-        `Status funnel (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
+        t('reports.expensesAnalysis.ai.funnelHeader', {
+          from: rangeDisplay.from,
+          to: rangeDisplay.to,
+        }),
         ...lines,
-        `Key rates: submitted→paid ${r1} · finance_review→finance_approved ${r2}`,
+        t('reports.expensesAnalysis.ai.funnelRates', {
+          submittedToPaid: r1,
+          financeReviewToApproved: r2,
+        }),
       ].join('\n');
     }
 
     if (q.includes('data quality') || q.includes('missing') || q.includes('coverage')) {
-      if (filteredExpenses.length === 0) return 'No expenses match the current filters.';
+      if (filteredExpenses.length === 0) return t('reports.expensesAnalysis.ai.noExpenses');
       return [
-        `Data quality (range ${rangeDisplay.from} → ${rangeDisplay.to}):`,
-        `- Results: ${dataQuality.total}`,
-        `- Missing category: ${dataQuality.missingCategory}`,
-        `- Missing project name: ${dataQuality.missingProjectName}`,
-        `- Unparseable dates for trends: ${dataQuality.unparseableTrendDates}`,
+        t('reports.expensesAnalysis.ai.dataQualityHeader', {
+          from: rangeDisplay.from,
+          to: rangeDisplay.to,
+        }),
+        t('reports.expensesAnalysis.ai.dataQualityResults', { count: dataQuality.total }),
+        t('reports.expensesAnalysis.ai.dataQualityMissingCategory', { count: dataQuality.missingCategory }),
+        t('reports.expensesAnalysis.ai.dataQualityMissingProject', { count: dataQuality.missingProjectName }),
+        t('reports.expensesAnalysis.ai.dataQualityUnparseableDates', { count: dataQuality.unparseableTrendDates }),
       ].join('\n');
     }
 
     if (q.includes('mover') || q.includes('driver') || (q.includes('change') && q.includes('category')) || (q.includes('change') && q.includes('project'))) {
-      if (!previousRange) return 'Select a valid date range to compare.';
+      if (!previousRange) return t('reports.expensesAnalysis.ai.moversMissingRange');
       const catUp = moversByCategory?.increases?.filter((r) => r.deltaTotal > 0).slice(0, 3) ?? [];
       const catDown = moversByCategory?.decreases?.filter((r) => r.deltaTotal < 0).slice(0, 3) ?? [];
       const projUp = moversByProject?.increases?.filter((r) => r.deltaTotal > 0).slice(0, 3) ?? [];
@@ -865,15 +946,59 @@ const ExpensesAnalysisReport: React.FC = () => {
       const previousFrom = formatTenantDate(previousRange.from, tenantContext);
       const previousTo = formatTenantDate(previousRange.to, tenantContext);
       return [
-        `Top movers vs previous period (${previousFrom} → ${previousTo}):`,
-        catUp.length ? 'Category increases:' : 'Category increases: —',
-        ...catUp.map((r) => `- ${r.key}: +${formatMoney(r.deltaTotal)} (Δ ${r.deltaCount})`),
-        catDown.length ? 'Category decreases:' : 'Category decreases: —',
-        ...catDown.map((r) => `- ${r.key}: ${formatMoney(r.deltaTotal)} (Δ ${r.deltaCount})`),
-        projUp.length ? 'Project increases:' : 'Project increases: —',
-        ...projUp.map((r) => `- ${r.name}: +${formatMoney(r.deltaTotal)} (Δ ${r.deltaCount})`),
-        projDown.length ? 'Project decreases:' : 'Project decreases: —',
-        ...projDown.map((r) => `- ${r.name}: ${formatMoney(r.deltaTotal)} (Δ ${r.deltaCount})`),
+        t('reports.expensesAnalysis.ai.moversHeader', { from: previousFrom, to: previousTo }),
+        catUp.length
+          ? t('reports.expensesAnalysis.ai.moversCategoryIncreases')
+          : t('reports.expensesAnalysis.ai.moversCategoryNone', {
+              label: t('reports.expensesAnalysis.ai.moversCategoryIncreases'),
+              fallback: notAvailableLabel,
+            }),
+        ...catUp.map((r) =>
+          t('reports.expensesAnalysis.ai.moversCategoryRowIncrease', {
+            category: r.key,
+            delta: formatMoney(r.deltaTotal),
+            countDelta: r.deltaCount,
+          })
+        ),
+        catDown.length
+          ? t('reports.expensesAnalysis.ai.moversCategoryDecreases')
+          : t('reports.expensesAnalysis.ai.moversCategoryNone', {
+              label: t('reports.expensesAnalysis.ai.moversCategoryDecreases'),
+              fallback: notAvailableLabel,
+            }),
+        ...catDown.map((r) =>
+          t('reports.expensesAnalysis.ai.moversCategoryRowDecrease', {
+            category: r.key,
+            delta: formatMoney(r.deltaTotal),
+            countDelta: r.deltaCount,
+          })
+        ),
+        projUp.length
+          ? t('reports.expensesAnalysis.ai.moversProjectIncreases')
+          : t('reports.expensesAnalysis.ai.moversProjectNone', {
+              label: t('reports.expensesAnalysis.ai.moversProjectIncreases'),
+              fallback: notAvailableLabel,
+            }),
+        ...projUp.map((r) =>
+          t('reports.expensesAnalysis.ai.moversProjectRowIncrease', {
+            project: r.name,
+            delta: formatMoney(r.deltaTotal),
+            countDelta: r.deltaCount,
+          })
+        ),
+        projDown.length
+          ? t('reports.expensesAnalysis.ai.moversProjectDecreases')
+          : t('reports.expensesAnalysis.ai.moversProjectNone', {
+              label: t('reports.expensesAnalysis.ai.moversProjectDecreases'),
+              fallback: notAvailableLabel,
+            }),
+        ...projDown.map((r) =>
+          t('reports.expensesAnalysis.ai.moversProjectRowDecrease', {
+            project: r.name,
+            delta: formatMoney(r.deltaTotal),
+            countDelta: r.deltaCount,
+          })
+        ),
       ].join('\n');
     }
 
@@ -891,9 +1016,21 @@ const ExpensesAnalysisReport: React.FC = () => {
           total: formatMoney(spendMix.totalSpend),
         }),
         t('reports.expensesAnalysis.ai.topCategories'),
-        ...topCats.map((r) => `- ${r.key}: ${r.share.toFixed(1)}% (${formatMoney(r.total)})`),
+        ...topCats.map((r) =>
+          t('reports.expensesAnalysis.ai.spendMixRow', {
+            label: r.key,
+            share: r.share.toFixed(1),
+            total: formatMoney(r.total),
+          })
+        ),
         t('reports.expensesAnalysis.ai.topStatuses'),
-        ...topStatuses.map((r) => `- ${r.key}: ${r.share.toFixed(1)}% (${formatMoney(r.total)})`),
+        ...topStatuses.map((r) =>
+          t('reports.expensesAnalysis.ai.spendMixRow', {
+            label: r.key,
+            share: r.share.toFixed(1),
+            total: formatMoney(r.total),
+          })
+        ),
       ].join('\n');
     }
 
@@ -1125,7 +1262,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       if (v === null) return;
                       setTrendGranularity(v);
                     }}
-                    aria-label="Trends granularity"
+                    aria-label={t('reports.expensesAnalysis.trends.granularityAria')}
                   >
                     <ToggleButton value="day">{t('reports.expensesAnalysis.trends.daily')}</ToggleButton>
                     <ToggleButton value="week">{t('reports.expensesAnalysis.trends.weekly')}</ToggleButton>
@@ -1204,7 +1341,9 @@ const ExpensesAnalysisReport: React.FC = () => {
                         {t('reports.expensesAnalysis.trends.peakPeriod')}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {trends.insights.peak ? `${trends.insights.peak.label} · ${formatMoney(trends.insights.peak.spend)}` : '—'}
+                        {trends.insights.peak
+                          ? `${trends.insights.peak.label} · ${formatMoney(trends.insights.peak.spend)}`
+                          : notAvailableLabel}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -1214,7 +1353,9 @@ const ExpensesAnalysisReport: React.FC = () => {
                         {t('reports.expensesAnalysis.trends.lowestPeriod')}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {trends.insights.lowest ? `${trends.insights.lowest.label} · ${formatMoney(trends.insights.lowest.spend)}` : '—'}
+                        {trends.insights.lowest
+                          ? `${trends.insights.lowest.label} · ${formatMoney(trends.insights.lowest.spend)}`
+                          : notAvailableLabel}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -1226,7 +1367,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {typeof trends.insights.pctChange === 'number'
                           ? `${trends.insights.pctChange >= 0 ? '+' : ''}${trends.insights.pctChange.toFixed(1)}%`
-                          : '—'}
+                          : notAvailableLabel}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -1238,7 +1379,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {typeof trends.insights.volatility === 'number'
                           ? `${(trends.insights.volatility * 100).toFixed(1)}%`
-                          : '—'}
+                          : notAvailableLabel}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -1363,7 +1504,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                                   if (name === 'total') {
                                     const count = ctx?.payload?.count;
                                     const suffix = Number.isFinite(count) ? ` (${count})` : '';
-                                    return [`${formatMoney(Number(value) || 0)}${suffix}`, 'Spend'];
+                                    return [`${formatMoney(Number(value) || 0)}${suffix}`, t('reports.expensesAnalysis.breakdown.spendLabel')];
                                   }
                                   return [String(value), String(name)];
                                 }}
@@ -1425,12 +1566,14 @@ const ExpensesAnalysisReport: React.FC = () => {
                           })}
                         </Alert>
                         {outliers.rows.map(({ exp, amount }) => {
-                          const name = exp.project?.name ? String(exp.project.name) : `Project #${exp.project_id}`;
+                          const name = exp.project?.name
+                            ? String(exp.project.name)
+                            : t('reports.expensesAnalysis.projectFallback', { id: exp.project_id });
                           const cat = typeof exp.category === 'string' && exp.category.trim()
                             ? exp.category
                             : t('reports.expensesAnalysis.outliers.uncategorized');
                           const ymd = typeof exp.date === 'string' ? exp.date.slice(0, 10) : '';
-                          const ymdLabel = ymd ? formatTenantDate(ymd, tenantContext) : '—';
+                          const ymdLabel = ymd ? formatTenantDate(ymd, tenantContext) : notAvailableLabel;
                           return (
                             <Box key={String(exp.id ?? `${exp.project_id}-${ymd}-${amount}`)} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                               <Typography variant="body2" color="text.primary">
@@ -1509,11 +1652,11 @@ const ExpensesAnalysisReport: React.FC = () => {
                           <Typography variant="body2" color="text.primary">
                             {breakdownByCategory[0]
                               ? `${breakdownByCategory[0].key} ${formatMoney(breakdownByCategory[0].total)}`
-                              : '—'}
+                              : notAvailableLabel}
                             {'  →  '}
                             {comparison.previousTopCategory
                               ? `${comparison.previousTopCategory.key} ${formatMoney(comparison.previousTopCategory.total)}`
-                              : '—'}
+                              : notAvailableLabel}
                           </Typography>
                         </Box>
 
@@ -1524,11 +1667,11 @@ const ExpensesAnalysisReport: React.FC = () => {
                           <Typography variant="body2" color="text.primary">
                             {breakdownByProject[0]
                               ? `${breakdownByProject[0].name} ${formatMoney(breakdownByProject[0].total)}`
-                              : '—'}
+                              : notAvailableLabel}
                             {'  →  '}
                             {comparison.previousTopProject
                               ? `${comparison.previousTopProject.name} ${formatMoney(comparison.previousTopProject.total)}`
-                              : '—'}
+                              : notAvailableLabel}
                           </Typography>
                         </Box>
                       </Stack>
@@ -1596,7 +1739,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {typeof statusFunnel.rates.submittedToPaid === 'number'
                               ? `${statusFunnel.rates.submittedToPaid.toFixed(1)}%`
-                              : '—'}
+                              : notAvailableLabel}
                           </Typography>
                         </Stack>
                       </Grid>
@@ -1608,7 +1751,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {typeof statusFunnel.rates.submittedToFinanceReview === 'number'
                               ? `${statusFunnel.rates.submittedToFinanceReview.toFixed(1)}%`
-                              : '—'}
+                              : notAvailableLabel}
                           </Typography>
                         </Stack>
                       </Grid>
@@ -1620,7 +1763,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {typeof statusFunnel.rates.financeReviewToFinanceApproved === 'number'
                               ? `${statusFunnel.rates.financeReviewToFinanceApproved.toFixed(1)}%`
-                              : '—'}
+                              : notAvailableLabel}
                           </Typography>
                         </Stack>
                       </Grid>
@@ -1719,7 +1862,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                             <Stack spacing={0.75} sx={{ mt: 0.75 }}>
                               {(moversByCategory?.increases ?? []).filter((r) => r.deltaTotal > 0).slice(0, 5).length === 0 ? (
                                 <Typography variant="body2" color="text.secondary">
-                                  —
+                                  {notAvailableLabel}
                                 </Typography>
                               ) : (
                                 (moversByCategory?.increases ?? [])
@@ -1740,12 +1883,12 @@ const ExpensesAnalysisReport: React.FC = () => {
                           </Grid>
                           <Grid item xs={12} sm={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                              DECREASES
+                              {t('reports.expensesAnalysis.movers.decreasesUpper')}
                             </Typography>
                             <Stack spacing={0.75} sx={{ mt: 0.75 }}>
                               {(moversByCategory?.decreases ?? []).filter((r) => r.deltaTotal < 0).slice(0, 5).length === 0 ? (
                                 <Typography variant="body2" color="text.secondary">
-                                  —
+                                  {notAvailableLabel}
                                 </Typography>
                               ) : (
                                 (moversByCategory?.decreases ?? [])
@@ -1769,17 +1912,17 @@ const ExpensesAnalysisReport: React.FC = () => {
 
                       <Grid item xs={12} md={6}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                          Projects
+                          {t('reports.expensesAnalysis.movers.projects')}
                         </Typography>
                         <Grid container spacing={2}>
                           <Grid item xs={12} sm={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                              INCREASES
+                              {t('reports.expensesAnalysis.movers.increasesUpper')}
                             </Typography>
                             <Stack spacing={0.75} sx={{ mt: 0.75 }}>
                               {(moversByProject?.increases ?? []).filter((r) => r.deltaTotal > 0).slice(0, 5).length === 0 ? (
                                 <Typography variant="body2" color="text.secondary">
-                                  —
+                                  {notAvailableLabel}
                                 </Typography>
                               ) : (
                                 (moversByProject?.increases ?? [])
@@ -1800,12 +1943,12 @@ const ExpensesAnalysisReport: React.FC = () => {
                           </Grid>
                           <Grid item xs={12} sm={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                              DECREASES
+                              {t('reports.expensesAnalysis.movers.decreasesUpper')}
                             </Typography>
                             <Stack spacing={0.75} sx={{ mt: 0.75 }}>
                               {(moversByProject?.decreases ?? []).filter((r) => r.deltaTotal < 0).slice(0, 5).length === 0 ? (
                                 <Typography variant="body2" color="text.secondary">
-                                  —
+                                  {notAvailableLabel}
                                 </Typography>
                               ) : (
                                 (moversByProject?.decreases ?? [])
@@ -1886,7 +2029,7 @@ const ExpensesAnalysisReport: React.FC = () => {
                                 if (name === 'share') {
                                   const total = ctx?.payload?.total;
                                   const suffix = Number.isFinite(total) ? ` (${formatMoney(Number(total) || 0)})` : '';
-                                  return [`${(Number(value) || 0).toFixed(1)}%${suffix}`, 'Share'];
+                                  return [`${(Number(value) || 0).toFixed(1)}%${suffix}`, t('reports.expensesAnalysis.spendMix.shareLabel')];
                                 }
                                 return [String(value), String(name)];
                               }}
@@ -1930,12 +2073,21 @@ const ExpensesAnalysisReport: React.FC = () => {
                                 if (name === 'share') {
                                   const total = ctx?.payload?.total;
                                   const suffix = Number.isFinite(total) ? ` (${formatMoney(Number(total) || 0)})` : '';
-                                  return [`${(Number(value) || 0).toFixed(1)}%${suffix}`, 'Share'];
+                                  return [
+                                    `${(Number(value) || 0).toFixed(1)}%${suffix}`,
+                                    t('reports.expensesAnalysis.spendMix.shareLabel')
+                                  ];
                                 }
                                 return [String(value), String(name)];
                               }}
                             />
-                            <Bar dataKey="share" name="share" fill={theme.palette.secondary.main} barSize={14} radius={[0, 6, 6, 0]} />
+                            <Bar
+                              dataKey="share"
+                              name={t('reports.expensesAnalysis.spendMix.shareLabel')}
+                              fill={theme.palette.secondary.main}
+                              barSize={14}
+                              radius={[0, 6, 6, 0]}
+                            />
                           </ComposedChart>
                         </ResponsiveContainer>
                       </Box>
@@ -1950,7 +2102,7 @@ const ExpensesAnalysisReport: React.FC = () => {
 
       <ReportAISideTab
         aiState={aiState}
-        title="AI"
+        title={t('reports.ai.title')}
         insights={aiInsightsNode}
         onUpgrade={() => void openCheckoutForAddon('ai')}
         onOpenSettings={() => {

@@ -632,10 +632,10 @@ const ApprovalHeatmapReport: React.FC = () => {
 
                   const lines: string[] = [header];
                   if (includeTimesheets) {
-                    lines.push(`Timesheets: ${tsPending} pending`);
+                    lines.push(t('approvalHeatmap.tooltip.timesheetsPending', { count: tsPending }));
                   }
                   if (includeExpenses) {
-                    lines.push(`Expenses: ${exPending} pending`);
+                    lines.push(t('approvalHeatmap.tooltip.expensesPending', { count: exPending }));
                   }
                   return lines.join('\n');
                 })();
@@ -682,7 +682,11 @@ const ApprovalHeatmapReport: React.FC = () => {
             </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              Showing {formatTenantDate(String(data.meta.from ?? ''), tenantContext)} → {formatTenantDate(String(data.meta.to ?? ''), tenantContext)} (scoped: {data.meta.scoped})
+              {t('approvalHeatmap.rangeLabel', {
+                from: formatTenantDate(String(data.meta.from ?? ''), tenantContext),
+                to: formatTenantDate(String(data.meta.to ?? ''), tenantContext),
+                scope: String(data.meta.scoped ?? ''),
+              })}
             </Typography>
           </Box>
         )}

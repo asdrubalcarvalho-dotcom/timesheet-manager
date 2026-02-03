@@ -27,6 +27,7 @@ import {
   type PaymentMethod,
 } from '../../api/billing';
 import AddCardModal from '../../components/Billing/AddCardModal';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Payment Methods Management Page
@@ -44,6 +45,7 @@ const PaymentMethodsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [addCardModalOpen, setAddCardModalOpen] = useState(false);
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
 
   useEffect(() => {
     fetchPaymentMethods();
@@ -55,7 +57,7 @@ const PaymentMethodsPage: React.FC = () => {
       const methods = await getPaymentMethods();
       setPaymentMethods(methods);
     } catch (error: any) {
-      showError(error.message || 'Failed to load payment methods');
+      showError(error.message || t('billing.paymentMethods.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -64,31 +66,31 @@ const PaymentMethodsPage: React.FC = () => {
   const handleSetDefault = async (paymentMethodId: string) => {
     try {
       await setDefaultPaymentMethod(paymentMethodId);
-      showSuccess('Default payment method updated');
+      showSuccess(t('billing.paymentMethods.toast.defaultUpdated'));
       fetchPaymentMethods();
     } catch (error: any) {
-      showError(error.message || 'Failed to set default payment method');
+      showError(error.message || t('billing.paymentMethods.errors.setDefaultFailed'));
     }
   };
 
   const handleRemove = async (paymentMethodId: string) => {
-    if (!confirm('Are you sure you want to remove this payment method?')) {
+    if (!confirm(t('billing.paymentMethods.confirmRemove'))) {
       return;
     }
 
     try {
       await removePaymentMethod(paymentMethodId);
-      showSuccess('Payment method removed');
+      showSuccess(t('billing.paymentMethods.toast.removed'));
       fetchPaymentMethods();
     } catch (error: any) {
-      showError(error.message || 'Failed to remove payment method');
+      showError(error.message || t('billing.paymentMethods.errors.removeFailed'));
     }
   };
 
   const handleCardAdded = () => {
     setAddCardModalOpen(false);
     fetchPaymentMethods();
-    showSuccess('Card added successfully');
+    showSuccess(t('billing.paymentMethods.toast.added'));
   };
 
   const getCardBrandIcon = (_brand: string) => {
@@ -120,10 +122,10 @@ const PaymentMethodsPage: React.FC = () => {
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 600, color: '#667eea', mb: 1 }}>
-            Payment Methods
+            {t('billing.paymentMethods.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage your credit and debit cards
+            {t('billing.paymentMethods.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -137,14 +139,14 @@ const PaymentMethodsPage: React.FC = () => {
             px: 3,
           }}
         >
-          Add Card
+          {t('billing.paymentMethods.addCard')}
         </Button>
       </Box>
 
       {/* Info Alert */}
       {paymentMethods.length === 0 && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          No payment methods added yet. Add a card to enable paid plan upgrades.
+          {t('billing.paymentMethods.empty')}
         </Alert>
       )}
 
@@ -168,7 +170,7 @@ const PaymentMethodsPage: React.FC = () => {
                 {/* Default Badge */}
                 {method.is_default && (
                   <Chip
-                    label="Default"
+                    label={t('billing.paymentMethods.defaultLabel')}
                     size="small"
                     icon={<StarIcon />}
                     sx={{
@@ -209,7 +211,10 @@ const PaymentMethodsPage: React.FC = () => {
 
                 {/* Expiry Date */}
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Expires {String(method.card.exp_month).padStart(2, '0')}/{method.card.exp_year}
+                  {t('billing.paymentMethods.expires', {
+                    month: String(method.card.exp_month).padStart(2, '0'),
+                    year: method.card.exp_year
+                  })}
                 </Typography>
 
                 {/* Actions */}
@@ -222,7 +227,7 @@ const PaymentMethodsPage: React.FC = () => {
                       onClick={() => handleSetDefault(method.id)}
                       sx={{ flex: 1, textTransform: 'none' }}
                     >
-                      Set Default
+                      {t('billing.paymentMethods.setDefault')}
                     </Button>
                   )}
                   <IconButton
@@ -230,7 +235,11 @@ const PaymentMethodsPage: React.FC = () => {
                     color="error"
                     onClick={() => handleRemove(method.id)}
                     disabled={method.is_default && paymentMethods.length === 1}
-                    title={method.is_default && paymentMethods.length === 1 ? 'Cannot remove the only payment method' : 'Remove card'}
+                    title={
+                      method.is_default && paymentMethods.length === 1
+                        ? t('billing.paymentMethods.cannotRemoveOnly')
+                        : t('billing.paymentMethods.removeCard')
+                    }
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>

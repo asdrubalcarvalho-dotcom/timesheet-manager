@@ -1,9 +1,11 @@
 import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../Auth/AuthContext';
 
 export const Header = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
@@ -28,7 +30,7 @@ export const Header = () => {
               lineHeight: 1
             }}
           >
-            The brain behind your team's time
+            {t('header.tagline')}
           </Typography>
         </Box>
         
@@ -38,27 +40,27 @@ export const Header = () => {
               color="inherit" 
               onClick={() => navigate('/timesheets')}
             >
-              Timesheets
+              {t('nav.timesheets')}
             </Button>
             <Button 
               color="inherit" 
               onClick={() => navigate('/expenses')}
             >
-              Expenses
+              {t('nav.expenses')}
             </Button>
             {user.role === 'Manager' && (
               <Button 
                 color="inherit" 
                 onClick={() => navigate('/approval')}
               >
-                Approvals
+                {t('nav.approvals')}
               </Button>
             )}
             <Button 
               color="inherit" 
               onClick={handleLogout}
             >
-              Logout ({user.name})
+              {t('nav.logoutWithName', { name: user.name })}
             </Button>
           </Box>
         )}

@@ -20,6 +20,7 @@
       "subtitle": "Consulte a documentação e dicas de IA para respostas mais rápidas.",
       "tip": "Dica: use a aba de IA para resumos, anomalias e próximos passos.",
       "fallbackTitle": "Ajuda",
+      "duration": "Duração",
       "fallbackBody": "Ainda não há ajuda disponível para esta página.",
       "timesheets": {
         "title": "Ajuda de timesheets",
@@ -253,6 +254,10 @@
     "clear": "Limpar",
     "save": "Guardar",
     "saving": "A guardar…",
+    "update": "Atualizar",
+    "expand": "Expandir",
+    "collapse": "Recolher",
+    "loading": "A carregar...",
     "today": "Hoje",
     "week": "Semana",
     "month": "Mês",
@@ -404,6 +409,17 @@
       }
     }
   },
+  "superAdmin": {
+    "portalTitle": "Portal de Gestão",
+    "portalPrompt": "Autentique-se para continuar"
+  },
+  "team": {
+    "title": "👥 Equipa",
+    "comingSoon": "Gestão de equipa disponível em breve..."
+  },
+  "header": {
+    "tagline": "O cérebro por trás do tempo da sua equipa"
+  },
   "nav": {
     "dashboard": "Painel",
     "timesheets": "Timesheets",
@@ -427,7 +443,9 @@
     "terms": "Termos",
     "privacy": "Privacidade",
     "acceptableUse": "Uso aceitável",
+    "profile": "Perfil",
     "logout": "Terminar sessão",
+    "logoutWithName": "Terminar sessão ({{name}})",
     "userFallback": "Utilizador",
     "tagline": "Folha de horas inteligente"
   },
@@ -436,6 +454,91 @@
     "enUS": "Inglês (EUA)",
     "enGB": "Inglês (Reino Unido)",
     "ptPT": "Português (PT)"
+  },
+  "billing": {
+    "paymentMethods": {
+      "title": "Métodos de pagamento",
+      "subtitle": "Gira os seus cartões de crédito e débito",
+      "addCard": "Adicionar cartão",
+      "empty": "Ainda não há métodos de pagamento. Adicione um cartão para ativar planos pagos.",
+      "defaultLabel": "Predefinido",
+      "expires": "Expira {{month}}/{{year}}",
+      "setDefault": "Definir como predefinido",
+      "cannotRemoveOnly": "Não é possível remover o único método de pagamento",
+      "removeCard": "Remover cartão",
+      "confirmRemove": "Tem a certeza de que quer remover este método de pagamento?",
+      "toast": {
+        "added": "Cartão adicionado com sucesso",
+        "removed": "Método de pagamento removido",
+        "defaultUpdated": "Método de pagamento predefinido atualizado"
+      },
+      "errors": {
+        "loadFailed": "Falha ao carregar métodos de pagamento",
+        "setDefaultFailed": "Falha ao definir método de pagamento predefinido",
+        "removeFailed": "Falha ao remover método de pagamento"
+      }
+    },
+    "addons": {
+      "upgradeTooltip": "Os add-ons não estão disponíveis no plano Starter.",
+      "requiresUpgrade": "Requer upgrade",
+      "active": "Ativo",
+      "priceOfBase": "{{percent}}% do preço base",
+      "planning": {
+        "name": "Módulo de planeamento",
+        "description": "Gráficos Gantt, planeamento de projetos, alocação de recursos",
+        "tooltip": "Planeie tarefas e recursos num calendário partilhado.",
+        "addonTooltip": "Ative o planeamento avançado com um acréscimo de {{percent}}% sobre o valor base.",
+        "features": {
+          "ganttCharts": "Gráficos Gantt",
+          "taskDependencies": "Dependências de tarefas",
+          "resourcePlanning": "Planeamento de recursos",
+          "timelineViews": "Vistas de cronograma"
+        }
+      },
+      "ai": {
+        "name": "Assistente de IA",
+        "description": "Insights, previsões e automação com IA",
+        "tooltip": "Sugestões inteligentes com base nos dados de utilização.",
+        "addonTooltip": "Ative funcionalidades de IA com um acréscimo de {{percent}}% sobre o valor base.",
+        "features": {
+          "smartSuggestions": "Sugestões inteligentes",
+          "patternAnalysis": "Análise de padrões",
+          "anomalyDetection": "Deteção de anomalias",
+          "predictiveAnalytics": "Análise preditiva"
+        }
+      }
+    }
+  },
+  "planning": {
+    "gantt": {
+      "tooltips": {
+        "showGrid": "Mostrar grelha",
+        "hideGrid": "Ocultar grelha",
+        "toggleColumns": "Mostrar/ocultar colunas",
+        "fitToView": "Ajustar todas as tarefas à vista",
+        "goToToday": "Ir para hoje",
+        "resetZoom": "Repor zoom para vista Mensal"
+      },
+      "columns": {
+        "label": "Colunas",
+        "alwaysVisible": "{{column}} (sempre visível)",
+        "location": "Localização",
+        "task": "Tarefa",
+        "users": "Utilizadores",
+        "project": "Projeto",
+        "start": "Início",
+        "end": "Fim",
+        "progress": "Progresso"
+      },
+      "manageTaskLocations": "Gerir localizações da tarefa",
+      "manageProjectMembers": "Gerir membros do projeto",
+      "viewModes": {
+        "day": "Dia",
+        "week": "Semana",
+        "month": "Mês",
+        "year": "Ano"
+      }
+    }
   },
   "approvalHeatmap": {
     "title": "Mapa de calor de aprovações",
@@ -452,6 +555,11 @@
     "approvedExpensesLabel": "Aprovadas (despesas)",
     "invalidRange": "Seleciona um intervalo válido (máx. 62 dias) e inclui pelo menos um tipo.",
     "loading": "A carregar mapa de calor…",
+    "tooltip": {
+      "timesheetsPending": "Timesheets: {{count}} pendentes",
+      "expensesPending": "Despesas: {{count}} pendentes"
+    },
+    "rangeLabel": "A mostrar {{from}} → {{to}} (âmbito: {{scope}})",
     "insights": {
       "summaryTitle": "Destaques de aprovações",
       "summaryHint": "Visão geral do volume pendente e dos dias mais cheios.",
@@ -620,6 +728,7 @@
     "travels": {
       "title": "Detalhes da viagem",
       "empty": "Sem detalhes de viagem.",
+      "loadFailed": "Falha ao carregar detalhes de viagem.",
       "technician": "Técnico",
       "project": "Projeto",
       "departure": "Partida",
@@ -627,7 +736,85 @@
       "direction": "Direção",
       "duration": "Duração",
       "status": "Estado",
-      "classificationReason": "Motivo da classificação"
+      "classificationReason": "Motivo da classificação",
+      "management": {
+        "title": "Gestão de viagens",
+        "subtitle": "Acompanhe segmentos de viagem e movimentos entre locais do projeto",
+        "emptyTitle": "Ainda não existem segmentos de viagem",
+        "emptySubtitle": "Crie o seu primeiro segmento de viagem para começar a acompanhar deslocações",
+        "newTravel": "Nova viagem",
+        "addAria": "Adicionar viagem"
+      },
+      "table": {
+        "start": "Início",
+        "end": "Fim",
+        "duration": "Duração",
+        "technician": "Técnico",
+        "project": "Projeto",
+        "route": "Rota",
+        "direction": "Direção",
+        "status": "Estado",
+        "actions": "Ações"
+      },
+      "directionLabels": {
+        "departure": "Partida",
+        "arrival": "Chegada",
+        "project_to_project": "Projeto para projeto",
+        "internal": "Interna"
+      },
+      "statusLabels": {
+        "completed": "Concluída",
+        "planned": "Planeada",
+        "cancelled": "Cancelada"
+      },
+      "durationValue": "{{hours}}h {{minutes}}m",
+      "delete": {
+        "title": "Eliminar segmento de viagem",
+        "message": "Tem a certeza de que quer eliminar esta viagem de {{origin}} para {{destination}}?"
+      },
+      "errors": {
+        "loadFailed": "Falha ao carregar segmentos de viagem",
+        "deleteFailed": "Falha ao eliminar segmento de viagem",
+        "saveFailed": "Falha ao guardar segmento de viagem"
+      },
+      "toast": {
+        "deleted": "Segmento de viagem eliminado com sucesso"
+      },
+      "fallbacks": {
+        "origin": "origem",
+        "destination": "destino"
+      },
+      "form": {
+        "newTitle": "Novo segmento de viagem",
+        "editTitle": "Editar segmento de viagem",
+        "technician": "Técnico",
+        "technicianPlaceholder": "Pesquisar técnicos...",
+        "technicianHelper": "Apenas membros de equipas de projetos geridos",
+        "project": "Projeto",
+        "projectPlaceholder": "Pesquisar projetos...",
+        "startDate": "Data de início",
+        "endDate": "Data de fim",
+        "endDateRequired": "Obrigatório para estado concluído",
+        "status": "Estado",
+        "origin": "Origem",
+        "destination": "Destino",
+        "originCountry": "País de origem",
+        "destinationCountry": "País de destino",
+        "originLocationOptional": "Localização de origem (opcional)",
+        "destinationLocationOptional": "Localização de destino (opcional)",
+        "originLocationPlaceholder": "Selecionar localização de origem",
+        "destinationLocationPlaceholder": "Selecionar localização de destino",
+        "selectTechnicianProject": "Selecione primeiro o técnico e o projeto",
+        "selectOriginCountryFirst": "Selecione primeiro o país de origem",
+        "selectDestinationCountryFirst": "Selecione primeiro o país de destino",
+        "projectLocationsOnly": "Apenas localizações do projeto",
+        "showingAllLocations": "A mostrar todas as localizações",
+        "allAvailableLocations": "Todas as localizações disponíveis",
+        "aiSuggestion": "Obter sugestão de IA",
+        "aiSuggestionFailed": "Falha ao obter sugestão de IA",
+        "aiSuggestionApplied": "Sugestão de IA aplicada",
+        "durationLabel": "⏱️ Duração: {{duration}}"
+      }
     }
   },
   "expenses": {
@@ -638,6 +825,9 @@
       "title": "Ainda não existem despesas",
       "subtitle": "Clique no botão + para submeter a sua primeira despesa",
       "action": "Adicionar despesa"
+    },
+    "fab": {
+      "addAria": "Adicionar despesa"
     },
     "validation": {
       "projectForTechnician": "Selecione um projeto válido para o técnico escolhido."
@@ -727,7 +917,8 @@
     "attachment": {
       "previewTitle": "Pré-visualização do anexo",
       "previewUnavailable": "Pré-visualização indisponível para este tipo de ficheiro",
-      "downloadFile": "Descarregar ficheiro"
+      "downloadFile": "Descarregar ficheiro",
+      "previewAlt": "Anexo da despesa"
     },
     "categories": {
       "general": "Geral",
@@ -744,7 +935,17 @@
   "reports": {
     "ai": {
       "openPanel": "Abrir IA",
-      "closePanel": "Fechar IA"
+      "closePanel": "Fechar IA",
+      "title": "IA"
+    },
+    "aiDrawer": {
+      "emptyPrompt": "Faça uma pergunta sobre o relatório atual e o intervalo de datas.",
+      "you": "Você",
+      "ai": "IA",
+      "questionLabel": "Pergunta",
+      "thinking": "A pensar…",
+      "send": "Enviar",
+      "errorFallback": "Falha ao obter resposta da IA"
     },
     "analysis": "Análise",
     "heatmap": "Mapa de calor",
@@ -763,6 +964,11 @@
       "validation": {
         "range": "Selecione um intervalo de datas válido."
       },
+      "errors": {
+        "loadFailed": "Falha ao carregar despesas.",
+        "loadFailedStatus": "Falha ao carregar despesas: {{status}}"
+      },
+      "projectFallback": "Projeto #{{id}}",
       "loading": "A carregar despesas…",
       "kpis": {
         "totalValue": "Valor total",
@@ -775,6 +981,7 @@
       "trends": {
         "title": "Tendências",
         "subtitle": "Gasto e número de despesas ao longo do tempo para os filtros atuais",
+        "granularityAria": "Granularidade das tendências",
         "daily": "Diário",
         "weekly": "Semanal",
         "monthly": "Mensal",
@@ -830,22 +1037,63 @@
         "title": "Mix de gastos",
         "subtitle": "Quota do total por categoria e estado",
         "categoryTitle": "Mix por categoria",
-        "statusTitle": "Mix por estado"
+        "statusTitle": "Mix por estado",
+        "shareLabel": "Quota"
       },
       "movers": {
         "title": "Maiores variações",
         "invalidRange": "Selecione um intervalo de datas válido para comparar com o período anterior.",
         "subtitle": "Maiores variações de gasto vs período anterior {{from}} → {{to}}",
         "categories": "Categorias",
-        "increases": "Aumentos"
+        "increases": "Aumentos",
+        "increasesUpper": "AUMENTOS",
+        "decreasesUpper": "DIMINUIÇÕES",
+        "projects": "Projetos"
       },
       "noExpenses": "Não existem despesas para os filtros atuais.",
       "ai": {
+        "hint": "Experimente perguntar sobre “categorias”, “projetos”, “outliers”, “o que mudou”, “funil de estados”, “qualidade dos dados”, “movimentos” ou “mix”.",
         "noExpenses": "Não existem despesas para os filtros atuais.",
         "spendMixUnavailable": "O mix de gastos não está disponível (gasto total é 0 para os filtros atuais).",
         "spendMixHeader": "Mix de gastos (intervalo {{from}} → {{to}}): total {{total}}",
         "topCategories": "Top categorias:",
         "topStatuses": "Top estados:",
+        "spendMixRow": "- {{label}}: {{share}}% ({{total}})",
+        "totalValue": "O valor total é {{total}} em {{count}} despesas (intervalo {{from}} → {{to}}).",
+        "statuses": "Estados (intervalo {{from}} → {{to}}): Revisão pendente {{pendingReview}}, Revisão financeira {{financeReview}}, Aprovado {{approved}}, Pago {{paid}}.",
+        "topCategoriesHeader": "Principais categorias (intervalo {{from}} → {{to}}):",
+        "topCategoriesRow": "- {{category}}: {{total}} ({{count}})",
+        "topProjectsHeader": "Principais projetos (intervalo {{from}} → {{to}}):",
+        "topProjectsRow": "- {{project}}: {{total}} ({{count}})",
+        "outliersUnavailable": "Os outliers precisam de mais variação de valores (IQR indisponível para o conjunto atual).",
+        "outliersNone": "Nenhum outlier detetado (limiar > {{threshold}}).",
+        "outliersHeader": "Outliers (limiar > {{threshold}}):",
+        "outliersRow": "- {{amount}} · {{project}} · {{category}} · {{date}}",
+        "compareMissingRange": "Selecione um intervalo de datas válido para comparar.",
+        "compareHeader": "Variação vs período anterior ({{from}} → {{to}}):",
+        "compareTotalLine": "Total: {{current}} vs {{previous}} ({{from}} → {{to}})",
+        "compareDeltaLine": "- {{totalLine}} · Δ {{delta}} · {{pct}}",
+        "compareCountLine": "- Quantidade: {{current}} vs {{previous}} · Δ {{delta}} · {{pct}}",
+        "funnelHeader": "Funil de estados (intervalo {{from}} → {{to}}):",
+        "funnelLine": "- {{status}}: {{count}} · {{total}}",
+        "funnelRates": "Taxas chave: submetido→pago {{submittedToPaid}} · revisão_financeira→aprovado_financeiro {{financeReviewToApproved}}",
+        "dataQualityHeader": "Qualidade dos dados (intervalo {{from}} → {{to}}):",
+        "dataQualityResults": "- Resultados: {{count}}",
+        "dataQualityMissingCategory": "- Categoria em falta: {{count}}",
+        "dataQualityMissingProject": "- Nome do projeto em falta: {{count}}",
+        "dataQualityUnparseableDates": "- Datas não interpretáveis para tendências: {{count}}",
+        "moversMissingRange": "Selecione um intervalo de datas válido para comparar.",
+        "moversHeader": "Maiores variações vs período anterior ({{from}} → {{to}}):",
+        "moversCategoryIncreases": "Aumentos de categoria:",
+        "moversCategoryDecreases": "Diminuições de categoria:",
+        "moversCategoryNone": "{{label}} {{fallback}}",
+        "moversCategoryRowIncrease": "- {{category}}: +{{delta}} (Δ {{countDelta}})",
+        "moversCategoryRowDecrease": "- {{category}}: {{delta}} (Δ {{countDelta}})",
+        "moversProjectIncreases": "Aumentos de projeto:",
+        "moversProjectDecreases": "Diminuições de projeto:",
+        "moversProjectNone": "{{label}} {{fallback}}",
+        "moversProjectRowIncrease": "- {{project}}: +{{delta}} (Δ {{countDelta}})",
+        "moversProjectRowDecrease": "- {{project}}: {{delta}} (Δ {{countDelta}})",
         "summaryHeader": "Análise de despesas (intervalo {{from}} → {{to}}):",
         "summaryTotal": "- Total: {{total}} ({{count}} despesas)",
         "summaryPending": "- Pendente: {{count}}",
@@ -854,6 +1102,38 @@
         "summaryPaid": "- Pago: {{count}}",
         "summaryPrompt": "Pergunte sobre “categorias”, “projetos”, “outliers”, “o que mudou”, “funil de estados”, “qualidade de dados”, “variações”, ou “mix”."
       }
+    }
+  },
+  "dashboard": {
+    "title": "Painel",
+    "subtitle": "Bem-vindo de volta, {{name}}! Eis o seu resumo dos últimos {{days}} dias.",
+    "userFallback": "Utilizador",
+    "noData": "Sem dados disponíveis",
+    "errors": {
+      "loadFailed": "Falha ao carregar estatísticas do painel"
+    },
+    "cards": {
+      "totalHours": "Total de horas",
+      "totalExpenses": "Total de despesas",
+      "pendingDetail": "Pendente ({{timesheets}}T + {{expenses}}D)",
+      "approvedDetail": "Aprovado ({{timesheets}}T + {{expenses}}D)"
+    },
+    "charts": {
+      "hoursByProject": "Horas por projeto",
+      "expensesByProject": "Despesas por projeto",
+      "timesheetsByStatus": "Folhas de horas por estado",
+      "expensesByStatus": "Despesas por estado",
+      "dailyHoursTrend": "Tendência diária de horas",
+      "dailyExpensesTrend": "Tendência diária de despesas"
+    },
+    "tooltips": {
+      "hours": "Horas: {{value}}",
+      "amount": "Valor: {{value}}",
+      "hoursValue": "{{value}} horas"
+    },
+    "legends": {
+      "hours": "Horas",
+      "amount": "Valor"
     }
   },
   "timesheets": {

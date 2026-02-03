@@ -326,8 +326,13 @@ const TimesheetCalendar: React.FC = () => {
   const roleIsAssigned = (role?: 'member' | 'manager' | 'none') => role && role !== 'none';
 
   const formatRoleLabel = (role?: 'member' | 'manager' | 'none') => {
-    if (!role || role === 'none') return 'Nenhum';
-    return role.charAt(0).toUpperCase() + role.slice(1);
+    const labels: Record<'member' | 'manager' | 'none', string> = {
+      member: t('approvals.roles.member'),
+      manager: t('approvals.roles.manager'),
+      none: t('approvals.roles.none'),
+    };
+    if (!role || role === 'none') return labels.none;
+    return labels[role] ?? role;
   };
 
   // AI Suggestion state - with localStorage persistence
