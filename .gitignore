@@ -114,3 +114,4 @@ test_*.sh
 setup_tenant.sh
 check_users.sh
 delete_user.sh
+frontend/tmp/
