@@ -4,6 +4,8 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
+import enGbLocale from '@fullcalendar/core/locales/en-gb';
+import ptLocale from '@fullcalendar/core/locales/pt';
 import { timesheetsApi, projectsApi, tasksApi, locationsApi, techniciansApi } from '../../services/api';
 import { travelsApi } from '../../services/travels';
 import type { Project, Timesheet, Task, Location, Technician, ProjectMember } from '../../types';
@@ -180,7 +182,7 @@ const DAILY_HOUR_CAP = 12;
 
 
 const TimesheetCalendar: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, tenant, isManager, isAdmin, loading: authLoading, tenantContext } = useAuth();
   const navigate = useNavigate();
   const { hasTravels } = useFeatures();
@@ -195,6 +197,19 @@ const TimesheetCalendar: React.FC = () => {
 
   const sourceWeekStart = tenantContext?.week_start ?? tenant?.week_start;
   const weekFirstDay = useMemo(() => weekStartToFirstDay(sourceWeekStart), [sourceWeekStart]);
+
+  const fullCalendarLocale = useMemo(() => {
+    const lang = String(i18n.resolvedLanguage ?? i18n.language ?? 'en').toLowerCase();
+    if (lang.startsWith('pt')) return 'pt';
+    if (lang === 'en-gb') return 'en-gb';
+    return 'en';
+  }, [i18n.language, i18n.resolvedLanguage]);
+
+  const fullCalendarLocaleInput = useMemo(() => {
+    if (fullCalendarLocale === 'pt') return ptLocale;
+    if (fullCalendarLocale === 'en-gb') return enGbLocale;
+    return 'en';
+  }, [fullCalendarLocale]);
 
   useEffect(() => {
     console.debug('[TimesheetCalendar] week start debug', {
@@ -2331,6 +2346,7 @@ const TimesheetCalendar: React.FC = () => {
               </Box>
               {(userIsManager || userIsAdmin) && (
                 <ToggleButtonGroup
+                  data-tour="timesheets-scope"
                   value={timesheetScope}
                   exclusive
                   onChange={handleTimesheetScopeChange}
@@ -2415,6 +2431,7 @@ const TimesheetCalendar: React.FC = () => {
         tabId="timesheet-insights"
         tooltip={t('rightPanel.trigger.tooltip')}
         icon={<SmartToyIcon fontSize="small" />}
+        dataTour="ai-trigger"
         ariaLabel={{
           open: t('rightPanel.trigger.open', { tab: t('rightPanel.tabs.insights') }),
           close: t('rightPanel.trigger.close', { tab: t('rightPanel.tabs.insights') }),
@@ -2434,6 +2451,7 @@ const TimesheetCalendar: React.FC = () => {
       <Box ref={calendarContainerRef} sx={{ flex: 1, minWidth: 0, display: 'flex' }}>
         <Paper 
           elevation={0}
+          data-tour="timesheets-calendar"
           sx={{ 
             borderRadius: 0,
             overflow: 'auto',
@@ -2677,9 +2695,10 @@ const TimesheetCalendar: React.FC = () => {
         }}
         >
           <FullCalendar
-            key={`weekFirstDay:${weekFirstDay}`}
+            key={`weekFirstDay:${weekFirstDay}:locale:${fullCalendarLocale}`}
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+            locales={[enGbLocale, ptLocale]}
             initialView="dayGridMonth"
             headerToolbar={{
               left: 'prev,next today',
@@ -2710,7 +2729,7 @@ const TimesheetCalendar: React.FC = () => {
             eventClick={handleEventClick}
             dateClick={handleDateClick}
             height="100%" // Usar 100% da altura disponível
-            locale="en"
+            locale={fullCalendarLocaleInput}
             firstDay={
               currentCalendarViewType === 'timeGridWeek' ||
               currentCalendarViewType === 'listWeek' ||
@@ -2728,6 +2747,7 @@ const TimesheetCalendar: React.FC = () => {
               //   where date corresponds to the visible first day column.
               dayGridMonth: {
                 firstDay: weekFirstDay,
+                titleFormat: { year: 'numeric', month: 'long' },
               },
               timeGridWeek: {
                 firstDay: weekFirstDay,
@@ -2737,6 +2757,7 @@ const TimesheetCalendar: React.FC = () => {
               },
               listMonth: {
                 firstDay: weekFirstDay,
+                titleFormat: { year: 'numeric', month: 'long' },
               },
             }}
             weekNumbers={!isMobile}

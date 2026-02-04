@@ -243,6 +243,7 @@ import ProjectMembersDialog from './ProjectMembersDialog';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate } from '../../utils/tenantFormatting';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 interface User {
   id: number;
@@ -326,14 +327,15 @@ const parseUserProjectFromGanttId = (id: string | number): { userId: number; pro
 };
 
 const normalizeRoleLabel = (value: any): string => {
-  if (!value) return 'None';
+  if (!value) return '';
   const s = String(value).trim();
-  if (!s) return 'None';
+  if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
 const buildColumns = (
   visibleColumns: VisibleColumnsState,
+  t: TFunction,
   resolveRoleBadge?: (task: any) => RoleBadge | null,
   formatGridDate?: (value: unknown) => string
 ) => {
@@ -342,7 +344,7 @@ const buildColumns = (
   if (visibleColumns.text) {
     cols.push({
       name: 'text',
-      label: 'Users',
+      label: t('planning.gantt.columns.users'),
       width: 260,
       tree: true,
       template: (task: any) => {
@@ -360,7 +362,7 @@ const buildColumns = (
   if (visibleColumns.start_date) {
     cols.push({
       name: 'start_date',
-      label: 'Start',
+      label: t('planning.gantt.columns.start'),
       width: 100,
       align: 'center',
       template: (task: any) => {
@@ -373,7 +375,7 @@ const buildColumns = (
   if (visibleColumns.end_date) {
     cols.push({
       name: 'end_date',
-      label: 'End',
+      label: t('planning.gantt.columns.end'),
       width: 100,
       align: 'center',
       template: (task: any) => {
@@ -386,7 +388,7 @@ const buildColumns = (
   if (visibleColumns.progress) {
     cols.push({
       name: 'progress',
-      label: 'Progress',
+      label: t('planning.gantt.columns.progress'),
       width: 80,
       align: 'center',
       template: (task: any) => {
@@ -531,6 +533,45 @@ const ensureDhtmlxGanttAssets = (): Promise<void> => {
   return dhtmlxLoader;
 };
 
+const buildLocaleDateNames = (language: string): {
+  month_full: string[];
+  month_short: string[];
+  day_full: string[];
+  day_short: string[];
+} => {
+  const safeLanguage = typeof language === 'string' && language.trim() ? language : 'en-US';
+
+  const monthFullFmt = new Intl.DateTimeFormat(safeLanguage, { month: 'long' });
+  const monthShortFmt = new Intl.DateTimeFormat(safeLanguage, { month: 'short' });
+  const dayFullFmt = new Intl.DateTimeFormat(safeLanguage, { weekday: 'long' });
+  const dayShortFmt = new Intl.DateTimeFormat(safeLanguage, { weekday: 'short' });
+
+  const month_full = Array.from({ length: 12 }, (_v, idx) => monthFullFmt.format(new Date(2020, idx, 1)));
+  const month_short = Array.from({ length: 12 }, (_v, idx) => monthShortFmt.format(new Date(2020, idx, 1)));
+
+  // DHTMLX expects Sunday-first day arrays.
+  const baseSunday = new Date(2020, 7, 2); // 2020-08-02 is Sunday
+  const day_full = Array.from({ length: 7 }, (_v, idx) => dayFullFmt.format(new Date(baseSunday.getTime() + idx * 86400000)));
+  const day_short = Array.from({ length: 7 }, (_v, idx) => dayShortFmt.format(new Date(baseSunday.getTime() + idx * 86400000)));
+
+  return { month_full, month_short, day_full, day_short };
+};
+
+const applyDhtmlxLocale = (gantt: any, language: string) => {
+  if (!gantt) return;
+  try {
+    const names = buildLocaleDateNames(language);
+    gantt.locale = gantt.locale || {};
+    gantt.locale.date = gantt.locale.date || {};
+    gantt.locale.date.month_full = names.month_full;
+    gantt.locale.date.month_short = names.month_short;
+    gantt.locale.date.day_full = names.day_full;
+    gantt.locale.date.day_short = names.day_short;
+  } catch (e) {
+    // Best-effort only; fall back to DHTMLX defaults.
+  }
+};
+
 const getProjectMembers = (project: any): User[] => {
   const pickArray = (v: any): any[] => {
     if (Array.isArray(v)) return v;
@@ -552,7 +593,7 @@ const getProjectMembers = (project: any): User[] => {
   candidates.forEach((item: any) => {
     // Sometimes it's already a user object
     if (item && typeof item.id === 'number' && (item.name || item.email)) {
-      extracted.push({ id: item.id, name: item.name ?? `User ${item.id}`, email: item.email ?? '' });
+      extracted.push({ id: item.id, name: item.name ?? `#${item.id}`, email: item.email ?? '' });
       return;
     }
 
@@ -561,7 +602,7 @@ const getProjectMembers = (project: any): User[] => {
     if (nested && typeof nested.id === 'number') {
       extracted.push({
         id: nested.id,
-        name: nested.name ?? `User ${nested.id}`,
+        name: nested.name ?? `#${nested.id}`,
         email: nested.email ?? '',
       });
     }
@@ -713,7 +754,8 @@ const buildUsersPlanning = (
 };
 
 const PlanningGanttUsers: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language || 'en-US';
   useTenantGuard();
   const { hasPermission, tenantContext } = useAuth();
   const canCreatePlanning = hasPermission('create-planning');
@@ -1028,21 +1070,21 @@ const PlanningGanttUsers: React.FC = () => {
     fetchTasks();
   }, []);
 
-  const applyScaleInternal = (gantt: any, mode: ViewMode) => {
+  const applyScaleInternal = (gantt: any, mode: ViewMode, t: TFunction) => {
     switch (mode) {
       case 'Day':
         gantt.config.scales = [{ unit: 'day', step: 1, format: '%D %d %M' }];
         break;
       case 'Week':
         gantt.config.scales = [
-          { unit: 'week', step: 1, format: 'Week #%W' },
+          { unit: 'week', step: 1, format: `${t('planning.gantt.viewModes.week')} #%W` },
           { unit: 'day', step: 1, format: '%d %M' },
         ];
         break;
       case 'Month':
         gantt.config.scales = [
           { unit: 'month', step: 1, format: '%F %Y' },
-          { unit: 'week', step: 1, format: 'Week #%W' },
+          { unit: 'week', step: 1, format: `${t('planning.gantt.viewModes.week')} #%W` },
         ];
         break;
       case 'Year':
@@ -1132,7 +1174,8 @@ const PlanningGanttUsers: React.FC = () => {
           gantt.config.auto_scheduling = false;
           gantt.config.show_progress = true;
           gantt.config.row_height = 34;
-          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, resolveRoleBadge, formatGridDate);
+          applyDhtmlxLocale(gantt, language);
+          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, t, resolveRoleBadge, formatGridDate);
 
           gantt.templates.tooltip_date_format = (date: Date) => {
             const ymd = dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DD') : '';
@@ -1165,19 +1208,19 @@ const PlanningGanttUsers: React.FC = () => {
 
           gantt.templates.tooltip_text = (start: Date, end: Date, task: any) => {
             if (task.type === 'project') {
-              return `<b>${task.text}</b><br/><i>Group</i>`;
+              return `<b>${task.text}</b>`;
             }
             return `
               <b>${task.text}</b><br/>
-              <b>Start:</b> ${gantt.templates.tooltip_date_format(start)}<br/>
-              <b>End:</b> ${gantt.templates.tooltip_date_format(end)}<br/>
-              <b>Progress:</b> ${Math.round((task.progress || 0) * 100)}%
+              <b>${t('planning.gantt.columns.start')}:</b> ${gantt.templates.tooltip_date_format(start)}<br/>
+              <b>${t('planning.gantt.columns.end')}:</b> ${gantt.templates.tooltip_date_format(end)}<br/>
+              <b>${t('planning.gantt.columns.progress')}:</b> ${Math.round((task.progress || 0) * 100)}%
             `;
           };
 
           injectCustomStyles();
           gantt.init(container);
-          applyScaleInternal(gantt, viewMode);
+          applyScaleInternal(gantt, viewMode, t);
 
           setGanttInitialized(true);
 
@@ -1209,28 +1252,29 @@ const PlanningGanttUsers: React.FC = () => {
         }
       }
     };
-  }, [ganttReady, ganttInitialized, gridVisible, viewMode, formatGridDate, tenantContext]);
+  }, [ganttReady, ganttInitialized, gridVisible, viewMode, formatGridDate, tenantContext, language]);
 
   // Update columns/grid when toggled
   useEffect(() => {
     if (!ganttInitialized || !window.gantt) return;
     const gantt = window.gantt;
     gantt.config.grid_width = gridVisible ? 300 : 0;
-    gantt.config.columns = buildColumns(visibleColumns, resolveRoleBadge, formatGridDate);
+    gantt.config.columns = buildColumns(visibleColumns, t, resolveRoleBadge, formatGridDate);
     gantt.render();
     try {
       gantt.setSizes();
     } catch (e) {
       // no-op
     }
-  }, [visibleColumns, gridVisible, ganttInitialized, rolesByUserProject, formatGridDate]);
+  }, [visibleColumns, gridVisible, ganttInitialized, rolesByUserProject, formatGridDate, language]);
 
   // Update view mode / scales
   useEffect(() => {
     if (!ganttInitialized || !window.gantt) return;
-    applyScaleInternal(window.gantt, viewMode);
+    applyDhtmlxLocale(window.gantt, language);
+    applyScaleInternal(window.gantt, viewMode, t);
     window.gantt.render();
-  }, [viewMode, ganttInitialized]);
+  }, [viewMode, ganttInitialized, language]);
 
   // Parse tasks into Gantt (with UI filtering) when data changes
   useEffect(() => {
@@ -1313,7 +1357,7 @@ const PlanningGanttUsers: React.FC = () => {
       >
         <Box sx={{ overflowY: 'auto', flex: 1, p: 2 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Select Users
+            {t('planning.gantt.sidebar.selectUsers')}
           </Typography>
 
           {(loadingProjects || loadingTasks) && (

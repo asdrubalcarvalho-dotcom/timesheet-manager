@@ -485,6 +485,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
           {menuItems.filter(item => item.show).map((item) => (
             <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
+                data-tour={item.id === 'timesheets' ? 'menu-timesheets' : undefined}
                 onClick={() => handleItemClick(item.path)}
                 selected={currentPage === item.path}
                 sx={{

@@ -30,6 +30,7 @@ import { useAuth } from '../Auth/AuthContext';
 import { useBilling } from '../../contexts/BillingContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { formatTenantMoney } from '../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
 
 interface UserRecord {
   id: number;
@@ -56,6 +57,7 @@ const extractRows = (payload: any): UserRecord[] => {
 };
 
 const UsersManager: React.FC = () => {
+  const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
   const { user: currentUser, tenantContext } = useAuth();
   const { billingSummary, loading: billingLoading } = useBilling();
@@ -93,7 +95,7 @@ const UsersManager: React.FC = () => {
       const response = await api.get('/api/technicians');
       setUsers(extractRows(response.data));
     } catch (error) {
-      showError('Failed to load users');
+      showError(t('admin.users.notifications.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -105,7 +107,7 @@ const UsersManager: React.FC = () => {
     }
     // Prevent editing Owner users (except by themselves)
     if (user?.is_owner && user.user_id !== currentUser?.id) {
-      showError('Owner users can only be edited by themselves');
+      showError(t('admin.users.errors.ownerEditSelfOnly'));
       return;
     }
     
@@ -116,9 +118,7 @@ const UsersManager: React.FC = () => {
       // If limit is defined and we're at or above it, block creation
       if (user_limit && user_limit > 0 && user_count >= user_limit) {
         const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
-        showError(
-          `License limit reached: Your ${planName} plan allows ${user_limit} users maximum. You currently have ${user_count}. Please upgrade your plan in the Billing page to add more users.`
-        );
+        showError(t('admin.users.errors.licenseLimitReached', { planName, user_limit, user_count }));
         return;
       }
     }
@@ -206,12 +206,12 @@ const UsersManager: React.FC = () => {
 
       if (editingUser) {
         await api.put(`/api/technicians/${editingUser.id}`, payload);
-        showSuccess('User updated successfully');
+        showSuccess(t('admin.users.notifications.updateSuccess'));
       } else {
         // Use the same endpoint, but allow opting out of invite email.
         payload.send_invite = sendInvite;
         await api.post('/api/technicians', payload);
-        showSuccess('User created successfully');
+        showSuccess(t('admin.users.notifications.createSuccess'));
       }
       fetchUsers();
       handleCloseDialog();
@@ -220,10 +220,10 @@ const UsersManager: React.FC = () => {
       if (error.response?.data?.code === 'user_limit_reached') {
         showError(
           error.response.data.message || 
-          'User limit reached. Purchase more licenses in Billing before adding new users.'
+          t('admin.users.errors.userLimitReachedDefault')
         );
       } else {
-        showError(error.response?.data?.message || 'Failed to save user');
+        showError(error.response?.data?.message || t('admin.users.notifications.saveFailed'));
       }
     }
   };
@@ -236,13 +236,13 @@ const UsersManager: React.FC = () => {
     
     // Prevent deleting Owner users
     if (user?.is_owner) {
-      showError('Owner users cannot be deleted');
+      showError(t('admin.users.errors.ownerDeleteBlocked'));
       return;
     }
     setConfirmDialog({
       open: true,
-      title: 'Delete User',
-      message: 'Are you sure you want to delete this user? This action cannot be undone.',
+      title: t('admin.users.confirmDelete.title'),
+      message: t('admin.users.confirmDelete.message'),
       recordDetails: {
         name: user?.name,
         email: user?.email,
@@ -254,10 +254,10 @@ const UsersManager: React.FC = () => {
         }
         try {
           await api.delete(`/api/technicians/${id}`);
-          showSuccess('User deleted successfully');
+          showSuccess(t('admin.users.notifications.deleteSuccess'));
           fetchUsers();
         } catch (error: any) {
-          showError(error?.response?.data?.message || 'Failed to delete user');
+          showError(error?.response?.data?.message || t('admin.users.notifications.deleteFailed'));
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }
@@ -266,18 +266,23 @@ const UsersManager: React.FC = () => {
 
   const formatRole = (role?: string) => {
     if (!role) return '-';
+    const normalized = role.toLowerCase();
+    const knownRoleKeys = ['owner', 'admin', 'manager', 'technician'];
+    if (knownRoleKeys.includes(normalized)) {
+      return t(`admin.users.roles.${normalized}`);
+    }
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
   const columns: GridColDef<UserRecord>[] = [
     {
       field: 'id',
-      headerName: 'ID',
+      headerName: t('admin.shared.columns.id'),
       width: 80
     },
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: t('admin.shared.columns.name'),
       flex: 1,
       minWidth: 180,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
@@ -285,7 +290,7 @@ const UsersManager: React.FC = () => {
           <span>{row.name}</span>
           {row.role === 'Owner' && (
             <Chip
-              label="Owner"
+              label={t('admin.users.roles.owner')}
               size="small"
               sx={{
                 height: 18,
@@ -304,13 +309,13 @@ const UsersManager: React.FC = () => {
     },
     {
       field: 'email',
-      headerName: 'Email',
+      headerName: t('admin.users.columns.email'),
       flex: 1.2,
       minWidth: 200
     },
     {
       field: 'role',
-      headerName: 'Role',
+      headerName: t('admin.users.columns.role'),
       width: 140,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => {
         const isOwner = row.is_owner || row.role?.toLowerCase() === 'owner';
@@ -331,7 +336,7 @@ const UsersManager: React.FC = () => {
         
         return (
           <Chip
-            label={formatRole(isOwner ? 'Owner' : row.role)}
+            label={formatRole(isOwner ? 'owner' : row.role)}
             size="small"
             sx={{
               bgcolor,
@@ -344,17 +349,23 @@ const UsersManager: React.FC = () => {
     },
     {
       field: 'hourly_rate',
-      headerName: 'Hourly Rate',
+      headerName: t('admin.users.columns.hourlyRate'),
       width: 130,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => {
         const value = row?.hourly_rate;
         const amount = Number(value);
-        return <span>{Number.isFinite(amount) ? `${formatTenantMoney(amount, tenantContext)}/hr` : '-'}</span>;
+        return (
+          <span>
+            {Number.isFinite(amount)
+              ? `${formatTenantMoney(amount, tenantContext)}${t('admin.users.perHourSuffix')}`
+              : '-'}
+          </span>
+        );
       }
     },
     {
       field: 'worker_id',
-      headerName: 'Worker ID',
+      headerName: t('admin.users.columns.workerId'),
       width: 150,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
         <span>{row?.worker_id || '-'}</span>
@@ -362,7 +373,7 @@ const UsersManager: React.FC = () => {
     },
     {
       field: 'worker_name',
-      headerName: 'Worker Name',
+      headerName: t('admin.users.columns.workerName'),
       flex: 1,
       minWidth: 180,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
@@ -371,7 +382,7 @@ const UsersManager: React.FC = () => {
     },
     {
       field: 'worker_contract_country',
-      headerName: 'Contract Country',
+      headerName: t('admin.users.columns.contractCountry'),
       width: 160,
       renderCell: ({ row }: GridRenderCellParams<UserRecord>) => (
         <span>{(row as any)?.worker_contract_country || '-'}</span>
@@ -379,7 +390,7 @@ const UsersManager: React.FC = () => {
     },
     {
       field: 'actions',
-      headerName: 'Actions',
+      headerName: t('admin.shared.columns.actions'),
       width: 120,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => {
@@ -421,13 +432,13 @@ const UsersManager: React.FC = () => {
   ];
 
   return (
-    <AdminLayout title="Users Management">
+    <AdminLayout title={t('admin.users.managementTitle')}>
       {!loading && users.length === 0 ? (
         <EmptyState
           icon={PeopleIcon}
-          title="No users yet"
-          subtitle="Create your first user to start managing your team"
-          actionLabel="New User"
+          title={t('admin.users.empty.title')}
+          subtitle={t('admin.users.empty.subtitle')}
+          actionLabel={t('admin.users.actions.new')}
           onAction={() => {
             if (!ensureWritable()) {
               return;
@@ -451,7 +462,7 @@ const UsersManager: React.FC = () => {
                 }
               }}
             >
-              Manage Access & Permissions
+              {t('admin.users.actions.manageAccess')}
             </Button>
           </Box>
 
@@ -516,70 +527,78 @@ const UsersManager: React.FC = () => {
         disableRestoreFocus
       >
         <DialogTitle>
-          {editingUser?.is_owner ? 'Edit Owner Profile' : editingUser ? 'Edit User' : 'New User'}
+          {editingUser?.is_owner
+            ? t('admin.users.dialog.editOwnerProfile')
+            : editingUser
+              ? t('admin.users.dialog.editUser')
+              : t('admin.users.dialog.newUser')}
         </DialogTitle>
         <DialogContent>
           <Box component="form" onSubmit={handleSave} id="user-form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
-              label="Name"
+              label={t('common.name')}
               fullWidth
               required
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
             <TextField
-              label="Email"
+              label={t('admin.users.fields.email')}
               type="email"
               fullWidth
               required
               disabled={editingUser?.is_owner === true}
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              helperText={editingUser?.is_owner ? "Owner email cannot be changed" : ""}
+              helperText={editingUser?.is_owner ? t('admin.users.helpers.ownerEmailLocked') : ""}
             />
             <TextField
-              label="Role"
+              label={t('admin.users.fields.role')}
               select
               fullWidth
               required
               disabled={editingUser?.is_owner === true}
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              helperText={editingUser?.is_owner ? "Owner role cannot be changed" : ""}
+              helperText={editingUser?.is_owner ? t('admin.users.helpers.ownerRoleLocked') : ""}
             >
-              <MenuItem value="technician">Technician</MenuItem>
-              <MenuItem value="manager">Manager</MenuItem>
+              <MenuItem value="technician">{t('admin.users.roles.technician')}</MenuItem>
+              <MenuItem value="manager">{t('admin.users.roles.manager')}</MenuItem>
             </TextField>
             <TextField
-              label="Hourly Rate"
+              label={t('admin.users.fields.hourlyRate')}
               type="number"
               fullWidth
               value={formData.hourly_rate}
               onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })}
             />
             <TextField
-              label="Worker ID"
+              label={t('admin.users.fields.workerId')}
               fullWidth
               value={formData.worker_id}
               onChange={(e) => setFormData({ ...formData, worker_id: e.target.value })}
-              helperText="Optional unique identifier used for payroll exports"
+              helperText={t('admin.users.helpers.workerId')}
             />
             <TextField
-              label="Worker Name"
+              label={t('admin.users.fields.workerName')}
               fullWidth
               value={formData.worker_name}
               onChange={(e) => setFormData({ ...formData, worker_name: e.target.value })}
-              helperText="Optional legal name for payroll if different from display name"
+              helperText={t('admin.users.helpers.workerName')}
             />
             <TextField
-              label="Worker Contract Country"
+              label={t('admin.users.fields.contractCountry')}
               fullWidth
               value={formData.worker_contract_country}
               onChange={(e) => setFormData({ ...formData, worker_contract_country: e.target.value })}
-              helperText="Country where the worker's contract is registered (e.g., Portugal, Spain)"
+              helperText={t('admin.users.helpers.contractCountry')}
             />
             <TextField
-              label={editingUser ? 'New Password (leave blank to keep current)' : 'Password'}
+              label={
+                editingUser
+                  ? t('admin.users.fields.newPasswordKeepCurrent')
+                  : t('admin.users.fields.password')
+              }
               type="password"
               fullWidth
               required={!editingUser}
@@ -589,7 +608,7 @@ const UsersManager: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog}>{t('common.cancel')}</Button>
           {editingUser ? (
             <Button
               type="submit"
@@ -598,7 +617,7 @@ const UsersManager: React.FC = () => {
               color="primary"
               disabled={isReadOnly}
             >
-              Update
+              {t('common.update')}
             </Button>
           ) : (
             <>
@@ -610,7 +629,7 @@ const UsersManager: React.FC = () => {
                 disabled={isReadOnly}
                 data-send-invite="false"
               >
-                Create without email
+                {t('admin.users.actions.createWithoutEmail')}
               </Button>
               <Button
                 type="submit"
@@ -619,7 +638,7 @@ const UsersManager: React.FC = () => {
                 color="primary"
                 disabled={isReadOnly}
               >
-                Create
+                {t('common.create')}
               </Button>
             </>
           )}
@@ -631,8 +650,8 @@ const UsersManager: React.FC = () => {
         title={confirmDialog.title}
         message={confirmDialog.message}
         recordDetails={confirmDialog.recordDetails}
-        confirmText="Delete"
-        cancelText="Cancel"
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         confirmColor="error"
         onConfirm={confirmDialog.action}
         onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}

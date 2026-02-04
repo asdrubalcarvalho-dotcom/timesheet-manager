@@ -10,6 +10,7 @@
       "open": "Abrir {{tab}}",
       "close": "Fechar {{tab}}"
     },
+    "openButton": "Ajuda / IA",
     "panelFallback": "Painel",
     "closePanel": "Fechar painel",
     "insights": {
@@ -456,6 +457,10 @@
     "ptPT": "Português (PT)"
   },
   "billing": {
+    "readOnly": {
+      "expired": "A sua subscrição expirou. Está em modo só de leitura.",
+      "upgrade": "Upgrade"
+    },
     "paymentMethods": {
       "title": "Métodos de pagamento",
       "subtitle": "Gira os seus cartões de crédito e débito",
@@ -530,6 +535,9 @@
         "end": "Fim",
         "progress": "Progresso"
       },
+      "sidebar": {
+        "selectUsers": "Selecionar utilizadores"
+      },
       "manageTaskLocations": "Gerir localizações da tarefa",
       "manageProjectMembers": "Gerir membros do projeto",
       "viewModes": {
@@ -550,6 +558,10 @@
       "expenses": "Despesas"
     },
     "scopeLabel": "Âmbito",
+    "scopes": {
+      "all": "Todos",
+      "self": "Meus"
+    },
     "pendingLabel": "Pendentes",
     "approvedTimesheetsLabel": "Aprovadas (timesheets)",
     "approvedExpensesLabel": "Aprovadas (despesas)",
@@ -778,7 +790,9 @@
         "saveFailed": "Falha ao guardar segmento de viagem"
       },
       "toast": {
-        "deleted": "Segmento de viagem eliminado com sucesso"
+        "deleted": "Segmento de viagem eliminado com sucesso",
+        "created": "Segmento de viagem criado com sucesso",
+        "updated": "Segmento de viagem atualizado com sucesso"
       },
       "fallbacks": {
         "origin": "origem",
@@ -810,6 +824,7 @@
         "projectLocationsOnly": "Apenas localizações do projeto",
         "showingAllLocations": "A mostrar todas as localizações",
         "allAvailableLocations": "Todas as localizações disponíveis",
+        "aiNotInPlan": "As funcionalidades de IA não estão incluídas no seu plano atual. Faça upgrade para aceder a sugestões de viagem com IA.",
         "aiSuggestion": "Obter sugestão de IA",
         "aiSuggestionFailed": "Falha ao obter sugestão de IA",
         "aiSuggestionApplied": "Sugestão de IA aplicada",
@@ -1266,6 +1281,459 @@
         "direction": "Direção",
         "status": "Estado",
         "classificationReason": "Motivo de classificação"
+      }
+    }
+  }
+
+  ,
+  "tour": {
+    "restart": "Reiniciar visita guiada",
+    "buttons": {
+      "back": "Anterior",
+      "close": "Fechar",
+      "finish": "Terminar",
+      "next": "Seguinte",
+      "skip": "Saltar"
+    },
+    "steps": {
+      "menuTimesheets": "Abra as Folhas de Horas no menu à esquerda.",
+      "timesheetsCalendar": "Este é o teu calendário de folhas de horas. Navega por dias/semanas/meses e clica numa data para adicionar registos.",
+      "timesheetsScope": "Usa o Âmbito para alternar entre os teus registos, os de outros, ou todos (gestores/admins).",
+      "aiTrigger": "Use este botão para abrir Insights e ferramentas de IA.",
+      "rightPanelToggle": "Use o X para fechar o painel lateral.",
+      "aiTab": "Mude para o separador de Chat de IA aqui."
+    }
+  },
+  "admin": {
+    "dashboard": {
+      "title": "Administração",
+      "modules": {
+        "projects": {
+          "title": "Projetos",
+          "description": "Criar e gerir projetos, datas e estado."
+        },
+        "tasks": {
+          "title": "Tarefas",
+          "description": "Gerir tarefas, progresso, dependências e locais."
+        },
+        "locations": {
+          "title": "Locais",
+          "description": "Manter locais usados em registos de trabalho e viagens."
+        },
+        "users": {
+          "title": "Utilizadores",
+          "description": "Gerir membros da equipa, funções e identificadores de payroll."
+        }
+      }
+    },
+    "access": {
+      "title": "Acesso e Permissões",
+      "actions": {
+        "editMatrix": "Editar matriz",
+        "aiSuggestion": "Sugestão de IA"
+      },
+      "matrix": {
+        "title": "Matriz de permissões",
+        "role": "Função"
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar perfis/permissões.",
+        "loadMatrixFailed": "Falha ao carregar permissões por perfil.",
+        "updatePermissionFailed": "Falha ao atualizar permissão.",
+        "permissionAssigned": "Permissão {{permission}} atribuída a {{role}}.",
+        "permissionRemoved": "Permissão {{permission}} removida de {{role}}.",
+        "aiNotInPlan": "As sugestões de IA não estão disponíveis no seu plano."
+      },
+      "ai": {
+        "noSuggestion": "Sem sugestão disponível.",
+        "fetchFailed": "Falha ao obter sugestão de IA."
+      }
+    },
+    "resetDataDialog": {
+      "title": {
+        "default": "Repor dados do tenant",
+        "success": "Reposição concluída"
+      },
+      "notifications": {
+        "resetFailed": "Falha ao repor dados.",
+        "resetTenantFailed": "Falha ao repor dados do tenant.",
+        "resetSuccessLoggingOut": "Os dados do tenant foram repostos com sucesso! A terminar sessão..."
+      },
+      "step1": {
+        "danger": "PERIGO: Esta ação não pode ser anulada!",
+        "willDeletePrefix": "Isto irá",
+        "willDeleteEmphasis": "eliminar permanentemente todos os dados",
+        "willDeleteSuffix": "desta base de dados do tenant, incluindo:",
+        "items": {
+          "timesheets": "Todas as folhas de horas e registos de tempo",
+          "expenses": "Todas as despesas e recibos",
+          "travels": "Todos os segmentos de viagem",
+          "projects": "Todos os projetos, tarefas e locais",
+          "users": "Todos os utilizadores (exceto Owner)",
+          "permissions": "Todas as permissões e atribuições de perfis"
+        },
+        "preserved": {
+          "title": "O que será preservado:",
+          "ownerAccount": "A sua conta Owner (email e palavra-passe)",
+          "dbStructure": "Estrutura da base de dados (tabelas e migrações)"
+        },
+        "importantTitle": "Importante:",
+        "important": {
+          "sessionClosed": "A sua sessão será terminada automaticamente após a reposição",
+          "loginAgain": "Terá de iniciar sessão novamente com a sua conta Owner",
+          "chooseOption": "Após a reposição, pode manter a base de dados limpa ou carregar dados de demonstração"
+        },
+        "preferenceTitle": "Selecione a sua preferência:",
+        "options": {
+          "demo": {
+            "title": "Carregar dados de demonstração (Recomendado)",
+            "description": "Criar projetos, tarefas, locais e utilizadores de exemplo para teste"
+          },
+          "clean": {
+            "title": "Base de dados limpa (Sem dados de demonstração)",
+            "description": "Começar com base de dados vazia (apenas conta Owner)"
+          }
+        }
+      },
+      "step2": {
+        "title": "CONFIRMAÇÃO FINAL",
+        "subtitle": "Tem a certeza absoluta de que pretende continuar?",
+        "selectedOptionLabel": "Opção selecionada:",
+        "selectedOption": {
+          "demo": "✓ Eliminar todos os dados e carregar dados de demonstração",
+          "clean": "✓ Eliminar todos os dados (base de dados limpa)"
+        },
+        "notice": "Esta ação irá eliminar imediatamente todos os dados existentes.",
+        "confirmHint": "Clique em \"REPÔR DADOS AGORA\" para confirmar."
+      },
+      "step3": {
+        "title": "Reposição de dados concluída!",
+        "message": {
+          "demo": "Todos os dados do tenant foram repostos e os dados de demonstração foram carregados.",
+          "clean": "Todos os dados do tenant foram eliminados. A base de dados está agora limpa."
+        },
+        "logoutHint": "Vai terminar sessão automaticamente em 2 segundos..."
+      },
+      "actions": {
+        "proceed": "Compreendo, continuar",
+        "goBack": "Voltar",
+        "resetting": "A repor...",
+        "resetNow": "REPÔR DADOS AGORA"
+      }
+    },
+    "shared": {
+      "columns": {
+        "id": "ID",
+        "name": "Nome",
+        "description": "Descrição",
+        "status": "Estado",
+        "actions": "Ações"
+      },
+      "status": {
+        "active": "Ativo",
+        "inactive": "Inativo"
+      }
+    },
+    "locations": {
+      "columns": {
+        "address": "Morada",
+        "city": "Cidade",
+        "country": "País",
+        "postalCode": "Código Postal",
+        "coordinates": "Coordenadas"
+      },
+      "confirmDelete": {
+        "title": "Eliminar local",
+        "message": "Tem a certeza que pretende eliminar este local? Esta ação não pode ser anulada."
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar locais.",
+        "loadCountriesFailed": "Falha ao carregar países.",
+        "requiredFields": "Preencha todos os campos obrigatórios.",
+        "createSuccess": "Local criado com sucesso.",
+        "updateSuccess": "Local atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar local.",
+        "deleteSuccess": "Local eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar local."
+      }
+    },
+    "projects": {
+      "managementTitle": "Gestão de Projetos",
+      "empty": {
+        "title": "Ainda não há projetos",
+        "subtitle": "Crie o seu primeiro projeto para começar a registar trabalho"
+      },
+      "actions": {
+        "new": "Novo Projeto",
+        "edit": "Editar Projeto"
+      },
+      "columns": {
+        "startDate": "Data de início",
+        "endDate": "Data de fim"
+      },
+      "fields": {
+        "startDate": "Data de início",
+        "endDate": "Data de fim"
+      },
+      "status": {
+        "active": "Ativo",
+        "completed": "Concluído",
+        "on_hold": "Em pausa"
+      },
+      "tabs": {
+        "details": "Detalhes",
+        "tasks": "Tarefas"
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar projetos.",
+        "loadTasksFailed": "Falha ao carregar tarefas do projeto.",
+        "createSuccess": "Projeto criado com sucesso.",
+        "updateSuccess": "Projeto atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar projeto.",
+        "deleteSuccess": "Projeto eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar projeto."
+      },
+      "confirmDelete": {
+        "title": "Eliminar projeto",
+        "message": "Tem a certeza que pretende eliminar este projeto? Esta ação não pode ser anulada."
+      },
+      "tasksTab": {
+        "subtitle": "Gerir tarefas deste projeto",
+        "addTask": "Adicionar tarefa",
+        "columns": {
+          "start": "Início",
+          "end": "Fim",
+          "progress": "Progresso"
+        },
+        "empty": "Ainda não há tarefas para este projeto."
+      },
+      "tasksDialog": {
+        "addTask": "Adicionar Tarefa",
+        "editTask": "Editar Tarefa",
+        "fields": {
+          "estimatedHours": "Horas estimadas",
+          "progress": "Progresso (%)"
+        },
+        "validation": {
+          "nameRequired": "O nome da tarefa é obrigatório.",
+          "startDateRequired": "A data de início é obrigatória.",
+          "endDateAfterStart": "A data de fim tem de ser posterior à data de início.",
+          "progressRange": "O progresso tem de estar entre 0 e 100.",
+          "estimatedHoursPositive": "As horas estimadas têm de ser um número positivo."
+        },
+        "notifications": {
+          "createSuccess": "Tarefa criada com sucesso.",
+          "updateSuccess": "Tarefa atualizada com sucesso.",
+          "saveFailed": "Falha ao guardar tarefa.",
+          "deleteSuccess": "Tarefa eliminada com sucesso.",
+          "deleteFailed": "Falha ao eliminar tarefa."
+        },
+        "confirmDelete": {
+          "title": "Eliminar tarefa",
+          "message": "Tem a certeza que pretende eliminar esta tarefa? Esta ação não pode ser anulada."
+        }
+      },
+      "membersDialog": {
+        "title": "Gerir membros — {{project}}",
+        "empty": "Ainda não existem membros associados a este projeto.",
+        "unnamedUser": "Utilizador sem nome",
+        "noEmail": "Sem email",
+        "removeAria": "Remover membro",
+        "fields": {
+          "user": "Utilizador",
+          "timesheetRole": "Perfil de horas",
+          "expenseRole": "Perfil de despesas",
+          "financeRole": "Perfil financeiro"
+        },
+        "addSectionTitle": "Adicionar novo membro",
+        "noAssignableUsers": "Não existem utilizadores disponíveis para atribuir. Crie primeiro um técnico.",
+        "actions": {
+          "close": "Fechar",
+          "assignUser": "Atribuir utilizador"
+        },
+        "confirmRemove": {
+          "title": "Remover membro",
+          "message": "Tem a certeza que pretende remover este membro do projeto?",
+          "confirm": "Remover"
+        },
+        "notifications": {
+          "loadMembersFailed": "Falha ao carregar membros do projeto",
+          "loadUsersFailed": "Falha ao carregar utilizadores disponíveis",
+          "rolesUpdated": "Perfis atualizados com sucesso",
+          "updateRolesFailed": "Não foi possível atualizar os perfis",
+          "memberRemoved": "Membro removido",
+          "removeMemberFailed": "Falha ao remover membro",
+          "memberAdded": "Membro adicionado ao projeto",
+          "addMemberFailed": "Falha ao adicionar membro"
+        }
+      }
+    },
+    "tasks": {
+      "managementTitle": "Gestão de Tarefas",
+      "empty": {
+        "title": "Ainda não há tarefas",
+        "subtitle": "Crie a sua primeira tarefa para organizar o trabalho"
+      },
+      "actions": {
+        "new": "Nova Tarefa",
+        "edit": "Editar Tarefa",
+        "manageLocations": "Gerir locais"
+      },
+      "columns": {
+        "type": "Tipo",
+        "start": "Início",
+        "end": "Fim",
+        "progress": "Progresso",
+        "project": "Projeto",
+        "locations": "Locais"
+      },
+      "locations": {
+        "none": "Sem locais",
+        "count_one": "{{count}} local",
+        "count_other": "{{count}} locais"
+      },
+      "fields": {
+        "project": "Projeto",
+        "taskType": "Tipo de tarefa",
+        "estimatedHours": "Horas estimadas",
+        "startDate": "Data de início",
+        "endDate": "Data de fim",
+        "progress": "Progresso (%)",
+        "dependencies": "Dependências"
+      },
+      "confirmDelete": {
+        "title": "Eliminar tarefa",
+        "message": "Tem a certeza que pretende eliminar esta tarefa? Esta ação não pode ser anulada."
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar tarefas.",
+        "loadProjectsLocationsFailed": "Falha ao carregar projetos ou locais.",
+        "createSuccess": "Tarefa criada com sucesso.",
+        "updateSuccess": "Tarefa atualizada com sucesso.",
+        "saveFailed": "Falha ao guardar tarefa.",
+        "deleteSuccess": "Tarefa eliminada com sucesso.",
+        "deleteFailed": "Falha ao eliminar tarefa."
+      },
+      "locationDialog": {
+        "title": "Gerir locais para: {{taskName}}",
+        "emptyLocations": "Não há locais disponíveis.",
+        "selectLabel": "Locais",
+        "noneSelected": "Nenhum selecionado",
+        "selectedCount_one": "{{count}} selecionado",
+        "selectedCount_other": "{{count}} selecionados",
+        "helper": "Escolha quais os locais disponíveis para esta tarefa.",
+        "notifications": {
+          "loadTaskLocationsFailed": "Falha ao carregar locais da tarefa.",
+          "allLocationsRemoved": "Todos os locais foram removidos.",
+          "updatedWithLocations": "Atualizado com {{count}} local(is).",
+          "updateFailed": "Falha ao atualizar locais da tarefa."
+        }
+      }
+    },
+    "users": {
+      "managementTitle": "Gestão de Utilizadores",
+      "empty": {
+        "title": "Ainda não há utilizadores",
+        "subtitle": "Crie o seu primeiro utilizador para começar a gerir a equipa"
+      },
+      "actions": {
+        "new": "Novo Utilizador",
+        "manageAccess": "Gerir Acesso e Permissões",
+        "createWithoutEmail": "Criar sem email"
+      },
+      "columns": {
+        "email": "Email",
+        "role": "Função",
+        "hourlyRate": "Taxa horária",
+        "workerId": "ID do colaborador",
+        "workerName": "Nome do colaborador",
+        "contractCountry": "País do contrato"
+      },
+      "roles": {
+        "owner": "Proprietário",
+        "manager": "Gestor",
+        "technician": "Técnico",
+        "admin": "Administrador"
+      },
+      "perHourSuffix": "/h",
+      "dialog": {
+        "newUser": "Novo Utilizador",
+        "editUser": "Editar Utilizador",
+        "editOwnerProfile": "Editar Perfil do Proprietário"
+      },
+      "fields": {
+        "email": "Email",
+        "role": "Função",
+        "hourlyRate": "Taxa horária",
+        "workerId": "ID do colaborador",
+        "workerName": "Nome do colaborador",
+        "contractCountry": "País do contrato do colaborador",
+        "password": "Palavra-passe",
+        "newPasswordKeepCurrent": "Nova palavra-passe (deixe vazio para manter a atual)"
+      },
+      "helpers": {
+        "ownerEmailLocked": "O email do proprietário não pode ser alterado",
+        "ownerRoleLocked": "A função do proprietário não pode ser alterada",
+        "workerId": "Identificador único opcional para exportações de payroll",
+        "workerName": "Nome legal opcional para payroll se diferente do nome apresentado",
+        "contractCountry": "País onde o contrato do colaborador está registado (ex.: Portugal, Espanha)"
+      },
+      "errors": {
+        "ownerEditSelfOnly": "Os utilizadores proprietários só podem ser editados por si próprios.",
+        "ownerDeleteBlocked": "Os utilizadores proprietários não podem ser eliminados.",
+        "userLimitReachedDefault": "Limite de utilizadores atingido. Compre mais licenças na Faturação antes de adicionar novos utilizadores.",
+        "licenseLimitReached": "Limite de licenças atingido: o seu plano {{planName}} permite no máximo {{user_limit}} utilizadores. Atualmente tem {{user_count}}. Faça upgrade do plano na página de Faturação para adicionar mais utilizadores."
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar utilizadores.",
+        "createSuccess": "Utilizador criado com sucesso.",
+        "updateSuccess": "Utilizador atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar utilizador.",
+        "deleteSuccess": "Utilizador eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar utilizador."
+      },
+      "confirmDelete": {
+        "title": "Eliminar utilizador",
+        "message": "Tem a certeza que pretende eliminar este utilizador? Esta ação não pode ser anulada."
+      }
+    },
+    "countries": {
+      "title": "Países",
+      "empty": {
+        "title": "Sem países",
+        "subtitle": "Crie o seu primeiro país para o usar em listas."
+      },
+      "actions": {
+        "add": "Adicionar País"
+      },
+      "columns": {
+        "iso2": "ISO-2"
+      },
+      "dialog": {
+        "newTitle": "Novo País",
+        "editTitle": "Editar País"
+      },
+      "fields": {
+        "iso2": "ISO-2"
+      },
+      "helpers": {
+        "iso2": "2 letras (ex.: PT, ES, FR)"
+      },
+      "validation": {
+        "nameAndIso2Required": "O nome é obrigatório e o ISO-2 tem de ter 2 letras."
+      },
+      "confirmForceDelete": {
+        "title": "O país está a ser utilizado",
+        "message": "Este país é referenciado por locais existentes. Pretende forçar a eliminação? Os locais NÃO serão eliminados; o país poderá ficar vazio.",
+        "confirmText": "Forçar eliminação"
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar países.",
+        "createSuccess": "País criado com sucesso.",
+        "updateSuccess": "País atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar país.",
+        "deleteSuccess": "País eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar país."
       }
     }
   }

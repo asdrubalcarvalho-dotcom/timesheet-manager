@@ -28,6 +28,7 @@ import EmptyState from '../Common/EmptyState';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useTranslation } from 'react-i18next';
 
 interface Location {
   id: number;
@@ -65,6 +66,7 @@ const normalizeApiResponse = <T,>(payload: unknown): T[] => {
 };
 
 const LocationsManager: React.FC = () => {
+  const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-locations');
   const [locations, setLocations] = useState<Location[]>([]);
@@ -102,7 +104,7 @@ const LocationsManager: React.FC = () => {
       const response = await api.get('/api/locations');
       setLocations(normalizeApiResponse<Location>(response.data));
     } catch {
-      showError('Failed to load locations');
+      showError(t('admin.locations.notifications.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -113,7 +115,7 @@ const LocationsManager: React.FC = () => {
       const response = await api.get('/api/countries');
       setCountries(normalizeApiResponse<Country>(response.data));
     } catch {
-      showError('Failed to load countries');
+      showError(t('admin.locations.notifications.loadCountriesFailed'));
     }
   };
 
@@ -171,7 +173,7 @@ const LocationsManager: React.FC = () => {
 
     // Frontend validation
     if (!formData.name || !formData.country_id || !formData.city) {
-      showError('Name, Country, and City are required fields');
+      showError(t('admin.locations.notifications.requiredFields'));
       return;
     }
 
@@ -193,15 +195,15 @@ const LocationsManager: React.FC = () => {
 
       if (editingLocation) {
         await api.put(`/api/locations/${editingLocation.id}`, payload);
-        showSuccess('Location updated successfully');
+        showSuccess(t('admin.locations.notifications.updateSuccess'));
       } else {
         await api.post('/api/locations', payload);
-        showSuccess('Location created successfully');
+        showSuccess(t('admin.locations.notifications.createSuccess'));
       }
       fetchLocations();
       handleCloseDialog();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Failed to save location';
+      const errorMessage = error.response?.data?.message || t('admin.locations.notifications.saveFailed');
       showError(errorMessage);
       console.error('Location save error:', error.response?.data);
     }
@@ -214,8 +216,8 @@ const LocationsManager: React.FC = () => {
     const location = locations.find(l => l.id === id);
     setConfirmDialog({
       open: true,
-      title: 'Delete Location',
-      message: 'Are you sure you want to delete this location? This action cannot be undone.',
+      title: t('admin.locations.confirmDelete.title'),
+      message: t('admin.locations.confirmDelete.message'),
       recordDetails: {
         name: location?.name,
         city: location?.city,
@@ -227,10 +229,10 @@ const LocationsManager: React.FC = () => {
         }
         try {
           await api.delete(`/api/locations/${id}`);
-          showSuccess('Location deleted successfully');
+          showSuccess(t('admin.locations.notifications.deleteSuccess'));
           fetchLocations();
         } catch (error: any) {
-          showError(error?.response?.data?.message || 'Failed to delete location');
+          showError(error?.response?.data?.message || t('admin.locations.notifications.deleteFailed'));
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }
@@ -240,34 +242,34 @@ const LocationsManager: React.FC = () => {
   const columns: GridColDef[] = [
     {
       field: 'id',
-      headerName: 'ID',
+      headerName: t('admin.shared.columns.id'),
       width: 80
     },
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: t('admin.shared.columns.name'),
       flex: 1,
       minWidth: 200
     },
     {
       field: 'address',
-      headerName: 'Address',
+      headerName: t('admin.locations.columns.address'),
       flex: 1.5,
       minWidth: 250
     },
     {
       field: 'city',
-      headerName: 'City',
+      headerName: t('admin.locations.columns.city'),
       width: 140
     },
     {
       field: 'country',
-      headerName: 'Country',
+      headerName: t('admin.locations.columns.country'),
       width: 140
     },
     {
       field: 'postal_code',
-      headerName: 'Postal Code',
+      headerName: t('admin.locations.columns.postalCode'),
       width: 140,
       renderCell: ({ row }: GridRenderCellParams<Location>) => (
         <span>{row?.postal_code || '-'}</span>
@@ -275,7 +277,7 @@ const LocationsManager: React.FC = () => {
     },
     {
       field: 'coordinates',
-      headerName: 'Coordinates',
+      headerName: t('admin.locations.columns.coordinates'),
       width: 180,
       renderCell: ({ row }: GridRenderCellParams<Location>) => {
         const latitude = row?.latitude;
@@ -299,12 +301,12 @@ const LocationsManager: React.FC = () => {
     },
     {
       field: 'is_active',
-      headerName: 'Status',
+      headerName: t('admin.shared.columns.status'),
       width: 120,
       renderCell: ({ row }: GridRenderCellParams<Location>) => (
         <Chip
           size="small"
-          label={row.is_active ? 'Active' : 'Inactive'}
+          label={row.is_active ? t('admin.shared.status.active') : t('admin.shared.status.inactive')}
           sx={{
             bgcolor: row.is_active ? '#4caf5015' : '#f4433615',
             color: row.is_active ? '#4caf50' : '#f44336',
@@ -315,7 +317,7 @@ const LocationsManager: React.FC = () => {
     },
     {
       field: 'actions',
-      headerName: 'Actions',
+      headerName: t('admin.shared.columns.actions'),
       width: 140,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
@@ -519,8 +521,8 @@ const LocationsManager: React.FC = () => {
         title={confirmDialog.title}
         message={confirmDialog.message}
         recordDetails={confirmDialog.recordDetails}
-        confirmText="Delete"
-        cancelText="Cancel"
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         confirmColor="error"
         onConfirm={confirmDialog.action}
         onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}

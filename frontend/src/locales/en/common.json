@@ -16,6 +16,9 @@
       "emptyValue": "—"
     },
     "help": {
+      "sidebar": {
+        "selectUsers": "Select users"
+      },
       "title": "Need help?",
       "subtitle": "Browse docs and AI tips for faster answers.",
       "tip": "Tip: Ask the AI tab for summaries, anomalies, and next steps.",

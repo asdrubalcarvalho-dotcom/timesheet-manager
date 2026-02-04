@@ -50,7 +50,8 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStatistics | null>(null);
 
   const policyAlert = React.useMemo(() => getPolicyAlertModel(tenantContext), [tenantContext]);
@@ -70,7 +71,8 @@ const Dashboard: React.FC = () => {
   const loadStatistics = async () => {
     try {
       setLoading(true);
-      setError('');
+      setErrorMessage(null);
+      setErrorKey(null);
       const data = await dashboardApi.getStatistics({
         date_from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         date_to: new Date().toISOString().split('T')[0]
@@ -78,7 +80,14 @@ const Dashboard: React.FC = () => {
       setStats(data);
     } catch (err: any) {
       console.error('Error loading dashboard statistics:', err);
-      setError(err.response?.data?.message || t('dashboard.errors.loadFailed'));
+      const backendMessage = err?.response?.data?.message;
+      if (typeof backendMessage === 'string' && backendMessage.trim().length > 0) {
+        setErrorMessage(backendMessage);
+        setErrorKey(null);
+      } else {
+        setErrorMessage(null);
+        setErrorKey('dashboard.errors.loadFailed');
+      }
     } finally {
       setLoading(false);
     }
@@ -123,10 +132,10 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (errorMessage || errorKey) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error">{errorMessage ?? t(errorKey!)}</Alert>
       </Box>
     );
   }

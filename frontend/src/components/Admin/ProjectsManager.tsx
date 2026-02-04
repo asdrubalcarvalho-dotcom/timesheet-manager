@@ -38,6 +38,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
 
 interface Project {
   id: number;
@@ -74,6 +75,7 @@ const formatDateForInput = (value?: string | null) => {
 };
 
 const ProjectsManager: React.FC = () => {
+  const { t } = useTranslation();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { showSuccess, showError } = useNotification();
@@ -132,7 +134,7 @@ const ProjectsManager: React.FC = () => {
     } catch (error: any) {
       console.error('[ProjectsManager] Error fetching projects:', error);
       console.error('[ProjectsManager] Error response:', error.response?.data);
-      showError(error.response?.data?.message || 'Failed to load projects');
+      showError(error.response?.data?.message || t('admin.projects.notifications.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -185,7 +187,7 @@ const ProjectsManager: React.FC = () => {
       setTasksLoadedForProjectId(projectId);
     } catch (error: any) {
       console.error('[ProjectsManager] Error fetching project tasks:', error);
-      showError(error.response?.data?.message || 'Failed to load project tasks');
+      showError(error.response?.data?.message || t('admin.projects.notifications.loadTasksFailed'));
       setProjectTasks([]);
       setTasksLoadedForProjectId(projectId);
     } finally {
@@ -256,23 +258,23 @@ const ProjectsManager: React.FC = () => {
     const estimatedHoursNum = taskForm.estimated_hours === '' ? null : Number(taskForm.estimated_hours);
 
     if (!name) {
-      setTaskFormError('Task name is required');
+      setTaskFormError(t('admin.projects.tasksDialog.validation.nameRequired'));
       return;
     }
     if (!startDate) {
-      setTaskFormError('Start date is required');
+      setTaskFormError(t('admin.projects.tasksDialog.validation.startDateRequired'));
       return;
     }
     if (endDate && !isSameOrAfterDay(endDate, startDate)) {
-      setTaskFormError('End date must be the same or after start date');
+      setTaskFormError(t('admin.projects.tasksDialog.validation.endDateAfterStart'));
       return;
     }
     if (!Number.isFinite(progressNum) || progressNum < 0 || progressNum > 100) {
-      setTaskFormError('Progress must be between 0 and 100');
+      setTaskFormError(t('admin.projects.tasksDialog.validation.progressRange'));
       return;
     }
     if (estimatedHoursNum != null && (!Number.isFinite(estimatedHoursNum) || estimatedHoursNum < 0)) {
-      setTaskFormError('Estimated hours must be a positive number');
+      setTaskFormError(t('admin.projects.tasksDialog.validation.estimatedHoursPositive'));
       return;
     }
 
@@ -288,15 +290,15 @@ const ProjectsManager: React.FC = () => {
     try {
       if (editingTask) {
         await api.put(`/api/tasks/${editingTask.id}`, payload);
-        showSuccess('Task updated successfully');
+        showSuccess(t('admin.projects.tasksDialog.notifications.updateSuccess'));
       } else {
         await api.post('/api/tasks', payload);
-        showSuccess('Task created successfully');
+        showSuccess(t('admin.projects.tasksDialog.notifications.createSuccess'));
       }
       closeTaskDialog();
       await fetchProjectTasks(editingProject.id);
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to save task');
+      showError(error.response?.data?.message || t('admin.projects.tasksDialog.notifications.saveFailed'));
     }
   };
 
@@ -306,8 +308,8 @@ const ProjectsManager: React.FC = () => {
     }
     setConfirmDialog({
       open: true,
-      title: 'Delete Task',
-      message: 'Are you sure you want to delete this task? This action cannot be undone.',
+      title: t('admin.projects.tasksDialog.confirmDelete.title'),
+      message: t('admin.projects.tasksDialog.confirmDelete.message'),
       recordDetails: {
         name: task.name,
         start_date: task.start_date,
@@ -319,12 +321,12 @@ const ProjectsManager: React.FC = () => {
         }
         try {
           await api.delete(`/api/tasks/${task.id}`);
-          showSuccess('Task deleted successfully');
+          showSuccess(t('admin.projects.tasksDialog.notifications.deleteSuccess'));
           if (editingProject) {
             await fetchProjectTasks(editingProject.id);
           }
         } catch (error: any) {
-          showError(error.response?.data?.message || 'Failed to delete task');
+          showError(error.response?.data?.message || t('admin.projects.tasksDialog.notifications.deleteFailed'));
         }
         setConfirmDialog((prev) => ({ ...prev, open: false }));
       }
@@ -351,15 +353,15 @@ const ProjectsManager: React.FC = () => {
 
       if (editingProject) {
         await api.put(`/api/projects/${editingProject.id}`, cleanData);
-        showSuccess('Project updated successfully');
+        showSuccess(t('admin.projects.notifications.updateSuccess'));
       } else {
         await api.post('/api/projects', cleanData);
-        showSuccess('Project created successfully');
+        showSuccess(t('admin.projects.notifications.createSuccess'));
       }
       fetchProjects();
       handleCloseDialog();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to save project');
+      showError(error.response?.data?.message || t('admin.projects.notifications.saveFailed'));
     }
   };
 
@@ -370,8 +372,8 @@ const ProjectsManager: React.FC = () => {
     const project = projects.find(p => p.id === id);
     setConfirmDialog({
       open: true,
-      title: 'Delete Project',
-      message: 'Are you sure you want to delete this project? This action cannot be undone.',
+      title: t('admin.projects.confirmDelete.title'),
+      message: t('admin.projects.confirmDelete.message'),
       recordDetails: {
         name: project?.name,
         description: project?.description,
@@ -383,10 +385,10 @@ const ProjectsManager: React.FC = () => {
         }
         try {
           await api.delete(`/api/projects/${id}`);
-          showSuccess('Project deleted successfully');
+          showSuccess(t('admin.projects.notifications.deleteSuccess'));
           fetchProjects();
         } catch (error: any) {
-          showError(error?.response?.data?.message || 'Failed to delete project');
+          showError(error?.response?.data?.message || t('admin.projects.notifications.deleteFailed'));
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }
@@ -407,38 +409,38 @@ const ProjectsManager: React.FC = () => {
   const columns: GridColDef[] = [
     {
       field: 'id',
-      headerName: 'ID',
+      headerName: t('admin.shared.columns.id'),
       width: 80
     },
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: t('admin.shared.columns.name'),
       flex: 1,
       minWidth: 200
     },
     {
       field: 'description',
-      headerName: 'Description',
+      headerName: t('admin.shared.columns.description'),
       flex: 1.5,
       minWidth: 250
     },
     {
       field: 'start_date',
-      headerName: 'Start Date',
+      headerName: t('admin.projects.columns.startDate'),
       width: 130,
       renderCell: ({ value }: GridRenderCellParams) => 
         value ? formatTenantDate(value, tenantContext) : '-'
     },
     {
       field: 'end_date',
-      headerName: 'End Date',
+      headerName: t('admin.projects.columns.endDate'),
       width: 130,
       renderCell: ({ value }: GridRenderCellParams) => 
         value ? formatTenantDate(value, tenantContext) : '-'
     },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('admin.shared.columns.status'),
       width: 120,
       renderCell: (params) => (
         <Box
@@ -453,13 +455,13 @@ const ProjectsManager: React.FC = () => {
             color: params.value === 'active' ? '#4caf50' : params.value === 'completed' ? '#2196f3' : '#ff9800'
           }}
         >
-          {params.value}
+          {t(`admin.projects.status.${String(params.value)}`)}
         </Box>
       )
     },
     {
       field: 'actions',
-      headerName: 'Actions',
+      headerName: t('admin.shared.columns.actions'),
       width: 120,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
@@ -494,13 +496,13 @@ const ProjectsManager: React.FC = () => {
   ];
 
   return (
-    <AdminLayout title="Projects Management">
+    <AdminLayout title={t('admin.projects.managementTitle')}>
       {!loading && projects.length === 0 ? (
         <EmptyState
           icon={FolderOpenIcon}
-          title="No projects yet"
-          subtitle="Create your first project to start organizing your team's work"
-          actionLabel="New Project"
+          title={t('admin.projects.empty.title')}
+          subtitle={t('admin.projects.empty.subtitle')}
+          actionLabel={t('admin.projects.actions.new')}
           onAction={() => {
             if (!ensureWritable()) {
               return;
@@ -569,7 +571,7 @@ const ProjectsManager: React.FC = () => {
         disableRestoreFocus
       >
         <DialogTitle>
-          {editingProject ? 'Edit Project' : 'New Project'}
+          {editingProject ? t('admin.projects.actions.edit') : t('admin.projects.actions.new')}
         </DialogTitle>
         <DialogContent>
           {editingProject && (
@@ -579,8 +581,8 @@ const ProjectsManager: React.FC = () => {
                 onChange={(_e, value) => setEditTab(value)}
                 sx={{ mb: 2 }}
               >
-                <Tab value="details" label="Details" />
-                <Tab value="tasks" label="Tasks" />
+                <Tab value="details" label={t('admin.projects.tabs.details')} />
+                <Tab value="tasks" label={t('admin.projects.tabs.tasks')} />
               </Tabs>
               <Divider sx={{ mb: 2 }} />
             </>
@@ -594,14 +596,14 @@ const ProjectsManager: React.FC = () => {
             sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}
           >
             <TextField
-              label="Name"
+              label={t('common.name')}
               fullWidth
               required
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
             <TextField
-              label="Description"
+              label={t('common.description')}
               fullWidth
               multiline
               rows={3}
@@ -609,7 +611,7 @@ const ProjectsManager: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
             <DatePicker
-              label="Start Date"
+              label={t('admin.projects.fields.startDate')}
               value={formData.start_date ? dayjs(formData.start_date) : null}
               onChange={(newValue) => setFormData({ ...formData, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
               format={datePickerFormat}
@@ -621,7 +623,7 @@ const ProjectsManager: React.FC = () => {
               }}
             />
             <DatePicker
-              label="End Date"
+              label={t('admin.projects.fields.endDate')}
               value={formData.end_date ? dayjs(formData.end_date) : null}
               onChange={(newValue) => setFormData({ ...formData, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
               format={datePickerFormat}
@@ -633,7 +635,7 @@ const ProjectsManager: React.FC = () => {
               }}
             />
             <TextField
-              label="Status"
+              label={t('admin.shared.columns.status')}
               select
               fullWidth
               required
@@ -641,9 +643,9 @@ const ProjectsManager: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'completed' | 'on_hold' })}
               SelectProps={{ native: true }}
             >
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-              <option value="on_hold">On Hold</option>
+              <option value="active">{t('admin.projects.status.active')}</option>
+              <option value="completed">{t('admin.projects.status.completed')}</option>
+              <option value="on_hold">{t('admin.projects.status.on_hold')}</option>
             </TextField>
           </Box>
           )}
@@ -653,33 +655,33 @@ const ProjectsManager: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
                   <Box sx={{ fontWeight: 600 }}>{editingProject.name}</Box>
-                  <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>Manage tasks for this project</Box>
+                  <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>{t('admin.projects.tasksTab.subtitle')}</Box>
                 </Box>
-                <Button variant="contained" onClick={openCreateTask} disabled={isReadOnly}>Add Task</Button>
+                <Button variant="contained" onClick={openCreateTask} disabled={isReadOnly}>{t('admin.projects.tasksTab.addTask')}</Button>
               </Box>
 
               <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Start</TableCell>
-                      <TableCell>End</TableCell>
-                      <TableCell align="right">Progress</TableCell>
-                      <TableCell align="right">Actions</TableCell>
+                      <TableCell>{t('admin.shared.columns.name')}</TableCell>
+                      <TableCell>{t('admin.projects.tasksTab.columns.start')}</TableCell>
+                      <TableCell>{t('admin.projects.tasksTab.columns.end')}</TableCell>
+                      <TableCell align="right">{t('admin.projects.tasksTab.columns.progress')}</TableCell>
+                      <TableCell align="right">{t('admin.shared.columns.actions')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {loadingProjectTasks ? (
                       <TableRow>
                         <TableCell colSpan={5}>
-                          Loading...
+                          {t('common.loading')}
                         </TableCell>
                       </TableRow>
                     ) : projectTasks.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5}>
-                          No tasks for this project.
+                          {t('admin.projects.tasksTab.empty')}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -707,7 +709,7 @@ const ProjectsManager: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog}>{t('common.cancel')}</Button>
           <Button
             type="submit"
             form="project-form"
@@ -715,14 +717,14 @@ const ProjectsManager: React.FC = () => {
             color="primary"
             disabled={Boolean(editingProject && editTab === 'tasks') || isReadOnly}
           >
-            {editingProject ? 'Update' : 'Create'}
+            {editingProject ? t('common.update') : t('common.create')}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={openTaskDialog} onClose={closeTaskDialog} maxWidth="sm" fullWidth disableRestoreFocus>
         <DialogTitle>
-          {editingTask ? 'Edit Task' : 'Add Task'}
+          {editingTask ? t('admin.projects.tasksDialog.editTask') : t('admin.projects.tasksDialog.addTask')}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
@@ -730,14 +732,14 @@ const ProjectsManager: React.FC = () => {
               <Box sx={{ color: 'error.main', fontSize: '0.875rem' }}>{taskFormError}</Box>
             )}
             <TextField
-              label="Name"
+              label={t('common.name')}
               fullWidth
               required
               value={taskForm.name}
               onChange={(e) => setTaskForm((p) => ({ ...p, name: e.target.value }))}
             />
             <DatePicker
-              label="Start Date"
+              label={t('admin.projects.fields.startDate')}
               value={taskForm.start_date ? dayjs(taskForm.start_date) : null}
               onChange={(newValue) => setTaskForm((p) => ({ ...p, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' }))}
               format={datePickerFormat}
@@ -749,7 +751,7 @@ const ProjectsManager: React.FC = () => {
               }}
             />
             <DatePicker
-              label="End Date"
+              label={t('admin.projects.fields.endDate')}
               value={taskForm.end_date ? dayjs(taskForm.end_date) : null}
               onChange={(newValue) => setTaskForm((p) => ({ ...p, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' }))}
               format={datePickerFormat}
@@ -760,14 +762,14 @@ const ProjectsManager: React.FC = () => {
               }}
             />
             <TextField
-              label="Estimated Hours"
+              label={t('admin.projects.tasksDialog.fields.estimatedHours')}
               fullWidth
               value={taskForm.estimated_hours}
               onChange={(e) => setTaskForm((p) => ({ ...p, estimated_hours: e.target.value }))}
               inputProps={{ inputMode: 'decimal' }}
             />
             <TextField
-              label="Progress (0..100)"
+              label={t('admin.projects.tasksDialog.fields.progress')}
               fullWidth
               value={taskForm.progress}
               onChange={(e) => setTaskForm((p) => ({ ...p, progress: e.target.value }))}
@@ -776,8 +778,8 @@ const ProjectsManager: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeTaskDialog}>Cancel</Button>
-          <Button variant="contained" onClick={saveTask} disabled={isReadOnly}>Save</Button>
+          <Button onClick={closeTaskDialog}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={saveTask} disabled={isReadOnly}>{t('common.save')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -786,8 +788,8 @@ const ProjectsManager: React.FC = () => {
         title={confirmDialog.title}
         message={confirmDialog.message}
         recordDetails={confirmDialog.recordDetails}
-        confirmText="Delete"
-        cancelText="Cancel"
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         confirmColor="error"
         onConfirm={confirmDialog.action}
         onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}

@@ -30,6 +30,7 @@ import { GlobalRightPanelTabs } from './components/RightPanel/GlobalRightPanelTa
 import { RightPanel } from './components/RightPanel/RightPanel';
 import { useRightPanel } from './components/RightPanel/useRightPanel';
 import { useRightPanelEntrypoint } from './components/RightPanel/useRightPanelEntrypoint';
+import { TourController } from './components/Common/Tour/TourController';
 import { LoginForm } from './components/Auth/LoginForm';
 import TenantRegistration from './components/Auth/TenantRegistration';
 import VerifyEmail from './components/Auth/VerifyEmail';
@@ -378,6 +379,11 @@ const AppContent: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <TourController />
+      <Box
+        data-tour="rightpanel-anchor"
+        sx={{ position: 'fixed', right: 24, top: 96, width: 1, height: 1, pointerEvents: 'none' }}
+      />
       <SideMenu 
         currentPage={currentPage} 
         onPageChange={handlePageChange} 
@@ -401,7 +407,7 @@ const AppContent: React.FC = () => {
               onClick={() => openRightPanel('help')}
               sx={{ textTransform: 'none' }}
             >
-              Help / AI
+              {t('rightPanel.openButton')}
             </Button>
           </Box>
         ) : null}
@@ -411,11 +417,11 @@ const AppContent: React.FC = () => {
             sx={{ mb: 2 }}
             action={
               <Button color="inherit" size="small" onClick={() => navigate('/billing')}>
-                Upgrade
+                {t('billing.readOnly.upgrade')}
               </Button>
             }
           >
-            Your subscription has expired. You are in read-only mode.
+            {t('billing.readOnly.expired')}
           </Alert>
         )}
         <Suspense fallback={<ModuleLoader />}>

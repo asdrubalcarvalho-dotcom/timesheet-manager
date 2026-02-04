@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Box, Link, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Link, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { helpContentRegistry, resolveHelpContextKey } from '../helpContentRegistry';
@@ -19,6 +19,16 @@ export const HelpTab: React.FC = () => {
         <Typography variant="body2" color="text.secondary">
           {content ? t(content.introKey) : t('rightPanel.help.fallbackBody')}
         </Typography>
+        <Box sx={{ mt: 1 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => window.dispatchEvent(new CustomEvent('tour:reset'))}
+            sx={{ textTransform: 'none' }}
+          >
+            {t('tour.restart')}
+          </Button>
+        </Box>
       </Box>
 
       {content ? (

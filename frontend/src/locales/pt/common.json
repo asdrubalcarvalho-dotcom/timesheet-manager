@@ -16,6 +16,9 @@
       "emptyValue": "—"
     },
     "help": {
+      "sidebar": {
+        "selectUsers": "Selecionar utilizadores"
+      },
       "title": "Precisa de ajuda?",
       "subtitle": "Consulte a documentação e dicas de IA para respostas mais rápidas.",
       "tip": "Dica: use a aba de IA para resumos, anomalias e próximos passos.",

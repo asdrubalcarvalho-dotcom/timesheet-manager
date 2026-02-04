@@ -288,13 +288,23 @@ const ApprovalHeatmapReport: React.FC = () => {
       totalApprovedExpenses += typeof v.expenses?.approved === 'number' ? v.expenses.approved : 0;
     }
 
+    const scopedRaw = data?.meta?.scoped ? String(data.meta.scoped) : '';
+    const scopedNorm = scopedRaw.trim().toLowerCase();
+    const scopedLabel = scopedRaw
+      ? scopedNorm === 'all'
+        ? t('approvalHeatmap.scopes.all')
+        : scopedNorm === 'self' || scopedNorm === 'mine' || scopedNorm === 'me'
+          ? t('approvalHeatmap.scopes.self')
+          : scopedRaw
+      : '—';
+
     return {
-      scoped: data?.meta?.scoped ? String(data.meta.scoped) : '—',
+      scoped: scopedLabel,
       totalPending,
       totalApprovedTimesheets,
       totalApprovedExpenses,
     };
-  }, [data]);
+  }, [data, t]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -685,7 +695,7 @@ const ApprovalHeatmapReport: React.FC = () => {
               {t('approvalHeatmap.rangeLabel', {
                 from: formatTenantDate(String(data.meta.from ?? ''), tenantContext),
                 to: formatTenantDate(String(data.meta.to ?? ''), tenantContext),
-                scope: String(data.meta.scoped ?? ''),
+                scope: totals.scoped,
               })}
             </Typography>
           </Box>

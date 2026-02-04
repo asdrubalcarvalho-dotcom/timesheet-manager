@@ -15,36 +15,38 @@ import {
   ChevronRight as ChevronRightIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AdminLayout from './AdminLayout';
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const adminModules = [
     {
-      title: 'Projects',
-      description: 'Manage projects and assignments',
+      title: t('admin.dashboard.modules.projects.title'),
+      description: t('admin.dashboard.modules.projects.description'),
       icon: <ProjectIcon sx={{ fontSize: 48, color: '#667eea' }} />,
       route: '/admin/projects',
       color: '#667eea'
     },
     {
-      title: 'Tasks',
-      description: 'Manage tasks and categories',
+      title: t('admin.dashboard.modules.tasks.title'),
+      description: t('admin.dashboard.modules.tasks.description'),
       icon: <TaskIcon sx={{ fontSize: 48, color: '#43a047' }} />,
       route: '/admin/tasks',
       color: '#43a047'
     },
     {
-      title: 'Locations',
-      description: 'Manage work locations',
+      title: t('admin.dashboard.modules.locations.title'),
+      description: t('admin.dashboard.modules.locations.description'),
       icon: <LocationIcon sx={{ fontSize: 48, color: '#ff9800' }} />,
       route: '/admin/locations',
       color: '#ff9800'
     },
     {
-      title: 'Users',
-      description: 'Manage user accounts and roles',
+      title: t('admin.dashboard.modules.users.title'),
+      description: t('admin.dashboard.modules.users.description'),
       icon: <PeopleIcon sx={{ fontSize: 48, color: '#e91e63' }} />,
       route: '/admin/users',
       color: '#e91e63'
@@ -52,7 +54,7 @@ const AdminDashboard: React.FC = () => {
   ];
 
   return (
-    <AdminLayout title="Administration Dashboard">
+    <AdminLayout title={t('admin.dashboard.title')}>
       <Grid container spacing={3}>
         {adminModules.map((module) => (
           <Grid item xs={12} sm={6} md={3} key={module.route}>
