@@ -57,9 +57,9 @@ vi.mock('../../../RightPanel/useRightPanel', () => {
 });
 
 const mountRightPanelTargets = () => {
-  const anchor = document.createElement('div');
-  anchor.setAttribute('data-tour', 'rightpanel-anchor');
-  document.body.appendChild(anchor);
+  const toggle = document.createElement('button');
+  toggle.setAttribute('data-tour', 'rightpanel-toggle');
+  document.body.appendChild(toggle);
 
   const container = document.createElement('div');
   container.setAttribute('data-tour', 'rightpanel-container');
@@ -74,10 +74,6 @@ const renderTour = async () => {
   const aiTrigger = document.createElement('button');
   aiTrigger.setAttribute('data-tour', 'ai-trigger');
   document.body.appendChild(aiTrigger);
-
-  const anchor = document.createElement('div');
-  anchor.setAttribute('data-tour', 'rightpanel-anchor');
-  document.body.appendChild(anchor);
 
   const mod = await import('../TourController');
   const TourController = mod.default;
@@ -135,7 +131,7 @@ describe('TourController', () => {
       joyrideProps.callback({
         status: STATUS.RUNNING,
         type: EVENTS.STEP_AFTER,
-        index: 4,
+        index: 3,
         action: ACTIONS.NEXT,
       });
     });
@@ -148,6 +144,17 @@ describe('TourController', () => {
 
     await act(async () => {
       await Promise.resolve();
+    });
+
+    expect(joyrideProps.stepIndex).toBe(4);
+
+    await act(async () => {
+      joyrideProps.callback({
+        status: STATUS.RUNNING,
+        type: EVENTS.STEP_AFTER,
+        index: 4,
+        action: ACTIONS.NEXT,
+      });
     });
 
     expect(joyrideProps.stepIndex).toBe(5);

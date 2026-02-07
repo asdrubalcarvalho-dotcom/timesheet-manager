@@ -54,9 +54,9 @@ export const TourController: React.FC = () => {
   const tourOpenedRightPanelRef = useRef(false);
   const pendingAdvanceRef = useRef<number | null>(null);
 
-  const RIGHT_PANEL_ANCHOR_SELECTOR = '[data-tour="rightpanel-anchor"]';
+  const RIGHT_PANEL_TOGGLE_SELECTOR = '[data-tour="rightpanel-toggle"]';
   const RIGHT_PANEL_AI_TAB_SELECTOR = '[data-tour="rightpanel-tab-ai"]';
-  const RIGHT_PANEL_TARGETS = new Set([RIGHT_PANEL_AI_TAB_SELECTOR]);
+  const RIGHT_PANEL_TARGETS = new Set([RIGHT_PANEL_AI_TAB_SELECTOR, RIGHT_PANEL_TOGGLE_SELECTOR]);
   const MAX_MISSING_TARGET_RETRIES = 5;
   const MISSING_TARGET_RETRY_INTERVAL_MS = 150;
 
@@ -84,24 +84,21 @@ export const TourController: React.FC = () => {
         placement: 'auto',
       },
       {
-        target: RIGHT_PANEL_ANCHOR_SELECTOR,
-        content: t('tour.steps.rightPanelToggle'),
-        placement: 'auto',
-      },
-      {
         target: RIGHT_PANEL_AI_TAB_SELECTOR,
         content: t('tour.steps.aiTab'),
         placement: 'auto',
+      },
+      {
+        target: RIGHT_PANEL_TOGGLE_SELECTOR,
+        content: t('tour.steps.rightPanelToggle'),
+        placement: 'auto',
+        spotlightClicks: true,
       },
     ],
     [t, retryTick]
   );
 
   const lastStepIndex = steps.length - 1;
-  const rightPanelAnchorStepIndex = useMemo(
-    () => steps.findIndex((step) => step.target === RIGHT_PANEL_ANCHOR_SELECTOR),
-    [steps]
-  );
 
   const getStepTargetSelector = useCallback(
     (index: number): string | null => {
@@ -139,22 +136,6 @@ export const TourController: React.FC = () => {
     });
   }, []);
 
-  const retryForSelector = useCallback(
-    async (selector: string, attempts: number, delayMs: number): Promise<boolean> => {
-      for (let attempt = 1; attempt <= attempts; attempt += 1) {
-        if (document.querySelector(selector)) {
-          return true;
-        }
-
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, delayMs);
-        });
-      }
-
-      return Boolean(document.querySelector(selector));
-    },
-    []
-  );
 
   const requestStart = useCallback(
     (reset: boolean) => {
@@ -278,28 +259,36 @@ export const TourController: React.FC = () => {
     [closeRightPanel, getStepTargetSelector, isRightPanelOpen, isRightPanelTarget, lastStepIndex, openRightPanel, waitForSelector]
   );
 
+  const finalizeTour = useCallback(
+    (markCompleted: boolean) => {
+      if (markCompleted) {
+        setTourCompleted();
+      }
+
+      setRun(false);
+      setStepIndex(0);
+      pendingAdvanceRef.current = null;
+      missingTargetRetriesRef.current = {};
+      missingTargetInFlightRef.current = {};
+
+      const initial = initialRightPanelStateRef.current;
+      if (initial?.wasOpen) {
+        openRightPanel(initial.activeTabId ?? undefined);
+      } else if (tourOpenedRightPanelRef.current && isRightPanelOpen) {
+        closeRightPanel();
+      }
+    },
+    [closeRightPanel, isRightPanelOpen, openRightPanel]
+  );
+
   const handleCallback = useCallback(
     (data: CallBackProps) => {
       const { status, type, index, action } = data;
+      const isFinished = status === STATUS.FINISHED || status === STATUS.SKIPPED;
+      const isTourEnd = type === EVENTS.TOUR_END;
 
-      if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-        if (index < lastStepIndex && action !== ACTIONS.SKIP) {
-          return;
-        }
-
-        setTourCompleted();
-        setRun(false);
-        setStepIndex(0);
-        missingTargetRetriesRef.current = {};
-        missingTargetInFlightRef.current = {};
-
-        const initial = initialRightPanelStateRef.current;
-        if (initial?.wasOpen) {
-          openRightPanel(initial.activeTabId ?? undefined);
-        } else if (tourOpenedRightPanelRef.current && isRightPanelOpen) {
-          closeRightPanel();
-        }
-
+      if (isFinished || isTourEnd) {
+        finalizeTour(isFinished);
         return;
       }
 
@@ -353,28 +342,6 @@ export const TourController: React.FC = () => {
       }
 
       if (type === EVENTS.STEP_AFTER) {
-        if (index === rightPanelAnchorStepIndex && action !== ACTIONS.PREV) {
-          const runAdvance = async () => {
-            openRightPanel('ai');
-            tourOpenedRightPanelRef.current = true;
-
-            const found = await retryForSelector(
-              RIGHT_PANEL_AI_TAB_SELECTOR,
-              MAX_MISSING_TARGET_RETRIES,
-              MISSING_TARGET_RETRY_INTERVAL_MS
-            );
-
-            if (found) {
-              advanceToStep(index + 1);
-            } else {
-              setRetryTick((prev) => prev + 1);
-            }
-          };
-
-          void runAdvance();
-          return;
-        }
-
         const delta = action === ACTIONS.PREV ? -1 : 1;
         advanceToStep(index + delta);
       }
@@ -382,14 +349,11 @@ export const TourController: React.FC = () => {
     [
       advanceToStep,
       closeRightPanel,
+      finalizeTour,
       getStepTargetSelector,
       isRightPanelOpen,
       isRightPanelTarget,
-      lastStepIndex,
       openRightPanel,
-      retryForSelector,
-        rightPanelAnchorStepIndex,
-        RIGHT_PANEL_AI_TAB_SELECTOR,
     ]
   );
 
@@ -407,9 +371,13 @@ export const TourController: React.FC = () => {
       callback={handleCallback}
       floaterProps={{
         options: {
-          boundary: 'viewport',
-          padding: 12,
-          flip: { padding: 8 },
+          preventOverflow: {
+            boundariesElement: 'viewport',
+            padding: 12,
+          },
+          flip: {
+            padding: 8,
+          },
         },
       }}
       locale={{

@@ -115,3 +115,8 @@ setup_tenant.sh
 check_users.sh
 delete_user.sh
 frontend/tmp/
+
+# Local dev certs (mkcert / letsencrypt local)
+docker/letsencrypt/
+docker/*.pem
+docker/*-key.pem

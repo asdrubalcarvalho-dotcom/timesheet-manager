@@ -223,6 +223,9 @@ const TimesheetCalendar: React.FC = () => {
   // Calendar ref to access API methods
   const calendarRef = useRef<FullCalendar>(null);
   const calendarContainerRef = useRef<HTMLDivElement>(null);
+  const lastMonthRef = useRef<string | null>(null);
+  const selectedTechnicianRef = useRef<number | undefined>(undefined);
+  const hasTravelsRef = useRef<boolean>(hasTravels);
   
   // State variables
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
@@ -240,6 +243,7 @@ const TimesheetCalendar: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState<Timesheet | null>(null);
   const [currentCalendarViewType, setCurrentCalendarViewType] = useState<string>('dayGridMonth');
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string | null>(null);
+  const [month, setMonth] = useState<string>(() => dayjs().format('YYYY-MM'));
 
   const isTenantDrivenFirstDayView =
     currentCalendarViewType === 'timeGridWeek' ||
@@ -337,6 +341,14 @@ const TimesheetCalendar: React.FC = () => {
   const [validationFilter, setValidationFilter] = useState<'all' | 'ai_flagged' | 'overcap'>('all');
   const userIsManager = isManager();
   const userIsAdmin = isAdmin();
+
+  useEffect(() => {
+    selectedTechnicianRef.current = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined;
+  }, [selectedTechnicianId]);
+
+  useEffect(() => {
+    hasTravelsRef.current = hasTravels;
+  }, [hasTravels]);
 
   const roleIsAssigned = (role?: 'member' | 'manager' | 'none') => role && role !== 'none';
 
@@ -573,26 +585,30 @@ const TimesheetCalendar: React.FC = () => {
     }
   }, [showError]);
 
-  const loadTravels = useCallback(
-    async (month?: string, technicianId?: number) => {
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadTravels = async () => {
       // Load travels for calendar month view integration
-      if (!hasTravels) {
+      if (!hasTravelsRef.current) {
         setTravelsByDate({});
         return;
       }
 
       try {
-        const params: Record<string, string | number> = {};
+        const params: Record<string, string | number> = {
+          month,
+        };
 
-        params.month = month ?? dayjs().format('YYYY-MM');
-
-        // Use provided technician filter when explicitly supplied
+        const technicianId = selectedTechnicianRef.current;
         if (technicianId) {
           params.technician_id = technicianId;
         }
 
         console.log('🛫 [TRAVELS] Loading with params:', params);
-        const response = await travelsApi.getTravelsByDate(params);
+        const response = await travelsApi.getTravelsByDate(params, controller.signal);
+
+        if (controller.signal.aborted) return;
 
         console.log('🛫 [TRAVELS] API Response:', response);
 
@@ -609,13 +625,17 @@ const TimesheetCalendar: React.FC = () => {
           setTravelsByDate({});
         }
       } catch (error: unknown) {
+        if (controller.signal.aborted) return;
         console.error('🛫 [TRAVELS] Error loading travels:', error);
         setTravelsByDate({});
         // Fail silently - travels are supplementary info to timesheets
       }
-    },
-    [hasTravels]
-  );
+    };
+
+    void loadTravels();
+
+    return () => controller.abort();
+  }, [month]);
 
   const loadProjects = useCallback(
     async (technicianId?: number | '') => {
@@ -665,8 +685,7 @@ const TimesheetCalendar: React.FC = () => {
     loadTasks();
     loadLocations();
     loadTechnicians();
-    loadTravels(); // Load travel indicators for calendar
-  }, [authLoading, user, loadTasks, loadLocations, loadTechnicians, loadTravels]);
+  }, [authLoading, user, loadTasks, loadLocations, loadTechnicians]);
 
   // Refetch projects and timesheets when technician selection changes (or on initial load)
   useEffect(() => {
@@ -757,14 +776,13 @@ const TimesheetCalendar: React.FC = () => {
         void loadWeekSummary(info.startStr);
       }
 
-      // Keep travel indicators in sync with the current visible range (month key)
-      if (hasTravels) {
-        const monthKey = dayjs(info.start).format('YYYY-MM');
-        const technicianFilter = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined;
-        void loadTravels(monthKey, technicianFilter);
+      const monthKey = dayjs(info.start).format('YYYY-MM');
+      if (lastMonthRef.current !== monthKey) {
+        lastMonthRef.current = monthKey;
+        setMonth(monthKey);
       }
     },
-    [hasTravels, loadWeekSummary, loadTravels, selectedTechnicianId]
+    [loadWeekSummary]
   );
 
   const calculateHours = (startTime: Dayjs | null, endTime: Dayjs | null): number => {
@@ -3140,7 +3158,7 @@ const TimesheetCalendar: React.FC = () => {
                                       {roleIsAssigned(projectRoleMap[project.id]?.projectRole) && (
                                         <Chip
                                           size="small"
-                                          icon={<span style={{ fontSize: '14px' }}>⏱️</span>}
+                                          icon={<Box component="span" sx={{ fontSize: '14px' }}>⏱️</Box>}
                                           color={projectRoleMap[project.id]?.projectRole === 'manager' ? 'primary' : 'default'}
                                           label={formatRoleLabel(projectRoleMap[project.id]?.projectRole)}
                                           sx={{ 
@@ -3152,7 +3170,7 @@ const TimesheetCalendar: React.FC = () => {
                                       {roleIsAssigned(projectRoleMap[project.id]?.expenseRole) && (
                                         <Chip
                                           size="small"
-                                          icon={<span style={{ fontSize: '14px' }}>💰</span>}
+                                          icon={<Box component="span" sx={{ fontSize: '14px' }}>💰</Box>}
                                           color={projectRoleMap[project.id]?.expenseRole === 'manager' ? 'warning' : 'default'}
                                           label={formatRoleLabel(projectRoleMap[project.id]?.expenseRole)}
                                           sx={{ 

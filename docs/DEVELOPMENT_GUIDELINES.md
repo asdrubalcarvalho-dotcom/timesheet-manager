@@ -255,3 +255,270 @@ CONSTRAINT timesheets_location_id_foreign
 **Versão**: 1.0  
 **Data**: 5 Nov 2025  
 **Status**: Padrões implementados e testados ✅
+# 📋 Development Guidelines: TimePerk Cortex
+## Avoid common mistakes and keep the codebase consistent
+
+This document captures the **real issues we’ve already hit** in this repo and the **patterns we want to enforce**.
+
+---
+
+## ✅ MUST (Non-negotiable)
+
+1) **Always follow tenancy boundaries**
+- Central routes: `backend/routes/api.php`
+- Tenant routes: `backend/routes/tenant.php`
+- Multi-tenant DBs:
+  - Central: `timesheet`
+  - Tenant: `timesheet_{slug}` (e.g., `timesheet_test-company`)
+- Tenant resolved by **subdomain** or **`X-Tenant`** header.
+- Avoid `Model::on($connection)` in controllers.
+- Raw queries must use the correct connection explicitly:
+  - `DB::connection('tenant')` for tenant DB
+  - `DB::connection('central')` only when truly central
+
+2) **Keep frontend + backend validation aligned**
+If frontend allows something that backend rejects, you create noisy bugs.
+
+3) **Respect FK constraints when changing schema**
+Don’t create contradictions between column nullability and FK delete rules.
+
+4) **Never duplicate fields in Models (fillable/casts/etc.)**
+Always check before adding.
+
+---
+
+## 👍 SHOULD (Preferred patterns)
+
+- Prefer **Form Requests** in `backend/app/Http/Requests/` over inline `validate()`.
+- Keep controllers thin; move business logic to Services.
+- When rules change, add/update tests.
+
+---
+
+# 🚨 Common issues we’ve seen
+
+## 1) ❌ Duplicate fields in Models
+**Problem:** Adding fields that already exist in `$fillable`, `$casts`, etc.
+
+✅ **Fix / Prevention**
+- Always inspect the model before editing.
+- Search before adding fields.
+
+**Search commands (repo-correct paths):**
+```bash
+# Models
+grep -R "status" backend/app/Models
+grep -R "status" Modules
+
+# Migrations
+grep -R "status" backend/database/migrations
+grep -R "status" Modules/*/Database/migrations
+
+# Helpful overview
+docker-compose exec app php artisan model:show Timesheet
+```
+
+---
+
+## 2) ❌ Inconsistent validation (frontend vs backend)
+**Problem:** Frontend allows values that backend rejects.
+
+✅ **Fix / Prevention**
+- Keep validation synchronized on both sides.
+- Document required fields clearly.
+- Test APIs with invalid payloads.
+
+### Backend example (Laravel)
+```php
+// ✅ BACKEND: example validation rules
+$validated = $request->validate([
+    'project_id' => 'required|exists:projects,id',
+    'task_id' => 'required|exists:tasks,id',          // required
+    'location_id' => 'required|exists:locations,id',  // required
+    'hours_worked' => 'required|numeric|min:0.25|max:24',
+]);
+```
+
+### Frontend example (React)
+```tsx
+// ✅ FRONTEND: enforce same constraints
+const handleSave = async () => {
+  if (!projectId) return setError('Please select a project');
+  if (!taskId) return setError('Please select a task');
+  if (!locationId) return setError('Please select a location');
+};
+```
+
+---
+
+## 3) ❌ Foreign Key constraints that contradict nullability
+**Problem:** Making a column NOT NULL while the FK uses `SET NULL` on delete.
+
+✅ **Correct patterns**
+```php
+// ✅ REQUIRED field -> restrict delete
+Schema::table('timesheets', function (Blueprint $table) {
+    $table->foreignId('task_id')->constrained()->onDelete('restrict');
+    $table->foreignId('location_id')->constrained()->onDelete('restrict');
+});
+
+// ✅ OPTIONAL field -> nullable + set null
+Schema::table('expenses', function (Blueprint $table) {
+    $table->foreignId('category_id')->nullable()->constrained()->onDelete('set null');
+});
+
+// ❌ WRONG: nullable but restrict (usually signals design mismatch)
+$table->foreignId('task_id')->nullable()->constrained()->onDelete('restrict');
+```
+
+---
+
+# 🧭 Tenancy-aware changes (VERY IMPORTANT)
+
+## Central vs tenant migrations
+- Central migrations:
+```bash
+docker-compose exec app php artisan migrate
+```
+- Tenant migrations:
+```bash
+docker-compose exec app php artisan tenants:migrate <slug>
+```
+
+✅ Rule: if a table lives in tenant DB, schema changes must be done via **tenant migration**, not central.
+
+## Where are auth tokens stored?
+If tokens are tenant-scoped, check the **tenant** DB:
+```bash
+docker-compose exec database mysql -u timesheet -psecret -e \
+"USE timesheet_<slug>; SELECT * FROM personal_access_tokens LIMIT 20;"
+```
+
+---
+
+# 📝 Development checklists
+
+## When adding new fields
+```bash
+# 1) Check if it already exists
+grep -R "field_name" backend/app/Models
+grep -R "field_name" Modules
+grep -R "field_name" backend/database/migrations
+grep -R "field_name" Modules/*/Database/migrations
+
+# 2) Check backend validation and usage
+grep -R "field_name" backend/app/Http
+
+# 3) Test migrations cleanly (careful: resets local DB)
+docker-compose exec app php artisan migrate:fresh --seed
+```
+
+## When changing validation rules
+- Update backend validation rules (Controller/Form Request)
+- Update frontend form validation
+- Update TypeScript types (if needed)
+
+Smoke test invalid payloads:
+```bash
+curl -X POST http://api.localhost/api/timesheets -H "Accept: application/json" \
+  -d '{"project_id": null}'
+
+curl -X POST http://api.localhost/api/timesheets -H "Accept: application/json" \
+  -d '{"task_id": null}'
+```
+
+## When changing DB schema
+```bash
+# 1) Consider existing data impact
+docker-compose exec app php artisan tinker
+# Then in tinker:
+# Model::whereNull('new_field')->count();
+
+# 2) Inspect existing foreign keys
+docker-compose exec database mysql -u timesheet -psecret -e \
+"USE timesheet; SHOW CREATE TABLE timesheets\G"
+
+# 3) Test rollback
+docker-compose exec app php artisan migrate:rollback --step=1
+docker-compose exec app php artisan migrate
+```
+
+---
+
+# 🔧 Verification tools
+
+```bash
+# Model structure
+docker-compose exec app php artisan model:show Timesheet
+docker-compose exec app php artisan model:show Expense
+
+# Pending migrations
+docker-compose exec app php artisan migrate:status
+
+# Foreign key inventory (central DB example)
+docker-compose exec database mysql -u timesheet -psecret -e "
+SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE REFERENCED_TABLE_SCHEMA = 'timesheet'
+  AND REFERENCED_TABLE_NAME IS NOT NULL;
+"
+```
+
+---
+
+# 🎯 Testing pattern example
+
+```php
+public function test_timesheet_requires_task_and_location()
+{
+    $response = $this->postJson('/api/timesheets', [
+        'project_id' => 1,
+        // task_id missing -> should fail
+        'location_id' => 1,
+        'hours_worked' => 8,
+    ]);
+
+    $response->assertStatus(422)
+             ->assertJsonValidationErrors(['task_id']);
+}
+```
+
+---
+
+# 📚 Current confirmed state (as of 2025-11-05)
+
+- **Timesheets**: `task_id` and `location_id` are **REQUIRED**
+- **Expenses**: only `project_id` is required (no task/location requirement)
+- **Tasks**: always associated with a specific project
+- **Locations**: global; used across projects
+
+### Working API endpoints
+```bash
+GET /api/tasks
+GET /api/tasks?project_id=1
+GET /api/projects/1/tasks
+GET /api/locations
+GET /api/locations/active
+```
+
+### DB constraints (illustrative)
+```sql
+-- Timesheets: task_id and location_id are NOT NULL
+ALTER TABLE timesheets MODIFY task_id BIGINT UNSIGNED NOT NULL;
+ALTER TABLE timesheets MODIFY location_id BIGINT UNSIGNED NOT NULL;
+
+-- Foreign Keys: RESTRICT
+CONSTRAINT timesheets_task_id_foreign
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE RESTRICT;
+
+CONSTRAINT timesheets_location_id_foreign
+  FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT;
+```
+
+---
+
+*Update this doc whenever we establish new standards or discover recurring issues.*
+
+**Version**: 1.1  
+**Date**: 2026-02-06  
+**Status**: Updated for repo paths + tenancy clarity ✅
