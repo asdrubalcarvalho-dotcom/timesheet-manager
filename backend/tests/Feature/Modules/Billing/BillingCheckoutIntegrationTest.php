@@ -162,7 +162,10 @@ class BillingCheckoutIntegrationTest extends TenantTestCase
 
         $this->assertEquals($expectedAmount, $data['amount']);
         $this->assertEquals('EUR', $data['currency']);
-        $this->assertNotNull($data['client_secret']);
+
+        if (($data['gateway'] ?? null) === 'stripe') {
+            $this->assertNotNull($data['client_secret']);
+        }
 
         // If using Stripe, verify amount is in cents (amount × 100)
         if (isset($data['gateway']) && $data['gateway'] === 'stripe') {

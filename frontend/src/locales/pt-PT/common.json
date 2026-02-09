@@ -110,11 +110,25 @@
     "ai": {
       "title": "Pergunte à IA TimePerk",
       "subtitle": "Resuma anomalias, aprovações e tendências.",
+      "examples": {
+        "title": "Exemplos",
+        "more": "Ver mais exemplos",
+        "less": "Ver menos exemplos",
+        "items": [
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00-13:00\nBloco 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00–13:00\nBloco 2: 14:00–18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\nBlock 1: 09:00-13:00\nBlock 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-10\nProjeto: \"Mobile Banking App\"\n09:00-10:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
+        ]
+      },
       "suggestions": {
         "flags": "Quais lançamentos foram sinalizados?",
         "overtime": "Onde as horas extras aumentaram?",
         "approvals": "Quais aprovações estão pendentes?",
-        "projectCosts": "Quais projetos excederam as horas previstas?"
+        "projectCosts": "Quais projetos excederam as horas previstas?",
+        "timesheetCreate": "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
       },
       "placeholderResponse": "Ainda estou a aprender. Por enquanto, posso resumir o relatório com base na tua pergunta.",
       "errorFallback": "Algo errado ocorreu. Tente novamente.",
@@ -438,6 +452,7 @@
     "countries": "Países",
     "users": "Utilizadores",
     "aiInsights": "Insights de IA",
+    "aiTimesheetBuilder": "Construtor IA de Timesheets",
     "billing": "Faturação",
     "resetData": "Repor dados",
     "legal": "Legal",
@@ -449,6 +464,89 @@
     "logoutWithName": "Terminar sessão ({{name}})",
     "userFallback": "Utilizador",
     "tagline": "Folha de horas inteligente"
+  },
+  "aiTimesheet": {
+    "title": "Construtor IA de Timesheets",
+    "subtitle": "Gera lancamentos em rascunho a partir de um prompt.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Exemplo: Criar lancamentos para 5 dias (Seg-Sex), 09:00-18:00, almoco 12:30-13:30, projeto ACME, tarefa Instalacao.",
+    "previewButton": "Pre-visualizar",
+    "applyButton": "Aplicar",
+    "applySuccess": "Criados {{count}} lancamentos em rascunho.",
+    "confirmCreate": "Confirmar e criar",
+    "previewSummary": {
+      "title": "Resumo da pre-visualizacao",
+      "dateRange": "Intervalo de datas",
+      "totalWork": "Horas de trabalho",
+      "totalBreaks": "Tempo de pausa",
+      "blockTime": "Horario",
+      "project": "Projeto",
+      "task": "Tarefa",
+      "location": "Localizacao",
+      "notes": "Notas",
+      "unassigned": "Sem projeto",
+      "unknown": "-"
+    },
+    "previewErrors": {
+      "existingNoTime": {
+        "title": "Lancamentos existentes sem horario",
+        "message": "Nao e possivel validar sobreposicoes porque existem lancamentos sem horario nesse dia. A nova proposta da IA inclui horas.",
+        "labels": {
+          "existingEntriesWithoutTime": "Lancamentos existentes sem horario",
+          "howToFix": "Como resolver",
+          "reviewExistingEntries": "Reveja os lancamentos existentes e adicione horas",
+          "replaceEntries": "Apague ou substitua os lancamentos existentes"
+        },
+        "actions": {
+          "chooseDates": "Escolha datas diferentes"
+        }
+      },
+      "overlap": {
+        "title": "Conflito de horarios",
+        "message": "Existem intervalos que se sobrepoem.",
+        "actions": {
+          "addTimes": "Indique horas de inicio e fim para cada bloco",
+          "adjustTimes": "Ajuste os intervalos para evitar sobreposicoes"
+        }
+      },
+      "break": {
+        "title": "Pausa obrigatoria",
+        "message": "E necessario adicionar uma pausa.",
+        "actions": {
+          "addBreak": "Adicione uma pausa no horario",
+          "reviewPolicy": "Confirme o requisito legal aplicado"
+        }
+      },
+      "project": {
+        "title": "Projeto nao encontrado",
+        "message": "Nao foi possivel encontrar o projeto indicado.",
+        "actions": {
+          "checkProject": "Verifique o nome do projeto",
+          "pickAnother": "Escolha outro projeto"
+        }
+      },
+      "generic": {
+        "title": "Nao foi possivel pre-visualizar",
+        "message": "Nao foi possivel interpretar o pedido.",
+        "actions": {
+          "retry": "Tente novamente com mais detalhe",
+          "editPrompt": "Revise o texto do prompt"
+        }
+      }
+    },
+    "missingFields": {
+      "title": "Falta informar",
+      "message": "Por favor indique: {{fields}}",
+      "labels": {
+        "intent": "Intencao",
+        "dateRange": "Intervalo de datas",
+        "dateRangeCount": "Quantidade de dias uteis",
+        "schedule": "Horario",
+        "project": "Projeto",
+        "task": "Tarefa",
+        "location": "Localizacao"
+      }
+    }
   },
   "language": {
     "label": "Idioma",

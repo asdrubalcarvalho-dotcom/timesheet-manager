@@ -109,11 +109,25 @@
     "ai": {
       "title": "Ask TimePerk AI",
       "subtitle": "Summarize anomalies, approvals, and trends.",
+      "examples": {
+        "title": "Examples",
+        "more": "View more examples",
+        "less": "View fewer examples",
+        "items": [
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00-13:00\nBloco 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00–13:00\nBloco 2: 14:00–18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\nBlock 1: 09:00-13:00\nBlock 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-10\nProjeto: \"Mobile Banking App\"\n09:00-10:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
+        ]
+      },
       "suggestions": {
         "flags": "What entries were flagged?",
         "overtime": "Where did overtime spike?",
         "approvals": "Which approvals are pending?",
-        "projectCosts": "Which projects exceed budgeted hours?"
+        "projectCosts": "Which projects exceed budgeted hours?",
+        "timesheetCreate": "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
       },
       "placeholderResponse": "I'm still learning. For now, I can summarize the report based on your question.",
       "errorFallback": "Something went wrong. Please try again.",
@@ -571,6 +585,7 @@
     "countries": "Countries",
     "users": "Users",
     "aiInsights": "AI Insights",
+    "aiTimesheetBuilder": "AI Timesheet Builder",
     "billing": "Billing",
     "resetData": "Reset data",
     "legal": "Legal",
@@ -582,6 +597,89 @@
     "logoutWithName": "Logout ({{name}})",
     "userFallback": "User",
     "tagline": "Smart Timesheet"
+  },
+  "aiTimesheet": {
+    "title": "AI Timesheet Builder",
+    "subtitle": "Generate draft entries from a natural language prompt.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Example: Create timesheet entries for 5 days (Mon-Fri), 09:00-18:00, lunch 12:30-13:30, project ACME, task Installation.",
+    "previewButton": "Preview",
+    "applyButton": "Apply",
+    "applySuccess": "Created {{count}} entries as drafts.",
+    "confirmCreate": "Confirm & create",
+    "previewSummary": {
+      "title": "Preview summary",
+      "dateRange": "Date range",
+      "totalWork": "Total work hours",
+      "totalBreaks": "Break time",
+      "blockTime": "Time",
+      "project": "Project",
+      "task": "Task",
+      "location": "Location",
+      "notes": "Notes",
+      "unassigned": "Unassigned",
+      "unknown": "-"
+    },
+    "previewErrors": {
+      "existingNoTime": {
+        "title": "Existing entries without time",
+        "message": "We cannot validate overlaps because there are existing entries without time on this day. The new AI proposal does include hours.",
+        "labels": {
+          "existingEntriesWithoutTime": "Existing entries without time",
+          "howToFix": "How to fix",
+          "reviewExistingEntries": "Review existing entries and add hours",
+          "replaceEntries": "Delete or replace existing entries"
+        },
+        "actions": {
+          "chooseDates": "Choose different dates"
+        }
+      },
+      "overlap": {
+        "title": "Time conflict",
+        "message": "Some time ranges overlap.",
+        "actions": {
+          "addTimes": "Provide start and end times for each block",
+          "adjustTimes": "Adjust the times so they do not overlap"
+        }
+      },
+      "break": {
+        "title": "Break required",
+        "message": "A break is required to comply with policy.",
+        "actions": {
+          "addBreak": "Add a break in the schedule",
+          "reviewPolicy": "Review the applied labour rule"
+        }
+      },
+      "project": {
+        "title": "Project not found",
+        "message": "We could not find the requested project.",
+        "actions": {
+          "checkProject": "Check the project name",
+          "pickAnother": "Choose another project"
+        }
+      },
+      "generic": {
+        "title": "Preview failed",
+        "message": "We could not interpret the request.",
+        "actions": {
+          "retry": "Try again with more detail",
+          "editPrompt": "Review the prompt text"
+        }
+      }
+    },
+    "missingFields": {
+      "title": "Missing details",
+      "message": "Please provide: {{fields}}",
+      "labels": {
+        "intent": "Intent",
+        "dateRange": "Date range",
+        "dateRangeCount": "Workday count",
+        "schedule": "Schedule",
+        "project": "Project",
+        "task": "Task",
+        "location": "Location"
+      }
+    }
   },
   "dashboard": {
     "title": "Dashboard",

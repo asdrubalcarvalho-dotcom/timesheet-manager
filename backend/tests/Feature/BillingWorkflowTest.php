@@ -271,7 +271,7 @@ class BillingWorkflowTest extends TestCase
 
         // And: next_renewal_at is set to start_date + 30 days
         $this->assertNotNull($subscription->next_renewal_at);
-        $expectedRenewal = $subscription->subscription_start_date->copy()->addDays(30);
+        $expectedRenewal = $subscription->subscription_start_date->copy()->addMonth();
         $this->assertTrue(
             $subscription->next_renewal_at->between(
                 $expectedRenewal->subMinutes(1),

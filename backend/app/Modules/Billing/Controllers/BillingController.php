@@ -846,6 +846,12 @@ class BillingController extends Controller
                 'amount' => $amount,
                 'currency' => 'EUR'
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             \Log::error('Checkout start failed', [
                 'error' => $e->getMessage(),

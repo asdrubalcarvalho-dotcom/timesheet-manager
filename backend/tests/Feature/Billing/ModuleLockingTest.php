@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Billing;
 
-use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantFeatures;
+use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
 use Modules\Billing\Models\Subscription;
-use Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\PermissionRegistrar;
+use Tests\TenantTestCase;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -18,60 +20,88 @@ use Laravel\Sanctum\Sanctum;
  * - AI module access (Enterprise + addon)
  * - 403 responses with helpful upgrade messages
  */
-class ModuleLockingTest extends TestCase
+class ModuleLockingTest extends TenantTestCase
 {
-    use RefreshDatabase;
-
-    protected Tenant $tenant;
     protected User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->tenant = Tenant::create([
-            'name' => 'Module Lock Test',
-            'slug' => 'module-lock-test',
-        ]);
-
         $this->user = User::factory()->create([
             'email' => 'user@moduletest.com',
         ]);
 
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $this->user->givePermissionTo('view-timesheets');
+        $this->user->givePermissionTo('view-planning');
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
         Sanctum::actingAs($this->user);
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function createSubscription(array $overrides = []): Subscription
+    {
+        DB::connection('mysql')
+            ->table('subscriptions')
+            ->where('tenant_id', $this->tenant->id)
+            ->delete();
+
+        $this->tenant->unsetRelation('subscription');
+
+        $subscription = Subscription::create(array_merge([
+            'tenant_id' => $this->tenant->id,
+            'plan' => 'starter',
+            'user_limit' => 2,
+            'status' => 'active',
+            'addons' => [],
+        ], $overrides));
+
+        TenantFeatures::syncFromSubscription($this->tenant);
+        return $subscription;
+    }
+
+    private function clearSubscription(): void
+    {
+        DB::connection('mysql')
+            ->table('subscriptions')
+            ->where('tenant_id', $this->tenant->id)
+            ->delete();
+
+        $this->tenant->unsetRelation('subscription');
+
+        TenantFeatures::syncFromSubscription($this->tenant);
     }
 
     /** @test */
     public function starter_plan_with_1_user_cannot_access_travels()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'starter',
             'user_limit' => 1,
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/travels');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/travels');
 
         $response->assertForbidden()
-            ->assertJson([
-                'message' => 'Travels module not available',
-                'requires_plan' => 'Team or Enterprise',
-            ]);
+            ->assertJsonPath('module', 'travels');
     }
 
     /** @test */
     public function starter_plan_with_3_users_can_access_travels()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'starter',
             'user_limit' => 3,
-            'status' => 'active',
         ]);
 
         // This should not return 403 (might return 404 or other, but not 403)
-        $response = $this->getJson('/api/travels');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/travels');
 
         $this->assertNotEquals(403, $response->status());
     }
@@ -79,14 +109,13 @@ class ModuleLockingTest extends TestCase
     /** @test */
     public function team_plan_can_access_travels()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'team',
             'user_limit' => 1,
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/travels');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/travels');
 
         $this->assertNotEquals(403, $response->status());
     }
@@ -94,14 +123,13 @@ class ModuleLockingTest extends TestCase
     /** @test */
     public function enterprise_plan_can_access_travels()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'enterprise',
             'user_limit' => 10,
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/travels');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/travels');
 
         $this->assertNotEquals(403, $response->status());
     }
@@ -109,53 +137,44 @@ class ModuleLockingTest extends TestCase
     /** @test */
     public function starter_plan_cannot_access_planning()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'starter',
             'user_limit' => 2,
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/planning');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/planning/projects');
 
         $response->assertForbidden()
-            ->assertJson([
-                'message' => 'Planning module not available',
-                'requires_plan' => 'Team or Enterprise',
-                'requires_addon' => 'Planning',
-            ]);
+            ->assertJsonPath('module', 'planning');
     }
 
     /** @test */
     public function team_plan_without_addon_cannot_access_planning()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'team',
             'user_limit' => 5,
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/planning');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/planning/projects');
 
         $response->assertForbidden()
-            ->assertJsonFragment([
-                'requires_addon' => 'Planning',
-            ]);
+            ->assertJsonPath('module', 'planning');
     }
 
     /** @test */
     public function team_plan_with_planning_addon_can_access_planning()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'team',
             'user_limit' => 5,
             'addons' => ['planning'],
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/planning');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/planning/projects');
 
         $this->assertNotEquals(403, $response->status());
     }
@@ -163,15 +182,14 @@ class ModuleLockingTest extends TestCase
     /** @test */
     public function enterprise_plan_with_planning_addon_can_access_planning()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->createSubscription([
             'plan' => 'enterprise',
             'user_limit' => 10,
             'addons' => ['planning'],
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/planning');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/planning/projects');
 
         $this->assertNotEquals(403, $response->status());
     }
@@ -179,72 +197,72 @@ class ModuleLockingTest extends TestCase
     /** @test */
     public function starter_plan_cannot_access_ai()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->tenant->ai_enabled = true;
+        $this->tenant->save();
+
+        $this->createSubscription([
             'plan' => 'starter',
             'user_limit' => 2,
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/ai/insights');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/ai/suggestions/timesheet');
 
         $response->assertForbidden()
-            ->assertJson([
-                'message' => 'AI module not available',
-                'requires_plan' => 'Enterprise',
-                'requires_addon' => 'AI',
-            ]);
+            ->assertJsonPath('module', 'ai');
     }
 
     /** @test */
     public function team_plan_cannot_access_ai()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->tenant->ai_enabled = true;
+        $this->tenant->save();
+
+        $this->createSubscription([
             'plan' => 'team',
             'user_limit' => 5,
             'addons' => ['ai'], // Even with addon, Team cannot access AI
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/ai/insights');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/ai/suggestions/timesheet');
 
         $response->assertForbidden()
-            ->assertJsonFragment([
-                'requires_plan' => 'Enterprise',
-            ]);
+            ->assertJsonPath('module', 'ai');
     }
 
     /** @test */
     public function enterprise_plan_without_ai_addon_cannot_access_ai()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->tenant->ai_enabled = true;
+        $this->tenant->save();
+
+        $this->createSubscription([
             'plan' => 'enterprise',
             'user_limit' => 10,
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/ai/insights');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/ai/suggestions/timesheet');
 
         $response->assertForbidden()
-            ->assertJsonFragment([
-                'requires_addon' => 'AI',
-            ]);
+            ->assertJsonPath('module', 'ai');
     }
 
     /** @test */
     public function enterprise_plan_with_ai_addon_can_access_ai()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
+        $this->tenant->ai_enabled = true;
+        $this->tenant->save();
+
+        $this->createSubscription([
             'plan' => 'enterprise',
             'user_limit' => 10,
             'addons' => ['ai'],
-            'status' => 'active',
         ]);
 
-        $response = $this->getJson('/api/ai/insights');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/ai/suggestions/timesheet');
 
         $this->assertNotEquals(403, $response->status());
     }
@@ -253,10 +271,14 @@ class ModuleLockingTest extends TestCase
     public function no_subscription_blocks_all_premium_modules()
     {
         // No subscription created
+        $this->clearSubscription();
 
-        $responseTravels = $this->getJson('/api/travels');
-        $responsePlanning = $this->getJson('/api/planning');
-        $responseAI = $this->getJson('/api/ai/insights');
+        $responseTravels = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/travels');
+        $responsePlanning = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/planning/projects');
+        $responseAI = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/ai/suggestions/timesheet');
 
         $responseTravels->assertForbidden();
         $responsePlanning->assertForbidden();

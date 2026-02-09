@@ -396,6 +396,82 @@ docker-compose exec database mysql -u timesheet -psecret -e \
 
 ---
 
+# 🧠 AI Timesheet Builder API
+
+## Endpoints (tenant-scoped, auth required)
+
+### Preview
+`POST /api/ai/timesheet/preview`
+
+Payload:
+```json
+{
+  "prompt": "Create timesheet entries for 5 days (Mon-Fri), 09:00-18:00, lunch 12:30-13:30, project ACME, task Installation."
+}
+```
+
+Response:
+```json
+{
+  "plan": {
+    "range": { "start_date": "2026-02-03", "end_date": "2026-02-07" },
+    "timezone": "Europe/Lisbon",
+    "days": [
+      {
+        "date": "2026-02-03",
+        "work_blocks": [
+          {
+            "start_time": "09:00",
+            "end_time": "18:00",
+            "project": { "id": 1, "name": "ACME" },
+            "task": { "id": 10, "name": "Installation" },
+            "location": { "id": 3, "name": "Lisbon" }
+          }
+        ],
+        "breaks": [{ "start_time": "12:30", "end_time": "13:30" }]
+      }
+    ]
+  },
+  "warnings": []
+}
+```
+
+### Commit
+`POST /api/ai/timesheet/commit`
+
+Payload:
+```json
+{
+  "request_id": "uuid",
+  "confirmed": true,
+  "plan": { "range": { "start_date": "2026-02-03", "end_date": "2026-02-07" }, "timezone": "Europe/Lisbon", "days": [] }
+}
+```
+
+Response:
+```json
+{
+  "created_ids": [1, 2, 3],
+  "summary": {
+    "created_count": 3,
+    "totals": {
+      "overall_minutes": 1440,
+      "overall_hours": 24,
+      "per_day": { "2026-02-03": { "minutes": 480, "hours": 8 } }
+    }
+  }
+}
+```
+
+## Deprecated endpoints
+The following routes remain temporarily for backwards compatibility:
+- `POST /api/timesheets/ai/preview`
+- `POST /api/timesheets/ai/apply`
+
+Use the new `/api/ai/timesheet/*` endpoints for all new integrations.
+
+---
+
 # 📝 Development checklists
 
 ## When adding new fields

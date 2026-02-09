@@ -87,6 +87,13 @@ abstract class TenantTestCase extends TestCase
             static::$centralMigrated = true;
         }
 
+        if (static::$sharedTenant && !Tenant::query()->whereKey(static::$sharedTenant->id)->exists()) {
+            $this->debug('setUp:shared-tenant:missing-reset');
+            static::$sharedTenant = null;
+            static::$sharedTenantDatabase = null;
+            static::$tenantMigrated = false;
+        }
+
         if (!static::$sharedTenant) {
             $slug = 'phpunit-' . substr((string) Str::uuid(), 0, 8);
 

@@ -694,6 +694,15 @@ const TimesheetCalendar: React.FC = () => {
   }, [authLoading, user, loadTimesheets]);
 
   useEffect(() => {
+    const handleRefresh = () => {
+      void loadTimesheets();
+    };
+
+    window.addEventListener('timesheets:refresh', handleRefresh);
+    return () => window.removeEventListener('timesheets:refresh', handleRefresh);
+  }, [loadTimesheets]);
+
+  useEffect(() => {
     if (authLoading || !user) return;
     loadProjects(selectedTechnicianId);
   }, [authLoading, user, selectedTechnicianId, loadProjects]);

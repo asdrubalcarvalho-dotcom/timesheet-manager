@@ -48,6 +48,7 @@ class TenantSignupVerificationFlowTest extends TestCase
             'admin_password' => 'password123',
             'admin_password_confirmation' => 'password123',
             'timezone' => 'UTC',
+            'legal_accepted' => true,
         ]);
 
         $response->assertOk();
@@ -84,6 +85,7 @@ class TenantSignupVerificationFlowTest extends TestCase
             'admin_password_confirmation' => 'password123',
             'timezone' => 'UTC',
             'region' => 'US',
+            'legal_accepted' => true,
         ]);
 
         $response->assertOk();
@@ -120,6 +122,7 @@ class TenantSignupVerificationFlowTest extends TestCase
             'admin_password' => 'password123',
             'admin_password_confirmation' => 'password123',
             'timezone' => 'UTC',
+            'legal_accepted' => true,
         ]);
 
         $response->assertStatus(500);
@@ -190,10 +193,12 @@ class TenantSignupVerificationFlowTest extends TestCase
             'timezone' => 'UTC',
             'expires_at' => now()->addHour(),
             'verified' => false,
+            'legal_accepted_at' => now(),
         ]);
 
         $response = $this->postJson('/api/tenants/complete-signup', [
             'token' => $token,
+            'legal_accepted' => true,
         ]);
 
         $response->assertStatus(422);

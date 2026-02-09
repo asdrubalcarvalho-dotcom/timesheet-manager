@@ -76,6 +76,7 @@ const PaymentMethodsPage = React.lazy(() => import('./pages/Billing/PaymentMetho
 const TimesheetPivotReport = React.lazy(() => import('./components/Timesheets/TimesheetPivotReport'));
 const ApprovalHeatmapReport = React.lazy(() => import('./components/Approvals/ApprovalHeatmapReport'));
 const ExpensesAnalysisReport = React.lazy(() => import('./components/Reports/Expenses/ExpensesAnalysisReport'));
+const AiTimesheetBuilder = React.lazy(() => import('./pages/AiTimesheetBuilder'));
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -108,7 +109,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
+type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'ai-timesheet-builder' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -121,6 +122,7 @@ const pageToPath: Record<Page, string> = {
   approvals: '/approvals',
   dashboard: '/dashboard',
   'ai-insights': '/ai-insights',
+  'ai-timesheet-builder': '/timesheets/ai-builder',
   team: '/team',
   planning: '/planning',
   'planning-locations': '/planning/locations',
@@ -312,6 +314,12 @@ const AppContent: React.FC = () => {
         return (
           <RequireFeature feature="ai">
             <AIInsights />
+          </RequireFeature>
+        );
+      case 'ai-timesheet-builder':
+        return (
+          <RequireFeature feature="ai">
+            <AiTimesheetBuilder />
           </RequireFeature>
         );
       case 'team':

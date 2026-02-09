@@ -240,6 +240,7 @@ export interface TimesheetWeekSummary {
   policy_key?: 'US-CA' | 'US-NY' | 'US-FLSA' | 'NON-US' | string;
 }
 
+
 // Technicians API
 export const techniciansApi = {
   getAll: (): Promise<ApiResponse<Technician[]>> =>
@@ -328,6 +329,7 @@ export const timesheetsApi = {
   
   reject: (id: number, reason: string): Promise<Timesheet> =>
     api.put(`/api/timesheets/${id}/reject`, { reason }).then(res => res.data),
+
 };
 
 // Expenses API

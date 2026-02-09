@@ -681,7 +681,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                 return (
                   <Tooltip
                     key={cellKey}
-                    title={<span style={{ whiteSpace: 'pre-line' }}>{tooltip}</span>}
+                    title={<Box component="span" sx={{ whiteSpace: 'pre-line' }}>{tooltip}</Box>}
                     placement="top"
                     arrow
                   >
