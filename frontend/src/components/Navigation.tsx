@@ -11,8 +11,10 @@ import {
 } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { useTranslation } from 'react-i18next';
 
 const Navigation: React.FC = () => {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -32,11 +34,11 @@ const Navigation: React.FC = () => {
   };
 
   const navItems = [
-    { path: '/', label: 'Home' },
-    { path: '/timesheets', label: 'Timesheets' },
-    { path: '/expenses', label: 'Expenses' },
-    { path: '/projects', label: 'Projects' },
-    { path: '/users', label: 'Users' },
+    { path: '/', labelKey: 'nav.dashboard' },
+    { path: '/timesheets', labelKey: 'nav.timesheets' },
+    { path: '/expenses', labelKey: 'nav.expenses' },
+    { path: '/projects', labelKey: 'nav.projects' },
+    { path: '/users', labelKey: 'nav.users' },
   ];
 
   return (
@@ -56,7 +58,7 @@ const Navigation: React.FC = () => {
               lineHeight: 1
             }}
           >
-            The brain behind your team's time
+            {t('header.tagline')}
           </Typography>
         </Box>
         
@@ -71,7 +73,7 @@ const Navigation: React.FC = () => {
                 backgroundColor: location.pathname === item.path ? 'rgba(255,255,255,0.1)' : 'transparent'
               }}
             >
-              {item.label}
+              {t(item.labelKey)}
             </Button>
           ))}
         </Box>
@@ -97,8 +99,8 @@ const Navigation: React.FC = () => {
           open={Boolean(anchorEl)}
           onClose={handleClose}
         >
-          <MenuItem onClick={handleClose}>Profile</MenuItem>
-          <MenuItem onClick={handleLogout}>Logout</MenuItem>
+          <MenuItem onClick={handleClose}>{t('nav.profile')}</MenuItem>
+          <MenuItem onClick={handleLogout}>{t('nav.logout')}</MenuItem>
         </Menu>
       </Toolbar>
     </AppBar>

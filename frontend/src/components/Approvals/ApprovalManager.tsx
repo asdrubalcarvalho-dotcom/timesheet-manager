@@ -530,7 +530,7 @@ const ApprovalManager: React.FC = () => {
       setSelectedTravels(travels.filter(Boolean));
 
       if (sawNonUpgradeError && !sawUpgradeRequired) {
-        showError('Failed to load travel details');
+        showError(t('approvals.travels.loadFailed'));
       }
     } catch (error) {
       console.error('Error loading travel details:', error);
@@ -538,7 +538,7 @@ const ApprovalManager: React.FC = () => {
       const data = (error as any)?.response?.data;
       const isUpgradeRequired = status === 403 && data?.upgrade_required === true;
       if (!isUpgradeRequired) {
-        showError('Failed to load travel details');
+        showError(t('approvals.travels.loadFailed'));
       }
     } finally {
       setLoadingTravels(false);

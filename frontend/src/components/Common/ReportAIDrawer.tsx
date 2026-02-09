@@ -12,6 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { useTranslation } from 'react-i18next';
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -26,6 +27,7 @@ type Props = {
 };
 
 const ReportAIDrawer: React.FC<Props> = ({ open, onClose, title, onAsk }) => {
+  const { t } = useTranslation();
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ const ReportAIDrawer: React.FC<Props> = ({ open, onClose, title, onAsk }) => {
           ? e.response.data.message
           : typeof e?.message === 'string'
             ? e.message
-            : 'Failed to get AI response';
+            : t('reports.aiDrawer.errorFallback');
       setError(message);
     } finally {
       setLoading(false);
@@ -77,7 +79,7 @@ const ReportAIDrawer: React.FC<Props> = ({ open, onClose, title, onAsk }) => {
         <Typography variant="h6" sx={{ flex: 1 }}>
           {title}
         </Typography>
-        <IconButton aria-label="Close" onClick={onClose}>
+        <IconButton aria-label={t('common.close')} onClick={onClose}>
           <CloseIcon />
         </IconButton>
       </Box>
@@ -92,13 +94,13 @@ const ReportAIDrawer: React.FC<Props> = ({ open, onClose, title, onAsk }) => {
         )}
 
         {messages.length === 0 ? (
-          <Alert severity="info">Ask a question about the current report and date range.</Alert>
+          <Alert severity="info">{t('reports.aiDrawer.emptyPrompt')}</Alert>
         ) : (
           <Stack spacing={1.5}>
             {messages.map((m, idx) => (
               <Box key={idx}>
                 <Typography variant="caption" color="text.secondary">
-                  {m.role === 'user' ? 'You' : 'AI'}
+                  {m.role === 'user' ? t('reports.aiDrawer.you') : t('reports.aiDrawer.ai')}
                 </Typography>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                   {m.content}
@@ -114,7 +116,7 @@ const ReportAIDrawer: React.FC<Props> = ({ open, onClose, title, onAsk }) => {
       <Box sx={{ p: 2 }}>
         <Stack spacing={1}>
           <TextField
-            label="Question"
+            label={t('reports.aiDrawer.questionLabel')}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             multiline
@@ -126,10 +128,10 @@ const ReportAIDrawer: React.FC<Props> = ({ open, onClose, title, onAsk }) => {
             {loading ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CircularProgress size={18} color="inherit" />
-                <span>Thinking…</span>
+                <span>{t('reports.aiDrawer.thinking')}</span>
               </Box>
             ) : (
-              'Send'
+              t('reports.aiDrawer.send')
             )}
           </Button>
         </Stack>

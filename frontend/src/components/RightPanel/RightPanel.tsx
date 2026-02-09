@@ -39,7 +39,7 @@ export const RightPanel: React.FC = () => {
           : { width: 420 },
       }}
     >
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box data-tour="rightpanel-container" sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box
           sx={{
             px: 2,
@@ -54,7 +54,7 @@ export const RightPanel: React.FC = () => {
           <Typography variant="subtitle1" sx={{ fontWeight: 800, flex: 1 }}>
             {activeTab?.label ?? t('rightPanel.panelFallback')}
           </Typography>
-          <IconButton aria-label={t('rightPanel.closePanel')} onClick={close}>
+          <IconButton data-tour="rightpanel-toggle" aria-label={t('rightPanel.closePanel')} onClick={close}>
             <CloseIcon />
           </IconButton>
         </Box>
@@ -70,7 +70,12 @@ export const RightPanel: React.FC = () => {
               scrollButtons="auto"
             >
               {tabs.map((t) => (
-                <Tab key={t.id} value={t.id} label={t.label} />
+                <Tab
+                  key={t.id}
+                  value={t.id}
+                  label={t.label}
+                  data-tour={t.id === 'ai-chat' ? 'rightpanel-tab-ai' : undefined}
+                />
               ))}
             </Tabs>
             <Divider />

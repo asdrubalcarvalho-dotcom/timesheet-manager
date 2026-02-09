@@ -27,6 +27,7 @@ import type { TravelSegment } from '../../services/travels';
 import { projectsApi, techniciansApi } from '../../services/api';
 
 import api from '../../services/api';
+import { useTranslation } from 'react-i18next';
 
 interface TravelFormProps {
   open: boolean;
@@ -69,6 +70,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
   const { showSuccess, showError, showInfo, showWarning } = useNotification();
   const { hasAI } = useFeatures();
   const { tenantContext } = useAuth();
+  const { t } = useTranslation();
   const datePickerFormat = useMemo(() => getTenantDatePickerFormat(tenantContext), [tenantContext]);
   const [loading, setLoading] = useState(false);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
@@ -281,12 +283,12 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
   const handleSuggest = async () => {
     // Feature gate: AI must be enabled
     if (!hasAI) {
-      showInfo('AI features are not included in your current plan. Please upgrade to access AI travel suggestions.');
+      showInfo(t('approvals.travels.form.aiNotInPlan'));
       return;
     }
     
     if (!formData.technician_id || !formData.project_id) {
-      showError('Please select technician and project first');
+      showError(t('approvals.travels.form.selectTechnicianProject'));
       return;
     }
 
@@ -305,9 +307,9 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
         destination_location_id: suggestion.destination_location_id?.toString() || prev.destination_location_id,
       }));
 
-      showSuccess('AI suggestion applied');
+      showSuccess(t('approvals.travels.form.aiSuggestionApplied'));
     } catch (error) {
-      showError('Failed to get AI suggestion');
+        showError(t('approvals.travels.form.aiSuggestionFailed'));
     } finally {
       setLoadingSuggestion(false);
     }
@@ -383,12 +385,12 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
         const result = await travelsApi.update(editingTravel.id, payload);
         const saved = extractSavedTravel(result);
         showOverrideWarningIfNeeded(saved, extractWarningMessage(result));
-        showSuccess('Travel segment updated successfully');
+        showSuccess(t('approvals.travels.toast.updated'));
       } else {
         const result = await travelsApi.create(payload);
         const saved = extractSavedTravel(result);
         showOverrideWarningIfNeeded(saved, extractWarningMessage(result));
-        showSuccess('Travel segment created successfully');
+        showSuccess(t('approvals.travels.toast.created'));
       }
 
       onSave();
@@ -399,7 +401,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
         responseData?.message ||
         responseData?.error ||
         (typeof responseData === 'string' ? responseData : null) ||
-        'Failed to save travel segment';
+        t('approvals.travels.errors.saveFailed');
       showError(message);
     } finally {
       setLoading(false);
@@ -409,7 +411,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        {editingTravel ? 'Edit Travel Segment' : 'New Travel Segment'}
+        {editingTravel ? t('approvals.travels.form.editTitle') : t('approvals.travels.form.newTitle')}
       </DialogTitle>
       <DialogContent>
         <Box component="form" onSubmit={handleSubmit} id="travel-form" sx={{ mt: 2 }}>
@@ -425,10 +427,10 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Technician"
+                    label={t('approvals.travels.form.technician')}
                     required
-                    placeholder="Search technicians..."
-                    helperText="Only team members from managed projects"
+                    placeholder={t('approvals.travels.form.technicianPlaceholder')}
+                    helperText={t('approvals.travels.form.technicianHelper')}
                   />
                 )}
                 loading={technicians.length === 0}
@@ -446,9 +448,9 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Project"
+                    label={t('approvals.travels.form.project')}
                     required
-                    placeholder="Search projects..."
+                    placeholder={t('approvals.travels.form.projectPlaceholder')}
                   />
                 )}
                 loading={projects.length === 0}
@@ -457,7 +459,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
 
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Start Date"
+                label={t('approvals.travels.form.startDate')}
                 value={formData.start_at}
                 onChange={(newValue) => setFormData({ ...formData, start_at: newValue })}
                 format={datePickerFormat}
@@ -472,14 +474,14 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
 
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="End Date"
+                label={t('approvals.travels.form.endDate')}
                 value={formData.end_at}
                 onChange={(newValue) => setFormData({ ...formData, end_at: newValue })}
                 format={datePickerFormat}
                 slotProps={{
                   textField: {
                     fullWidth: true,
-                    helperText: formData.status === 'completed' ? 'Required for completed status' : ''
+                    helperText: formData.status === 'completed' ? t('approvals.travels.form.endDateRequired') : ''
                   }
                 }}
               />
@@ -499,7 +501,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                     display: 'inline-block'
                   }}
                 >
-                  ⏱️ Duration: {durationLabel}
+                  {t('approvals.travels.form.durationLabel', { duration: durationLabel })}
                 </Typography>
               </Grid>
             )}
@@ -507,22 +509,22 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
             <Grid item xs={12} sm={6}>
               <TextField
                 select
-                label="Status"
+                label={t('approvals.travels.form.status')}
                 fullWidth
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
               >
-                <MenuItem value="planned">Planned</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="cancelled">Cancelled</MenuItem>
+                <MenuItem value="planned">{t('approvals.travels.statusLabels.planned')}</MenuItem>
+                <MenuItem value="completed">{t('approvals.travels.statusLabels.completed')}</MenuItem>
+                <MenuItem value="cancelled">{t('approvals.travels.statusLabels.cancelled')}</MenuItem>
               </TextField>
             </Grid>
 
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Box sx={{ fontWeight: 600, color: 'text.secondary' }}>Origin</Box>
+                <Box sx={{ fontWeight: 600, color: 'text.secondary' }}>{t('approvals.travels.form.origin')}</Box>
                 {hasAI && (
-                  <Tooltip title="Get AI suggestion">
+                  <Tooltip title={t('approvals.travels.form.aiSuggestion')}>
                     <span>
                       <IconButton
                         size="small"
@@ -554,11 +556,11 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 renderInput={(params) => (
                   <TextField 
                     {...params} 
-                    label="Origin Country" 
+                    label={t('approvals.travels.form.originCountry')}
                     required
                     helperText={
                       !formData.technician_id || !formData.project_id
-                        ? "Select technician and project first"
+                        ? t('approvals.travels.form.selectTechnicianProject')
                         : ""
                     }
                   />
@@ -580,16 +582,20 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Origin Location (Optional)"
-                    placeholder="Select origin location"
-                    helperText={!formData.origin_country ? "Select origin country first" : "From project locations"}
+                    label={t('approvals.travels.form.originLocationOptional')}
+                    placeholder={t('approvals.travels.form.originLocationPlaceholder')}
+                    helperText={
+                      !formData.origin_country
+                        ? t('approvals.travels.form.selectOriginCountryFirst')
+                        : t('approvals.travels.form.projectLocationsOnly')
+                    }
                   />
                 )}
               />
             </Grid>
 
             <Grid item xs={12}>
-              <Box sx={{ fontWeight: 600, color: 'text.secondary', mb: 1 }}>Destination</Box>
+              <Box sx={{ fontWeight: 600, color: 'text.secondary', mb: 1 }}>{t('approvals.travels.form.destination')}</Box>
             </Grid>
 
             <Grid item xs={12} sm={6}>
@@ -608,14 +614,14 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 renderInput={(params) => (
                   <TextField 
                     {...params} 
-                    label="Destination Country" 
+                    label={t('approvals.travels.form.destinationCountry')}
                     required
                     helperText={
                       !formData.origin_country
-                        ? "Select origin country first"
+                        ? t('approvals.travels.form.selectOriginCountryFirst')
                         : formData.origin_country === workerContractCountry
-                        ? "Showing project locations only"
-                        : "Showing all locations"
+                        ? t('approvals.travels.form.projectLocationsOnly')
+                        : t('approvals.travels.form.showingAllLocations')
                     }
                   />
                 )}
@@ -636,14 +642,14 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Destination Location (Optional)"
-                    placeholder="Select destination location"
+                    label={t('approvals.travels.form.destinationLocationOptional')}
+                    placeholder={t('approvals.travels.form.destinationLocationPlaceholder')}
                     helperText={
                       !formData.destination_country
-                        ? "Select destination country first"
+                        ? t('approvals.travels.form.selectDestinationCountryFirst')
                         : formData.origin_country === workerContractCountry
-                        ? "Project locations only"
-                        : "All available locations"
+                        ? t('approvals.travels.form.projectLocationsOnly')
+                        : t('approvals.travels.form.allAvailableLocations')
                     }
                   />
                 )}
@@ -654,7 +660,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button
           type="submit"
@@ -663,7 +669,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ open, onClose, onSave, editingT
           color="primary"
           disabled={loading}
         >
-          {loading ? 'Saving...' : (editingTravel ? 'Update' : 'Save')}
+          {loading ? t('common.saving') : (editingTravel ? t('common.update') : t('common.save'))}
         </Button>
       </DialogActions>
     </Dialog>

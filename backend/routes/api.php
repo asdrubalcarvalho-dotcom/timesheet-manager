@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TravelSegmentController;
 use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\Api\AiApprovalsController;
+use App\Http\Controllers\Api\AiTimesheetController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\PublicContactController;
 use App\Http\Controllers\CountryController;
@@ -177,21 +178,27 @@ Route::middleware(['tenant.initialize', 'tenant.set-context'])->group(function (
             Route::post('ai/approvals/query', [AiApprovalsController::class, 'query'])
                 ->middleware(['permission:approve-timesheets|approve-expenses', 'throttle:read']);
 
-    // Access management routes for admin UI
-    Route::prefix('access')->group(function () {
-        Route::get('users', [\App\Http\Controllers\AccessManagerController::class, 'listUsers'])->middleware('throttle:read');
-        Route::get('roles', [\App\Http\Controllers\AccessManagerController::class, 'listRoles'])->middleware('throttle:read');
-        Route::get('permissions', [\App\Http\Controllers\AccessManagerController::class, 'indexPermissions'])->middleware('throttle:read');
-        Route::post('users/{user}/assign-role', [\App\Http\Controllers\AccessManagerController::class, 'assignRole'])->middleware('throttle:edit');
-        Route::post('users/{user}/remove-role', [\App\Http\Controllers\AccessManagerController::class, 'removeRole'])->middleware('throttle:edit');
-        Route::post('users/{user}/assign-permission', [\App\Http\Controllers\AccessManagerController::class, 'assignPermission'])->middleware('throttle:edit');
-        Route::post('users/{user}/remove-permission', [\App\Http\Controllers\AccessManagerController::class, 'removePermission'])->middleware('throttle:edit');
+            // AI Timesheet Builder
+            Route::post('ai/timesheet/preview', [AiTimesheetController::class, 'preview'])
+                ->middleware(['permission:create-timesheets', 'throttle:ai-read']);
+            Route::post('ai/timesheet/commit', [AiTimesheetController::class, 'commit'])
+                ->middleware(['permission:create-timesheets', 'throttle:create']);
 
-        // Role-permission management endpoints for matrix UI
-        Route::get('roles/{role}/permissions', [\App\Http\Controllers\AccessManagerController::class, 'getRolePermissions'])->middleware('throttle:read');
-        Route::post('roles/{role}/assign-permission', [\App\Http\Controllers\AccessManagerController::class, 'assignPermissionToRole'])->middleware('throttle:edit');
-        Route::post('roles/{role}/remove-permission', [\App\Http\Controllers\AccessManagerController::class, 'removePermissionFromRole'])->middleware('throttle:edit');
-    });
+            // Access management routes for admin UI
+            Route::prefix('access')->group(function () {
+                Route::get('users', [\App\Http\Controllers\AccessManagerController::class, 'listUsers'])->middleware('throttle:read');
+                Route::get('roles', [\App\Http\Controllers\AccessManagerController::class, 'listRoles'])->middleware('throttle:read');
+                Route::get('permissions', [\App\Http\Controllers\AccessManagerController::class, 'indexPermissions'])->middleware('throttle:read');
+                Route::post('users/{user}/assign-role', [\App\Http\Controllers\AccessManagerController::class, 'assignRole'])->middleware('throttle:edit');
+                Route::post('users/{user}/remove-role', [\App\Http\Controllers\AccessManagerController::class, 'removeRole'])->middleware('throttle:edit');
+                Route::post('users/{user}/assign-permission', [\App\Http\Controllers\AccessManagerController::class, 'assignPermission'])->middleware('throttle:edit');
+                Route::post('users/{user}/remove-permission', [\App\Http\Controllers\AccessManagerController::class, 'removePermission'])->middleware('throttle:edit');
+
+                // Role-permission management endpoints for matrix UI
+                Route::get('roles/{role}/permissions', [\App\Http\Controllers\AccessManagerController::class, 'getRolePermissions'])->middleware('throttle:read');
+                Route::post('roles/{role}/assign-permission', [\App\Http\Controllers\AccessManagerController::class, 'assignPermissionToRole'])->middleware('throttle:edit');
+                Route::post('roles/{role}/remove-permission', [\App\Http\Controllers\AccessManagerController::class, 'removePermissionFromRole'])->middleware('throttle:edit');
+            });
 
     // Technicians - List visible technicians (all authenticated users)
     Route::get('technicians', [TechnicianController::class, 'index'])->middleware('throttle:read');

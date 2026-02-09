@@ -35,9 +35,9 @@ The system allows:
 
 ### Demo Credentials
 ```
-Email: admin@testcompany.test
 Tenant: test-company
-Password: admin123
+Email: admin@testcompany.test
+Password: (set by seeder for local/demo; do not store in git)
 ```
 
 **Frontend Login**: Click "Owner" demo button on login page
@@ -128,8 +128,8 @@ More details: [docs/DATABASE_PERMISSIONS.md](docs/DATABASE_PERMISSIONS.md)
 ```
 Tenant: test-company
 Email: admin@testcompany.test
-Password: admin123
-⚠️ Change password in production!
+Password: (set by seeder for local/demo; do not store in git)
+Production: set your own strong password
 ```
 
 **Note**: Use "Owner" demo button on login page for quick access.
@@ -235,8 +235,9 @@ docker-compose exec app php artisan migrate --seed
 docker-compose exec app php artisan tenants:create
 
 # 5. Access the application
-# Frontend: http://app.localhost:8082
+# Frontend (recommended): http://app.localhost:8082
 # API: http://api.localhost
+# Alternative (if you run Vite directly): http://localhost:3000
 ```
 
 ### Common Commands
@@ -251,9 +252,10 @@ docker-compose exec app php artisan db:setup-permissions --force
 # Create tenant database
 docker-compose exec app php artisan tenants:migrate <tenant-slug>
 
-# Rebuild containers after code changes (IMPORTANT!)
-docker-compose down -v && docker-compose up -d --build
+# Rebuild containers (keeps volumes)
+docker-compose up -d --build
 ```
+For cache/file-sync issues and full resets (down -v), see docs/COPILOT_PLAYBOOK.md.
 
 ---
 
@@ -729,67 +731,25 @@ Development Notes
 	•	Prefer async/await and React Query for data fetching.
 	•	Approved records must be blocked server-side (Policy/Middleware) and disabled in the UI.
 
-## ✅ Timesheets day-uniqueness rule (do not change)
-
-We **allow multiple timesheet entries on the same day** for the same technician and project **as long as time ranges do not overlap**.
-
-**Do not** add (or reintroduce) a database unique index on:
-- `(technician_id, project_id, date)`
-
-The system enforces correctness like this:
-- **App-level validation**: blocks **overlapping** time ranges for the same technician on the same date.
-- **DB-level protection**: keeps only the “no exact duplicates” unique index (technician_id + date + start_time + end_time) to prevent accidental duplicate submits.
-
-If an existing tenant database still has the unique index `timesheets_technician_id_project_id_date_unique`, remove it via a **tenant migration** (not a central migration).
-
-CI
-
-GitHub Actions workflow at .github/workflows/build.yml:
-	•	Backend: Composer install, key generate, PHPUnit (if present)
-	•	Frontend: Node 20, npm ci, npm run build
-
 ---
 
 ## 📚 Documentation
 
 ### User Guides
-- **[Admin Panel Guide](docs/ADMIN_PANEL_GUIDE.md)** - User-facing documentation for administration features
-- **[Admin Panel Implementation](docs/ADMIN_PANEL_IMPLEMENTATION.md)** - Technical implementation guide
+- **Admin Panel Guide**: `docs/ADMIN_PANEL_GUIDE.md`
+- **Admin Panel Implementation**: `docs/ADMIN_PANEL_IMPLEMENTATION.md`
 
 ### Developer Guides
-- **[Development Guidelines](docs/DEVELOPMENT_GUIDELINES.md)** - Coding standards and best practices
-- **[Developer Guide](README_DEV_GUIDE.md)** - Human developer guide with extension patterns
-- **[AI Developer Guide](docs/ai/README_DEV_GUIDE_AI.md)** - Concise AI agent operational guide
-
-### Architecture & Context
-- **[AI Context](docs/ai/ai_context.json)** - Machine-readable context for automated agents
-- **[Technical Specifications](docs/ai/TECHNICAL_SPECIFICATIONS.md)** - Detailed technical documentation
+- **Development Guidelines**: `docs/DEVELOPMENT_GUIDELINES.md`
+- **AI Context**: `docs/ai/ai_context.json`
+- **AI/Agent Playbook**: `docs/COPILOT_PLAYBOOK.md`
 
 ### Multi-Tenancy
-- **[Database Permissions](docs/DATABASE_PERMISSIONS.md)** - ⚠️ **CRITICAL** Setup guide for multi-tenant database permissions (recurring issue)
-- **[Multi-Database Tenancy Fixes](docs/MULTI_DATABASE_TENANCY_FIXES.md)** - ✅ **NEW** Critical fixes for multi-DB tenancy (3/3 tests passing)
-- **[Local Tenancy](docs/local_tenancy.md)** - Header/query-based tenant resolution for local development
-
-### Change Logs
-- **[Improvements Log](IMPROVEMENTS_LOG.md)** - Portuguese changelog
-- **[Implemented Improvements](docs/IMPLEMENTED_IMPROVEMENTS.md)** - Complete feature log in English
+- **Database Permissions**: `docs/DATABASE_PERMISSIONS.md`
+- **Local Tenancy**: `docs/local_tenancy.md`
 
 ---
 
 ## License
 
 MIT
-
----
-
-## That’s it
-- Files **updated**:  
-  - `.copilot/config.yml`  
-  - `.copilot/hooks/post-run.sh`  
-  - `/docs/ai/ai_context.json`  
-  - `README.md`  
-
-- File **added**:  
-  - `.github/workflows/build.yml`  
-
-All other scripts/hooks/logs we created earlier can remain as-is. If you want, I can also generate **starter stubs** (migrations, models, controllers, minimal React pages) to paste in immediately.

@@ -17,9 +17,10 @@ type Props = {
   sx?: SxProps<Theme>;
   ariaLabel?: { open: string; close: string };
   onClick?: () => void;
+  dataTour?: string;
 };
 
-export const RightPanelTrigger: React.FC<Props> = ({ tabId, tooltip, icon, badge, sx, ariaLabel, onClick }) => {
+export const RightPanelTrigger: React.FC<Props> = ({ tabId, tooltip, icon, badge, sx, ariaLabel, onClick, dataTour }) => {
   const theme = useTheme();
   const { isOpen, activeTabId, toggle } = useRightPanel();
 
@@ -72,6 +73,7 @@ export const RightPanelTrigger: React.FC<Props> = ({ tabId, tooltip, icon, badge
     >
       <Tooltip title={tooltip} placement="left">
         <IconButton
+          data-tour={dataTour}
           aria-label={openForThisTab ? (ariaLabel?.close ?? `Close ${tooltip}`) : (ariaLabel?.open ?? `Open ${tooltip}`)}
           onClick={() => (onClick ? onClick() : toggle(tabId))}
           sx={{

@@ -81,6 +81,12 @@ Route::middleware([
             ->middleware(['permission:approve-timesheets', 'throttle:critical']);
         Route::post('/timesheets/{timesheet}/close', [App\Http\Controllers\Api\TimesheetController::class, 'close'])
             ->middleware(['permission:close-timesheets', 'throttle:critical']);
+        // @deprecated use /api/ai/timesheet/preview instead.
+        Route::post('/timesheets/ai/preview', [App\Http\Controllers\Api\AiTimesheetController::class, 'preview'])
+            ->middleware(['throttle:read']);
+        // @deprecated use /api/ai/timesheet/commit instead.
+        Route::post('/timesheets/ai/apply', [App\Http\Controllers\Api\AiTimesheetController::class, 'apply'])
+            ->middleware(['throttle:create']);
 
         // Expenses
         Route::apiResource('expenses', App\Http\Controllers\Api\ExpenseController::class);

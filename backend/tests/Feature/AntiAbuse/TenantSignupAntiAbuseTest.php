@@ -34,6 +34,7 @@ class TenantSignupAntiAbuseTest extends TestCase
                 'admin_password' => 'password123',
                 'admin_password_confirmation' => 'password123',
                 'timezone' => 'UTC',
+                'legal_accepted' => true,
             ]);
 
         $response->assertStatus(422);
@@ -86,6 +87,7 @@ class TenantSignupAntiAbuseTest extends TestCase
             'admin_password' => 'password123',
             'admin_password_confirmation' => 'password123',
             'timezone' => 'UTC',
+            'legal_accepted' => true,
         ]);
 
         $response->assertOk();
@@ -117,6 +119,7 @@ class TenantSignupAntiAbuseTest extends TestCase
                     'admin_password' => 'password123',
                     'admin_password_confirmation' => 'password123',
                     'timezone' => 'UTC',
+                    'legal_accepted' => true,
                 ]);
 
             $response->assertOk();
@@ -135,6 +138,7 @@ class TenantSignupAntiAbuseTest extends TestCase
                 'admin_password' => 'password123',
                 'admin_password_confirmation' => 'password123',
                 'timezone' => 'UTC',
+                'legal_accepted' => true,
             ]);
 
         $sixth->assertStatus(429);

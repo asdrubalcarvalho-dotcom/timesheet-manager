@@ -133,6 +133,40 @@ export interface ProjectMember {
   };
 }
 
+export type AiTimesheetIntentRangeType = 'absolute' | 'relative';
+
+export type AiTimesheetIntentRelativeValue =
+  | 'this_week'
+  | 'last_week'
+  | 'next_week'
+  | 'last_n_workdays';
+
+export interface AiTimesheetIntentDateRange {
+  type: AiTimesheetIntentRangeType;
+  from?: string;
+  to?: string;
+  value?: AiTimesheetIntentRelativeValue;
+  count?: number;
+}
+
+export interface AiTimesheetIntentScheduleBlock {
+  from: string;
+  to: string;
+}
+
+export interface AiTimesheetIntent {
+  intent: string;
+  date_range?: AiTimesheetIntentDateRange;
+  schedule?: AiTimesheetIntentScheduleBlock[];
+  breaks?: AiTimesheetIntentScheduleBlock[];
+  project?: string;
+  task?: string;
+  description?: string;
+  location?: string;
+  notes?: string;
+  missing_fields: string[];
+}
+
 export interface Timesheet {
   id: number;
   technician_id: number;
@@ -155,6 +189,51 @@ export interface Timesheet {
   ai_flagged?: boolean;
   ai_score?: number | null;
   ai_feedback?: string[] | null;
+}
+
+export interface AiTimesheetPlanWorkBlock {
+  start_time: string | null;
+  end_time: string | null;
+  project: { id: number | null; name: string | null };
+  task: { id: number | null; name: string | null };
+  location: { id: number | null; name: string | null };
+  notes?: string | null;
+}
+
+export interface AiTimesheetPlanBreak {
+  start_time: string | null;
+  end_time: string | null;
+}
+
+export interface AiTimesheetPlanDay {
+  date: string;
+  work_blocks: AiTimesheetPlanWorkBlock[];
+  breaks: AiTimesheetPlanBreak[];
+}
+
+export interface AiTimesheetPlan {
+  range: { start_date: string | null; end_date: string | null };
+  timezone?: string | null;
+  days: AiTimesheetPlanDay[];
+}
+
+export interface AiTimesheetTotals {
+  overall_minutes: number;
+  overall_hours: number;
+  per_day: Record<string, { minutes: number; hours: number }>;
+}
+
+export interface AiTimesheetPreviewResponse {
+  plan: AiTimesheetPlan;
+  warnings: string[];
+}
+
+export interface AiTimesheetApplyResponse {
+  created_ids: number[];
+  summary: {
+    created_count: number;
+    totals?: AiTimesheetTotals | null;
+  };
 }
 
 export type TimesheetOverlapRisk = 'ok' | 'warning' | 'block';

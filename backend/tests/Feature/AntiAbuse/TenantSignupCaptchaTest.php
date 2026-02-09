@@ -41,6 +41,7 @@ class TenantSignupCaptchaTest extends TestCase
             'admin_password' => 'password123',
             'admin_password_confirmation' => 'password123',
             'timezone' => 'UTC',
+            'legal_accepted' => true,
         ]);
 
         $response->assertStatus(422);
@@ -73,6 +74,7 @@ class TenantSignupCaptchaTest extends TestCase
             'admin_password_confirmation' => 'password123',
             'timezone' => 'UTC',
             'captcha_token' => 'test-token',
+            'legal_accepted' => true,
         ]);
 
         $response->assertOk();

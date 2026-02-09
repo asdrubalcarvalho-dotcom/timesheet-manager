@@ -42,13 +42,16 @@ import PageHeader from '../Common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { getPolicyAlertModel } from '../../utils/policyAlert';
 import { formatTenantDate, formatTenantMoney, formatTenantNumber } from '../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
   const { user, tenantContext } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStatistics | null>(null);
 
   const policyAlert = React.useMemo(() => getPolicyAlertModel(tenantContext), [tenantContext]);
@@ -68,7 +71,8 @@ const Dashboard: React.FC = () => {
   const loadStatistics = async () => {
     try {
       setLoading(true);
-      setError('');
+      setErrorMessage(null);
+      setErrorKey(null);
       const data = await dashboardApi.getStatistics({
         date_from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         date_to: new Date().toISOString().split('T')[0]
@@ -76,7 +80,14 @@ const Dashboard: React.FC = () => {
       setStats(data);
     } catch (err: any) {
       console.error('Error loading dashboard statistics:', err);
-      setError(err.response?.data?.message || 'Failed to load dashboard statistics');
+      const backendMessage = err?.response?.data?.message;
+      if (typeof backendMessage === 'string' && backendMessage.trim().length > 0) {
+        setErrorMessage(backendMessage);
+        setErrorKey(null);
+      } else {
+        setErrorMessage(null);
+        setErrorKey('dashboard.errors.loadFailed');
+      }
     } finally {
       setLoading(false);
     }
@@ -121,10 +132,10 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (errorMessage || errorKey) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error">{errorMessage ?? t(errorKey!)}</Alert>
       </Box>
     );
   }
@@ -132,7 +143,7 @@ const Dashboard: React.FC = () => {
   if (!stats) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="info">No data available</Alert>
+        <Alert severity="info">{t('dashboard.noData')}</Alert>
       </Box>
     );
   }
@@ -140,8 +151,11 @@ const Dashboard: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <PageHeader
-        title="Dashboard"
-        subtitle={`Welcome back, ${user?.name || 'User'}! Here's your overview for the last 30 days.`}
+        title={t('dashboard.title')}
+        subtitle={t('dashboard.subtitle', {
+          name: user?.name || t('dashboard.userFallback'),
+          days: 30
+        })}
       />
 
       {policyAlert && (
@@ -177,7 +191,7 @@ const Dashboard: React.FC = () => {
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                     {formatTenantNumber(stats.summary.total_hours, tenantContext, 1)}
                   </Typography>
-                  <Typography variant="body2">Total Hours</Typography>
+                  <Typography variant="body2">{t('dashboard.cards.totalHours')}</Typography>
                 </Box>
               </Box>
             </CardContent>
@@ -198,7 +212,7 @@ const Dashboard: React.FC = () => {
                   <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                     {formatTenantMoney(stats.summary.total_expenses, tenantContext)}
                   </Typography>
-                  <Typography variant="body2">Total Expenses</Typography>
+                  <Typography variant="body2">{t('dashboard.cards.totalExpenses')}</Typography>
                 </Box>
               </Box>
             </CardContent>
@@ -220,7 +234,10 @@ const Dashboard: React.FC = () => {
                     {formatTenantNumber(stats.summary.pending_timesheets + stats.summary.pending_expenses, tenantContext, 0)}
                   </Typography>
                   <Typography variant="body2">
-                    Pending ({formatTenantNumber(stats.summary.pending_timesheets, tenantContext, 0)}T + {formatTenantNumber(stats.summary.pending_expenses, tenantContext, 0)}E)
+                    {t('dashboard.cards.pendingDetail', {
+                      timesheets: formatTenantNumber(stats.summary.pending_timesheets, tenantContext, 0),
+                      expenses: formatTenantNumber(stats.summary.pending_expenses, tenantContext, 0)
+                    })}
                   </Typography>
                 </Box>
               </Box>
@@ -243,7 +260,10 @@ const Dashboard: React.FC = () => {
                     {formatTenantNumber(stats.summary.approved_timesheets + stats.summary.approved_expenses, tenantContext, 0)}
                   </Typography>
                   <Typography variant="body2">
-                    Approved ({formatTenantNumber(stats.summary.approved_timesheets, tenantContext, 0)}T + {formatTenantNumber(stats.summary.approved_expenses, tenantContext, 0)}E)
+                    {t('dashboard.cards.approvedDetail', {
+                      timesheets: formatTenantNumber(stats.summary.approved_timesheets, tenantContext, 0),
+                      expenses: formatTenantNumber(stats.summary.approved_expenses, tenantContext, 0)
+                    })}
                   </Typography>
                 </Box>
               </Box>
@@ -259,7 +279,7 @@ const Dashboard: React.FC = () => {
           <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
               <TrendingUp sx={{ mr: 1 }} />
-              Hours by Project
+              {t('dashboard.charts.hoursByProject')}
             </Typography>
             {stats.hours_by_project.length > 0 ? (
             <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -284,7 +304,9 @@ const Dashboard: React.FC = () => {
                             {payload[0].payload.project_name}
                           </Typography>
                           <Typography variant="body2" color="primary">
-                            Hours: {formatTenantNumber(Number(payload[0].value), tenantContext, 1)}
+                            {t('dashboard.tooltips.hours', {
+                              value: formatTenantNumber(Number(payload[0].value), tenantContext, 1)
+                            })}
                           </Typography>
                         </Paper>
                       );
@@ -293,13 +315,13 @@ const Dashboard: React.FC = () => {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="total_hours" fill={COLORS.primary} name="Hours" />
+                <Bar dataKey="total_hours" fill={COLORS.primary} name={t('dashboard.legends.hours')} />
               </BarChart>
             </ResponsiveContainer>
             </Box>
             ) : (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No data available</Typography>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
               </Box>
             )}
           </Paper>
@@ -310,7 +332,7 @@ const Dashboard: React.FC = () => {
           <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
               <AttachMoney sx={{ mr: 1 }} />
-              Expenses by Project
+              {t('dashboard.charts.expensesByProject')}
             </Typography>
             {stats.expenses_by_project.length > 0 ? (
             <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -335,7 +357,9 @@ const Dashboard: React.FC = () => {
                             {payload[0].payload.project_name}
                           </Typography>
                           <Typography variant="body2" color="success.main">
-                            Amount: {formatTenantMoney(Number(payload[0].value), tenantContext)}
+                            {t('dashboard.tooltips.amount', {
+                              value: formatTenantMoney(Number(payload[0].value), tenantContext)
+                            })}
                           </Typography>
                         </Paper>
                       );
@@ -344,13 +368,13 @@ const Dashboard: React.FC = () => {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="total_amount" fill={COLORS.success} name="Amount" />
+                <Bar dataKey="total_amount" fill={COLORS.success} name={t('dashboard.legends.amount')} />
               </BarChart>
             </ResponsiveContainer>
             </Box>
             ) : (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No data available</Typography>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
               </Box>
             )}
           </Paper>
@@ -363,7 +387,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              Timesheets by Status
+              {t('dashboard.charts.timesheetsByStatus')}
             </Typography>
             {stats.hours_by_status.length > 0 ? (
             <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -394,7 +418,7 @@ const Dashboard: React.FC = () => {
             </Box>
             ) : (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No data available</Typography>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
               </Box>
             )}
           </Paper>
@@ -404,7 +428,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              Expenses by Status
+              {t('dashboard.charts.expensesByStatus')}
             </Typography>
             {stats.expenses_by_status.length > 0 ? (
             <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -435,7 +459,7 @@ const Dashboard: React.FC = () => {
             </Box>
             ) : (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No data available</Typography>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
               </Box>
             )}
           </Paper>
@@ -448,7 +472,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              Daily Hours Trend
+              {t('dashboard.charts.dailyHoursTrend')}
             </Typography>
             {stats.daily_hours.length > 0 ? (
             <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -465,7 +489,12 @@ const Dashboard: React.FC = () => {
                 <YAxis />
                 <Tooltip 
                   labelFormatter={(value) => formatChartDate(String(value))}
-                  formatter={(value) => [`${formatTenantNumber(Number(value), tenantContext, 1)} hours`, 'Hours']}
+                  formatter={(value) => [
+                    t('dashboard.tooltips.hoursValue', {
+                      value: formatTenantNumber(Number(value), tenantContext, 1)
+                    }),
+                    t('dashboard.legends.hours')
+                  ]}
                 />
                 <Legend />
                 <Line 
@@ -473,7 +502,7 @@ const Dashboard: React.FC = () => {
                   dataKey="hours" 
                   stroke={COLORS.primary} 
                   strokeWidth={2}
-                  name="Hours"
+                  name={t('dashboard.legends.hours')}
                   dot={{ fill: COLORS.primary }}
                 />
               </LineChart>
@@ -481,7 +510,7 @@ const Dashboard: React.FC = () => {
             </Box>
             ) : (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No data available</Typography>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
               </Box>
             )}
           </Paper>
@@ -491,7 +520,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              Daily Expenses Trend
+              {t('dashboard.charts.dailyExpensesTrend')}
             </Typography>
             {stats.daily_expenses.length > 0 ? (
             <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -508,7 +537,10 @@ const Dashboard: React.FC = () => {
                 <YAxis />
                 <Tooltip 
                   labelFormatter={(value) => formatChartDate(String(value))}
-                  formatter={(value) => [formatTenantMoney(Number(value), tenantContext), 'Amount']}
+                  formatter={(value) => [
+                    formatTenantMoney(Number(value), tenantContext),
+                    t('dashboard.legends.amount')
+                  ]}
                 />
                 <Legend />
                 <Line 
@@ -516,7 +548,7 @@ const Dashboard: React.FC = () => {
                   dataKey="amount" 
                   stroke={COLORS.success} 
                   strokeWidth={2}
-                  name="Amount"
+                  name={t('dashboard.legends.amount')}
                   dot={{ fill: COLORS.success }}
                 />
               </LineChart>
@@ -524,7 +556,7 @@ const Dashboard: React.FC = () => {
             </Box>
             ) : (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No data available</Typography>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
               </Box>
             )}
           </Paper>

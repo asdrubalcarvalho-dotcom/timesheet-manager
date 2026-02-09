@@ -7,10 +7,12 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/en';
+import 'dayjs/locale/en-gb';
 import 'dayjs/locale/pt';
 import 'dayjs/locale/es';
 import 'dayjs/locale/fr';
 import 'dayjs/locale/de';
+import { useTranslation } from 'react-i18next';
 
 import { getTenantUiLocale } from './utils/tenantFormatting';
 
@@ -28,6 +30,7 @@ import { GlobalRightPanelTabs } from './components/RightPanel/GlobalRightPanelTa
 import { RightPanel } from './components/RightPanel/RightPanel';
 import { useRightPanel } from './components/RightPanel/useRightPanel';
 import { useRightPanelEntrypoint } from './components/RightPanel/useRightPanelEntrypoint';
+import { TourController } from './components/Common/Tour/TourController';
 import { LoginForm } from './components/Auth/LoginForm';
 import TenantRegistration from './components/Auth/TenantRegistration';
 import VerifyEmail from './components/Auth/VerifyEmail';
@@ -73,6 +76,7 @@ const PaymentMethodsPage = React.lazy(() => import('./pages/Billing/PaymentMetho
 const TimesheetPivotReport = React.lazy(() => import('./components/Timesheets/TimesheetPivotReport'));
 const ApprovalHeatmapReport = React.lazy(() => import('./components/Approvals/ApprovalHeatmapReport'));
 const ExpensesAnalysisReport = React.lazy(() => import('./components/Reports/Expenses/ExpensesAnalysisReport'));
+const AiTimesheetBuilder = React.lazy(() => import('./pages/AiTimesheetBuilder'));
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -105,7 +109,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
+type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'ai-timesheet-builder' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -118,6 +122,7 @@ const pageToPath: Record<Page, string> = {
   approvals: '/approvals',
   dashboard: '/dashboard',
   'ai-insights': '/ai-insights',
+  'ai-timesheet-builder': '/timesheets/ai-builder',
   team: '/team',
   planning: '/planning',
   'planning-locations': '/planning/locations',
@@ -178,6 +183,7 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const { open: openRightPanel } = useRightPanel();
   const { hasFloatingTrigger } = useRightPanelEntrypoint();
+  const { t } = useTranslation();
 
   const hasStoredSession = (() => {
     try {
@@ -215,8 +221,8 @@ const AppContent: React.FC = () => {
     if (!user) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="h5">Management Portal</Typography>
-          <Typography variant="body2" color="text.secondary">Please authenticate to continue</Typography>
+          <Typography variant="h5">{t('superAdmin.portalTitle')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('superAdmin.portalPrompt')}</Typography>
           <LoginForm />
         </Box>
       );
@@ -249,7 +255,7 @@ const AppContent: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 2 }}>
           <CircularProgress size={32} />
           <Typography variant="body2" color="text.secondary">
-            Signing you in...
+            {t('auth.login.signingIn')}
           </Typography>
         </Box>
       );
@@ -259,7 +265,7 @@ const AppContent: React.FC = () => {
     if (currentPage === 'legal-terms' || currentPage === 'legal-privacy' || currentPage === 'legal-acceptable-use') {
       return (
         <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
-          <Suspense fallback={<ModuleLoader label="Loading..." />}>
+          <Suspense fallback={<ModuleLoader label={t('common.loading')} />}>
             {renderPublicPage()}
           </Suspense>
         </Box>
@@ -310,11 +316,17 @@ const AppContent: React.FC = () => {
             <AIInsights />
           </RequireFeature>
         );
+      case 'ai-timesheet-builder':
+        return (
+          <RequireFeature feature="ai">
+            <AiTimesheetBuilder />
+          </RequireFeature>
+        );
       case 'team':
         return (
           <Box sx={{ p: 3 }}>
-            <h1>👥 Team</h1>
-            <p>Team management coming soon...</p>
+            <h1>{t('team.title')}</h1>
+            <p>{t('team.comingSoon')}</p>
           </Box>
         );
       case 'planning':
@@ -375,6 +387,11 @@ const AppContent: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <TourController />
+      <Box
+        data-tour="rightpanel-anchor"
+        sx={{ position: 'fixed', right: 24, top: 96, width: 1, height: 1, pointerEvents: 'none' }}
+      />
       <SideMenu 
         currentPage={currentPage} 
         onPageChange={handlePageChange} 
@@ -398,7 +415,7 @@ const AppContent: React.FC = () => {
               onClick={() => openRightPanel('help')}
               sx={{ textTransform: 'none' }}
             >
-              Help / AI
+              {t('rightPanel.openButton')}
             </Button>
           </Box>
         ) : null}
@@ -408,11 +425,11 @@ const AppContent: React.FC = () => {
             sx={{ mb: 2 }}
             action={
               <Button color="inherit" size="small" onClick={() => navigate('/billing')}>
-                Upgrade
+                {t('billing.readOnly.upgrade')}
               </Button>
             }
           >
-            Your subscription has expired. You are in read-only mode.
+            {t('billing.readOnly.expired')}
           </Alert>
         )}
         <Suspense fallback={<ModuleLoader />}>

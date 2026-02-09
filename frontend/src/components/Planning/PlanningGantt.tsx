@@ -111,6 +111,8 @@ import { useTenantGuard } from '../../hooks/useTenantGuard';
 import TaskLocationsDialog from '../Common/TaskLocationsDialog';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate } from '../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 interface Project {
   id: number;
@@ -234,18 +236,54 @@ const ensureDhtmlxGanttAssets = (): Promise<void> => {
   return dhtmlxLoader;
 };
 
+const buildLocaleDateNames = (language: string): {
+  month_full: string[];
+  month_short: string[];
+  day_full: string[];
+  day_short: string[];
+} => {
+  const safeLanguage = typeof language === 'string' && language.trim() ? language : 'en-US';
+
+  const monthFullFmt = new Intl.DateTimeFormat(safeLanguage, { month: 'long' });
+  const monthShortFmt = new Intl.DateTimeFormat(safeLanguage, { month: 'short' });
+  const dayFullFmt = new Intl.DateTimeFormat(safeLanguage, { weekday: 'long' });
+  const dayShortFmt = new Intl.DateTimeFormat(safeLanguage, { weekday: 'short' });
+
+  // Use a stable year; month names are derived from month index.
+  const month_full = Array.from({ length: 12 }, (_v, idx) => monthFullFmt.format(new Date(2020, idx, 1)));
+  const month_short = Array.from({ length: 12 }, (_v, idx) => monthShortFmt.format(new Date(2020, idx, 1)));
+
+  // DHTMLX expects Sunday-first day arrays.
+  const baseSunday = new Date(2020, 7, 2); // 2020-08-02 is Sunday
+  const day_full = Array.from({ length: 7 }, (_v, idx) => dayFullFmt.format(new Date(baseSunday.getTime() + idx * 86400000)));
+  const day_short = Array.from({ length: 7 }, (_v, idx) => dayShortFmt.format(new Date(baseSunday.getTime() + idx * 86400000)));
+
+  return { month_full, month_short, day_full, day_short };
+};
+
+const applyDhtmlxLocale = (gantt: any, language: string): void => {
+  if (!gantt) return;
+  const dateNames = buildLocaleDateNames(language);
+  gantt.locale = gantt.locale || {};
+  gantt.locale.date = { ...(gantt.locale.date || {}), ...dateNames };
+};
+
 const buildColumns = (
   visibleColumns: VisibleColumnsState,
   planningView: 'projects' | 'locations' = 'projects',
   resolveProjectName?: (projectId: number) => string,
-  formatGridDate?: (value: unknown) => string
+  formatGridDate?: (value: unknown) => string,
+  t?: TFunction
 ) => {
   const cols: any[] = [];
 
   if (visibleColumns.text) {
     cols.push({
       name: 'text',
-      label: planningView === 'locations' ? 'Location' : 'Task',
+      label:
+        planningView === 'locations'
+          ? (t?.('planning.gantt.columns.location', { defaultValue: 'Location' }) ?? 'Location')
+          : (t?.('planning.gantt.columns.task', { defaultValue: 'Task' }) ?? 'Task'),
       width: 220,
       tree: true,
     });
@@ -255,7 +293,7 @@ const buildColumns = (
   if (visibleColumns.project_name) {
     cols.push({
       name: 'project_name',
-      label: 'Project',
+      label: t?.('planning.gantt.columns.project', { defaultValue: 'Project' }) ?? 'Project',
       width: 160,
       align: 'left',
       template: (task: any) => {
@@ -286,7 +324,7 @@ const buildColumns = (
   if (visibleColumns.start_date) {
     cols.push({
       name: 'start_date',
-      label: 'Start',
+      label: t?.('planning.gantt.columns.start', { defaultValue: 'Start' }) ?? 'Start',
       width: 100,
       align: 'center',
       template: (task: any) => {
@@ -299,7 +337,7 @@ const buildColumns = (
   if (visibleColumns.end_date) {
     cols.push({
       name: 'end_date',
-      label: 'End',
+      label: t?.('planning.gantt.columns.end', { defaultValue: 'End' }) ?? 'End',
       width: 100,
       align: 'center',
       template: (task: any) => {
@@ -312,7 +350,7 @@ const buildColumns = (
   if (visibleColumns.progress) {
     cols.push({
       name: 'progress',
-      label: 'Progress',
+      label: t?.('planning.gantt.columns.progress', { defaultValue: 'Progress' }) ?? 'Progress',
       width: 80,
       align: 'center',
       template: (task: any) => {
@@ -394,6 +432,7 @@ interface PlanningGanttProps {
 }
 
 const PlanningGantt: React.FC<PlanningGanttProps> = ({ initialView = 'projects' }) => {
+  const { t, i18n } = useTranslation();
   useTenantGuard();
   const { hasPermission, tenantContext } = useAuth();
   const canCreatePlanning = hasPermission('create-planning');
@@ -491,6 +530,20 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
         setError('Failed to load Gantt library. Please refresh the page.');
       });
   }, []);
+
+  // Keep DHTMLX locale in sync with the UI language.
+  useEffect(() => {
+    if (!window.gantt) return;
+    try {
+      applyDhtmlxLocale(window.gantt, i18n.language);
+      if (ganttInitialized) {
+        applyScaleInternal(window.gantt, viewMode, t);
+      }
+      window.gantt.render();
+    } catch {
+      // no-op
+    }
+  }, [i18n.language, ganttInitialized, viewMode, t]);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -697,7 +750,9 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
           gantt.config.show_progress = true;
           gantt.config.row_height = 34;
 
-          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, planningView, resolveProjectName, formatGridDate);
+          applyDhtmlxLocale(gantt, i18n.language);
+
+          gantt.config.columns = buildColumns(DEFAULT_VISIBLE_COLUMNS, planningView, resolveProjectName, formatGridDate, t);
 
           gantt.templates.tooltip_date_format = (date: Date) => {
             const ymd = dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DD') : '';
@@ -754,21 +809,26 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
 
           gantt.templates.tooltip_text = (start: Date, end: Date, task: any) => {
             if (task.type === 'project') {
-              return `<b>${task.text}</b><br/><i>Project Group</i>`;
+              return `<b>${task.text}</b>`;
             }
+            const projectLabel = t('planning.gantt.columns.project', { defaultValue: 'Project' });
+            const startLabel = t('planning.gantt.columns.start', { defaultValue: 'Start' });
+            const endLabel = t('planning.gantt.columns.end', { defaultValue: 'End' });
+            const progressLabel = t('planning.gantt.columns.progress', { defaultValue: 'Progress' });
+            const na = t('common.na', { defaultValue: 'N/A' });
             return `
               <b>${task.text}</b><br/>
-              <b>Project:</b> ${task.project_name || 'N/A'}<br/>
-              <b>Start:</b> ${gantt.templates.tooltip_date_format(start)}<br/>
-              <b>End:</b> ${gantt.templates.tooltip_date_format(end)}<br/>
-              <b>Progress:</b> ${Math.round((task.progress || 0) * 100)}%
+              <b>${projectLabel}:</b> ${task.project_name || na}<br/>
+              <b>${startLabel}:</b> ${gantt.templates.tooltip_date_format(start)}<br/>
+              <b>${endLabel}:</b> ${gantt.templates.tooltip_date_format(end)}<br/>
+              <b>${progressLabel}:</b> ${Math.round((task.progress || 0) * 100)}%
             `;
           };
 
           injectCustomStyles();
 
           gantt.init(container);
-          applyScaleInternal(gantt, viewMode);
+          applyScaleInternal(gantt, viewMode, t);
 
           setGanttInitialized(true);
           console.log('[PlanningGantt] ✅ DHTMLX Gantt initialized successfully!');
@@ -809,7 +869,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
     
     // Ensure grid width matches gridVisible state
     gantt.config.grid_width = gridVisible ? 300 : 0;
-    gantt.config.columns = buildColumns(visibleColumns, planningView, resolveProjectName, formatGridDate);
+    gantt.config.columns = buildColumns(visibleColumns, planningView, resolveProjectName, formatGridDate, t);
     gantt.render();
     
     // Fix column squeezing after view switches
@@ -818,7 +878,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
     } catch (e) {
       // no-op
     }
-  }, [visibleColumns, gridVisible, ganttInitialized, resolveProjectName, planningView, formatGridDate]);
+  }, [visibleColumns, gridVisible, ganttInitialized, resolveProjectName, planningView, formatGridDate, t]);
 
   // Parse tasks into Gantt when tasks array changes
   useEffect(() => {
@@ -842,11 +902,12 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
   // Update view mode / scales
   useEffect(() => {
     if (!ganttInitialized || !window.gantt) return;
-    applyScaleInternal(window.gantt, viewMode);
+    applyScaleInternal(window.gantt, viewMode, t);
     window.gantt.render();
-  }, [viewMode, ganttInitialized]);
+  }, [viewMode, ganttInitialized, t]);
 
-  const applyScaleInternal = (gantt: any, mode: ViewMode) => {
+  const applyScaleInternal = (gantt: any, mode: ViewMode, tFn: TFunction) => {
+    const weekLabel = tFn('planning.gantt.viewModes.week', { defaultValue: 'Week' });
     switch (mode) {
       case 'Day':
         gantt.config.scales = [
@@ -855,14 +916,14 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
         break;
       case 'Week':
         gantt.config.scales = [
-          { unit: 'week', step: 1, format: 'Week #%W' },
+          { unit: 'week', step: 1, format: `${weekLabel} #%W` },
           { unit: 'day', step: 1, format: '%d %M' },
         ];
         break;
       case 'Month':
         gantt.config.scales = [
           { unit: 'month', step: 1, format: '%F %Y' },
-          { unit: 'week', step: 1, format: 'Week #%W' },
+          { unit: 'week', step: 1, format: `${weekLabel} #%W` },
         ];
         break;
       case 'Year':
@@ -1414,14 +1475,14 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
             </IconButton>
           </Tooltip>
           {/* Column Manager */}
-          <Tooltip title="Show/Hide Columns">
+          <Tooltip title={t('planning.gantt.tooltips.toggleColumns')}>
             <Button
               variant="outlined"
               size="small"
               startIcon={<ViewColumnIcon />}
               onClick={handleColumnMenuOpen}
             >
-              Columns
+              {t('planning.gantt.columns.label')}
             </Button>
           </Tooltip>
 
@@ -1433,7 +1494,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
               onClick={handleManageLocations}
               disabled={!selectedTaskForLocations}
             >
-              Manage Task Locations
+              {t('planning.gantt.manageTaskLocations')}
             </Button>
           )}
 
@@ -1444,23 +1505,27 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
           >
             <MenuItem onClick={() => toggleColumn('text')} disabled>
               <Checkbox checked={visibleColumns.text} disabled size="small" />
-              {planningView === 'locations' ? 'Location' : 'Task'} (always visible)
+              {t('planning.gantt.columns.alwaysVisible', {
+                column: planningView === 'locations'
+                  ? t('planning.gantt.columns.location')
+                  : t('planning.gantt.columns.task')
+              })}
             </MenuItem>
             <MenuItem onClick={() => toggleColumn('project_name')}>
               <Checkbox checked={visibleColumns.project_name} size="small" />
-              Project
+              {t('planning.gantt.columns.project')}
             </MenuItem>
             <MenuItem onClick={() => toggleColumn('start_date')}>
               <Checkbox checked={visibleColumns.start_date} size="small" />
-              Start
+              {t('planning.gantt.columns.start')}
             </MenuItem>
             <MenuItem onClick={() => toggleColumn('end_date')}>
               <Checkbox checked={visibleColumns.end_date} size="small" />
-              End
+              {t('planning.gantt.columns.end')}
             </MenuItem>
             <MenuItem onClick={() => toggleColumn('progress')}>
               <Checkbox checked={visibleColumns.progress} size="small" />
-              Progress
+              {t('planning.gantt.columns.progress')}
             </MenuItem>
           </Menu>
 
@@ -1472,30 +1537,30 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
                 onClick={() => handleViewModeChange(mode)}
                 variant={viewMode === mode ? 'contained' : 'outlined'}
               >
-                {mode}
+                {t(`planning.gantt.viewModes.${mode.toLowerCase()}`)}
               </Button>
             ))}
           </ButtonGroup>
 
           {/* Expand / Collapse */}
           <Button variant="outlined" size="small" onClick={handleToggleExpandCollapse}>
-            {allExpanded ? 'Collapse' : 'Expand'}
+            {allExpanded ? t('common.collapse') : t('common.expand')}
           </Button>
 
           {/* Timeline Utility Buttons */}
-          <Tooltip title="Fit all tasks in view">
+          <Tooltip title={t('planning.gantt.tooltips.fitToView')}>
             <IconButton size="small" onClick={handleFitTasks} color="primary">
               <FitScreenIcon />
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Go to today">
+          <Tooltip title={t('planning.gantt.tooltips.goToToday')}>
             <IconButton size="small" onClick={handleShowToday} color="primary">
               <TodayIcon />
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Reset zoom to Month view">
+          <Tooltip title={t('planning.gantt.tooltips.resetZoom')}>
             <IconButton size="small" onClick={handleResetZoom} color="primary">
               <ZoomOutMapIcon />
             </IconButton>

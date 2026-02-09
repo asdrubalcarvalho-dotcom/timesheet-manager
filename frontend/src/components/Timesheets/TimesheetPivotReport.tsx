@@ -110,6 +110,19 @@ type PivotInsights = {
   highestCell: PivotInsightItem | null;
 };
 
+const getScopedLabel = (rawScoped: unknown, t: TFunction): string => {
+  if (rawScoped === null || rawScoped === undefined) return '—';
+  const scoped = String(rawScoped).trim();
+  if (scoped === '') return '—';
+
+  const normalized = scoped.toLowerCase();
+  if (normalized === 'all') return t('timesheets.scope.all', { defaultValue: 'All' });
+  if (normalized === 'self' || normalized === 'mine') return t('timesheets.scope.mine', { defaultValue: 'Mine' });
+  if (normalized === 'others') return t('timesheets.scope.others', { defaultValue: 'Others' });
+
+  return scoped;
+};
+
 const parseHoursValue = (value: unknown): number => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value !== 'string') return 0;
@@ -212,7 +225,7 @@ const answerPivotQuestionDeterministically = (
   const colLabelByKey = new Map(data.columns.map((c) => [c.key, c.label] as const));
 
   const grand = typeof data.totals?.grand === 'number' ? data.totals.grand : null;
-  const scoped = data.meta?.scoped ? String(data.meta.scoped) : '—';
+  const scoped = getScopedLabel(data.meta?.scoped, t);
   const topRowTotals = Object.entries(data.totals?.rows ?? {})
     .map(([k, v]) => ({ key: k, label: rowLabelByKey.get(k) ?? k, hours: typeof v === 'number' ? v : 0 }))
     .sort((a, b) => b.hours - a.hours)
@@ -509,7 +522,7 @@ const TimesheetPivotReport: React.FC = () => {
   const rowHeaderLabel = rowDimensionLabel;
 
   const deterministicInsights = useMemo(() => {
-    const scoped = data?.meta?.scoped ? String(data.meta.scoped) : '—';
+    const scoped = getScopedLabel(data?.meta?.scoped, t);
     const grand = typeof data?.totals?.grand === 'number' ? data.totals.grand : null;
     const dims = t('timesheetPivot.dimsLabel', {
       row: rowDimensionLabel,

@@ -514,7 +514,7 @@ export const ExpenseManager: React.FC = () => {
       const found = technicians.find((t) => t.id === id);
       if (found?.name) return found.name;
     }
-    return '—';
+    return t('common.notAvailable');
   };
 
   const columns: GridColDef<ExpenseEntry>[] = [
@@ -587,7 +587,9 @@ export const ExpenseManager: React.FC = () => {
             <Visibility fontSize="small" />
           </IconButton>
         ) : (
-          <Typography variant="caption" color="text.secondary">—</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {t('common.notAvailable')}
+          </Typography>
         ),
     },
     {
@@ -686,7 +688,7 @@ export const ExpenseManager: React.FC = () => {
       {expenses.length > 0 && (
         <Fab
           color="primary"
-          aria-label="add expense"
+          aria-label={t('expenses.fab.addAria')}
           onClick={handleAddNew}
           disabled={isReadOnlyMode}
           sx={{ 
@@ -1028,7 +1030,7 @@ export const ExpenseManager: React.FC = () => {
             <Box
               component="img"
               src={previewAttachmentUrl}
-              alt="Expense attachment"
+              alt={t('expenses.attachment.previewAlt')}
               sx={{
                 width: '100%',
                 height: 'auto',
@@ -1039,7 +1041,7 @@ export const ExpenseManager: React.FC = () => {
           ) : previewAttachmentUrl.endsWith('.pdf') ? (
             <iframe
               src={previewAttachmentUrl}
-              title="PDF Preview"
+              title={t('expenses.attachment.previewTitle')}
               style={{ width: '100%', height: '70vh', border: 'none' }}
             />
           ) : (

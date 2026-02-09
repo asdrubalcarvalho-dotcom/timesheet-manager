@@ -16,6 +16,9 @@
       "emptyValue": "—"
     },
     "help": {
+      "sidebar": {
+        "selectUsers": "Select users"
+      },
       "title": "Need help?",
       "subtitle": "Browse docs and AI tips for faster answers.",
       "tip": "Tip: Ask the AI tab for summaries, anomalies, and next steps.",
@@ -108,11 +111,25 @@
     "ai": {
       "title": "Ask TimePerk AI",
       "subtitle": "Summarize anomalies, approvals, and trends.",
+      "examples": {
+        "title": "Examples",
+        "more": "View more examples",
+        "less": "View fewer examples",
+        "items": [
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00-13:00\nBloco 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00–13:00\nBloco 2: 14:00–18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\nBlock 1: 09:00-13:00\nBlock 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-10\nProjeto: \"Mobile Banking App\"\n09:00-10:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
+        ]
+      },
       "suggestions": {
         "flags": "What entries were flagged?",
         "overtime": "Where did overtime spike?",
         "approvals": "Which approvals are pending?",
-        "projectCosts": "Which projects exceed budgeted hours?"
+        "projectCosts": "Which projects exceed budgeted hours?",
+        "timesheetCreate": "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
       },
       "placeholderResponse": "I'm still learning. For now, I can summarize the report based on your question.",
       "errorFallback": "Something went wrong. Please try again.",

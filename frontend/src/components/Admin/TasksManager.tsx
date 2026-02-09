@@ -38,6 +38,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
+import { useTranslation } from 'react-i18next';
 
 interface Task {
   id: number;
@@ -108,6 +109,7 @@ const normalizeProgressToPercent = (raw: unknown): number => {
 };
 
 const TasksManager: React.FC = () => {
+  const { t } = useTranslation();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { showSuccess, showError } = useNotification();
@@ -174,7 +176,7 @@ const TasksManager: React.FC = () => {
         }))
       );
     } catch (error) {
-      showError('Failed to load tasks');
+      showError(t('admin.tasks.notifications.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -190,6 +192,7 @@ const TasksManager: React.FC = () => {
       setAllLocations(normalizeApiResponse<Location>(locationsResponse.data));
     } catch (error) {
       console.error('Failed to load projects and locations');
+      showError(t('admin.tasks.notifications.loadProjectsLocationsFailed'));
     }
   };
 
@@ -249,7 +252,7 @@ const TasksManager: React.FC = () => {
       setLocationDialog({ open: true, task });
     } catch (error) {
       console.error('Error loading task locations:', error);
-      showError('Failed to load task locations');
+      showError(t('admin.tasks.locationDialog.notifications.loadTaskLocationsFailed'));
     }
   };
   
@@ -268,15 +271,15 @@ const TasksManager: React.FC = () => {
       
       showSuccess(
         selectedLocationIds.length === 0 
-          ? 'All locations removed from task'
-          : `Task updated with ${selectedLocationIds.length} location(s)`
+          ? t('admin.tasks.locationDialog.notifications.allLocationsRemoved')
+          : t('admin.tasks.locationDialog.notifications.updatedWithLocations', { count: selectedLocationIds.length })
       );
       
       setLocationDialog({ open: false, task: null });
       setSelectedLocationIds([]);
     } catch (error) {
       console.error('Error updating task locations:', error);
-      showError('Failed to update task locations');
+      showError(t('admin.tasks.locationDialog.notifications.updateFailed'));
     } finally {
       setLoading(false);
     }
@@ -314,15 +317,15 @@ const TasksManager: React.FC = () => {
 
       if (editingTask) {
         await api.put(`/api/tasks/${editingTask.id}`, payload);
-        showSuccess('Task updated successfully');
+        showSuccess(t('admin.tasks.notifications.updateSuccess'));
       } else {
         await api.post('/api/tasks', payload);
-        showSuccess('Task created successfully');
+        showSuccess(t('admin.tasks.notifications.createSuccess'));
       }
       fetchTasks();
       handleCloseDialog();
     } catch (error) {
-      showError('Failed to save task');
+      showError(t('admin.tasks.notifications.saveFailed'));
     }
   };
 
@@ -333,8 +336,8 @@ const TasksManager: React.FC = () => {
     const task = tasks.find(t => t.id === id);
     setConfirmDialog({
       open: true,
-      title: 'Delete Task',
-      message: 'Are you sure you want to delete this task? This action cannot be undone.',
+      title: t('admin.tasks.confirmDelete.title'),
+      message: t('admin.tasks.confirmDelete.message'),
       recordDetails: {
         name: task?.name,
         description: task?.description,
@@ -346,10 +349,10 @@ const TasksManager: React.FC = () => {
         }
         try {
           await api.delete(`/api/tasks/${id}`);
-          showSuccess('Task deleted successfully');
+          showSuccess(t('admin.tasks.notifications.deleteSuccess'));
           fetchTasks();
         } catch (error: any) {
-          showError(error?.response?.data?.message || 'Failed to delete task');
+          showError(error?.response?.data?.message || t('admin.tasks.notifications.deleteFailed'));
         }
         setConfirmDialog({ ...confirmDialog, open: false });
       }
@@ -359,29 +362,29 @@ const TasksManager: React.FC = () => {
   const columns: GridColDef[] = [
     {
       field: 'id',
-      headerName: 'ID',
+      headerName: t('admin.shared.columns.id'),
       width: 80
     },
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: t('admin.shared.columns.name'),
       flex: 1,
       minWidth: 200
     },
     {
       field: 'description',
-      headerName: 'Description',
+      headerName: t('admin.shared.columns.description'),
       flex: 1.2,
       minWidth: 220
     },
     {
       field: 'task_type',
-      headerName: 'Type',
+      headerName: t('admin.tasks.columns.type'),
       width: 150
     },
     {
       field: 'start_date',
-      headerName: 'Start',
+      headerName: t('admin.tasks.columns.start'),
       width: 140,
       renderCell: ({ value }) => {
         if (!value) return <span style={{ color: '#999' }}>-</span>;
@@ -390,7 +393,7 @@ const TasksManager: React.FC = () => {
     },
     {
       field: 'end_date',
-      headerName: 'End',
+      headerName: t('admin.tasks.columns.end'),
       width: 140,
       renderCell: ({ value }) => {
         if (!value) return <span style={{ color: '#999' }}>-</span>;
@@ -399,7 +402,7 @@ const TasksManager: React.FC = () => {
     },
     {
       field: 'progress',
-      headerName: 'Progress',
+      headerName: t('admin.tasks.columns.progress'),
       width: 120,
       type: 'number',
       valueGetter: (params: any) => normalizeProgressToPercent(getTaskProgressRaw(params?.row)),
@@ -410,7 +413,7 @@ const TasksManager: React.FC = () => {
     },
     {
       field: 'project_id',
-      headerName: 'Project',
+      headerName: t('admin.tasks.columns.project'),
       width: 200,
       renderCell: (params: GridRenderCellParams<Task>) => {
         const project = projects.find(p => p.id === params.row.project_id);
@@ -419,7 +422,7 @@ const TasksManager: React.FC = () => {
     },
     {
       field: 'locations',
-      headerName: 'Locations',
+      headerName: t('admin.tasks.columns.locations'),
       width: 140,
       sortable: false,
       renderCell: (params: GridRenderCellParams<Task>) => {
@@ -427,7 +430,11 @@ const TasksManager: React.FC = () => {
         return (
           <Chip
             icon={<LocationIcon />}
-            label={count === 0 ? 'No locations' : `${count} location${count > 1 ? 's' : ''}`}
+            label={
+              count === 0
+                ? t('admin.tasks.locations.none')
+                : t('admin.tasks.locations.count', { count })
+            }
             size="small"
             color={count > 0 ? 'primary' : 'default'}
             variant={count > 0 ? 'filled' : 'outlined'}
@@ -446,7 +453,7 @@ const TasksManager: React.FC = () => {
     },
     {
       field: 'is_active',
-      headerName: 'Status',
+      headerName: t('admin.shared.columns.status'),
       width: 120,
       renderCell: (params: GridRenderCellParams) => {
         const isActive = params.row.is_active === true || params.row.is_active === 1 || params.row.is_active === '1';
@@ -463,14 +470,14 @@ const TasksManager: React.FC = () => {
               color: isActive ? '#4caf50' : '#ff9800'
             }}
           >
-            {isActive ? 'Active' : 'Inactive'}
+            {isActive ? t('admin.shared.status.active') : t('admin.shared.status.inactive')}
           </Box>
         );
       }
     },
     {
       field: 'actions',
-      headerName: 'Actions',
+      headerName: t('admin.shared.columns.actions'),
       width: 160,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
@@ -483,7 +490,7 @@ const TasksManager: React.FC = () => {
               handleManageLocations(params.row as Task);
             }}
             sx={{ color: '#2196f3' }}
-            title="Manage Locations"
+            title={t('admin.tasks.actions.manageLocations')}
           >
             <LocationIcon fontSize="small" />
           </IconButton>
@@ -515,13 +522,13 @@ const TasksManager: React.FC = () => {
   ];
 
   return (
-    <AdminLayout title="Tasks Management">
+    <AdminLayout title={t('admin.tasks.managementTitle')}>
       {!loading && tasks.length === 0 ? (
         <EmptyState
           icon={AssignmentIcon}
-          title="No tasks yet"
-          subtitle="Create your first task to start tracking project activities"
-          actionLabel="New Task"
+          title={t('admin.tasks.empty.title')}
+          subtitle={t('admin.tasks.empty.subtitle')}
+          actionLabel={t('admin.tasks.actions.new')}
           onAction={() => {
             if (!ensureWritable()) {
               return;
@@ -593,19 +600,19 @@ const TasksManager: React.FC = () => {
         disableRestoreFocus
       >
         <DialogTitle>
-          {editingTask ? 'Edit Task' : 'New Task'}
+            {editingTask ? t('admin.tasks.actions.edit') : t('admin.tasks.actions.new')}
         </DialogTitle>
         <DialogContent>
           <Box component="form" onSubmit={handleSave} id="task-form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
-              label="Name"
+                label={t('common.name')}
               fullWidth
               required
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
             <TextField
-              label="Description"
+                label={t('common.description')}
               fullWidth
               multiline
               rows={3}
@@ -614,7 +621,7 @@ const TasksManager: React.FC = () => {
             />
             <TextField
               select
-              label="Project"
+                label={t('admin.tasks.fields.project')}
               fullWidth
               required
               value={formData.project_id}
@@ -628,7 +635,7 @@ const TasksManager: React.FC = () => {
             </TextField>
             <TextField
               select
-              label="Task Type"
+              label={t('admin.tasks.fields.taskType')}
               value={formData.task_type}
               onChange={(e) => setFormData({ ...formData, task_type: e.target.value })}
             >
@@ -639,7 +646,7 @@ const TasksManager: React.FC = () => {
               ))}
             </TextField>
             <TextField
-              label="Estimated Hours"
+              label={t('admin.tasks.fields.estimatedHours')}
               type="number"
               inputProps={{ min: 0, step: 0.25 }}
               value={formData.estimated_hours}
@@ -647,14 +654,14 @@ const TasksManager: React.FC = () => {
             />
             <Box sx={{ display: 'flex', gap: 2 }}>
               <DatePicker
-                label="Start Date"
+                label={t('admin.tasks.fields.startDate')}
                 value={formData.start_date ? dayjs(formData.start_date) : null}
                 onChange={(newValue) => setFormData({ ...formData, start_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
                 format={datePickerFormat}
                 slotProps={{ textField: { fullWidth: true } }}
               />
               <DatePicker
-                label="End Date"
+                label={t('admin.tasks.fields.endDate')}
                 value={formData.end_date ? dayjs(formData.end_date) : null}
                 onChange={(newValue) => setFormData({ ...formData, end_date: newValue ? newValue.format('YYYY-MM-DD') : '' })}
                 format={datePickerFormat}
@@ -662,14 +669,14 @@ const TasksManager: React.FC = () => {
               />
             </Box>
             <TextField
-              label="Progress"
+              label={t('admin.tasks.fields.progress')}
               type="number"
               inputProps={{ min: 0, max: 100 }}
               value={formData.progress}
               onChange={(e) => setFormData({ ...formData, progress: e.target.value })}
             />
             <TextField
-              label="Dependencies (comma separated ids)"
+              label={t('admin.tasks.fields.dependencies')}
               fullWidth
               value={formData.dependencies}
               onChange={(e) => setFormData({ ...formData, dependencies: e.target.value })}
@@ -677,19 +684,19 @@ const TasksManager: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <TextField
                 select
-                label="Status"
+                label={t('admin.shared.columns.status')}
                 value={formData.is_active ? 'active' : 'inactive'}
                 onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'active' })}
                 sx={{ width: 200 }}
               >
-                <MenuItem value="active">Active</MenuItem>
-                <MenuItem value="inactive">Inactive</MenuItem>
+                <MenuItem value="active">{t('admin.shared.status.active')}</MenuItem>
+                <MenuItem value="inactive">{t('admin.shared.status.inactive')}</MenuItem>
               </TextField>
             </Box>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog}>{t('common.cancel')}</Button>
           <Button
             type="submit"
             form="task-form"
@@ -697,7 +704,7 @@ const TasksManager: React.FC = () => {
             color="primary"
             disabled={isReadOnly}
           >
-            {editingTask ? 'Update' : 'Create'}
+            {editingTask ? t('common.update') : t('common.create')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -710,17 +717,17 @@ const TasksManager: React.FC = () => {
         fullWidth
       >
         <DialogTitle>
-          Manage Locations for Task: {locationDialog.task?.name}
+          {t('admin.tasks.locationDialog.title', { taskName: locationDialog.task?.name || '' })}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             {allLocations.length === 0 ? (
               <Alert severity="info">
-                No locations available. Please create locations first in the Locations management page.
+                {t('admin.tasks.locationDialog.emptyLocations')}
               </Alert>
             ) : (
               <FormControl fullWidth>
-                <InputLabel id="location-select-label">Select Locations</InputLabel>
+                <InputLabel id="location-select-label">{t('admin.tasks.locationDialog.selectLabel')}</InputLabel>
                 <Select
                   labelId="location-select-label"
                   id="location-select"
@@ -733,12 +740,12 @@ const TasksManager: React.FC = () => {
                       typeof value === 'string' ? [] : value
                     );
                   }}
-                  label="Select Locations"
+                  label={t('admin.tasks.locationDialog.selectLabel')}
                   renderValue={(selected) => {
                     if (selected.length === 0) {
-                      return <em>No locations selected</em>;
+                      return <em>{t('admin.tasks.locationDialog.noneSelected')}</em>;
                     }
-                    return `${selected.length} location${selected.length > 1 ? 's' : ''} selected`;
+                    return t('admin.tasks.locationDialog.selectedCount', { count: selected.length });
                   }}
                 >
                   {allLocations.map((location) => (
@@ -752,14 +759,14 @@ const TasksManager: React.FC = () => {
                   ))}
                 </Select>
                 <FormHelperText>
-                  Select one or more locations to associate with this task. Leave empty to remove all locations.
+                  {t('admin.tasks.locationDialog.helper')}
                 </FormHelperText>
               </FormControl>
             )}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseLocationDialog}>Cancel</Button>
+          <Button onClick={handleCloseLocationDialog}>{t('common.cancel')}</Button>
           {selectedLocationIds.length > 0 && (
             <Button
               onClick={() => {
@@ -768,7 +775,7 @@ const TasksManager: React.FC = () => {
               color="warning"
               disabled={isReadOnly}
             >
-              Clear All
+              {t('common.clearAll')}
             </Button>
           )}
           <Button
@@ -777,7 +784,7 @@ const TasksManager: React.FC = () => {
             color="primary"
             disabled={allLocations.length === 0 || isReadOnly}
           >
-            Save
+            {t('common.save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -787,8 +794,8 @@ const TasksManager: React.FC = () => {
         title={confirmDialog.title}
         message={confirmDialog.message}
         recordDetails={confirmDialog.recordDetails}
-        confirmText="Delete"
-        cancelText="Cancel"
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         confirmColor="error"
         onConfirm={confirmDialog.action}
         onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}

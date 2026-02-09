@@ -22,6 +22,7 @@ import AdminLayout from './AdminLayout';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useFeatures } from '../../contexts/FeatureContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useTranslation } from 'react-i18next';
 
 interface Role {
   id: number;
@@ -36,6 +37,7 @@ interface RolePermissions {
 }
 
 const AccessManager: React.FC = () => {
+  const { t } = useTranslation();
   const { showSuccess, showError, showInfo } = useNotification();
   const { hasAI } = useFeatures();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-access');
@@ -64,7 +66,7 @@ const AccessManager: React.FC = () => {
       setRoles(rolesData);
       setPermissions(permissionsData);
     } catch (err) {
-      showError('Failed to load roles/permissions');
+      showError(t('admin.access.notifications.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -85,7 +87,7 @@ const AccessManager: React.FC = () => {
       );
       setRolePermissions(Object.fromEntries(entries));
     } catch (err) {
-      showError('Failed to load role permissions');
+      showError(t('admin.access.notifications.loadMatrixFailed'));
     } finally {
       setMatrixLoading(false);
     }
@@ -109,10 +111,10 @@ const AccessManager: React.FC = () => {
       const hasPerm = rolePermissions[role]?.includes(permission);
       if (hasPerm) {
         await api.post(`/api/access/roles/${role}/remove-permission`, { permission });
-        showSuccess(`Removed ${permission} from ${role}`);
+        showSuccess(t('admin.access.notifications.permissionRemoved', { permission, role }));
       } else {
         await api.post(`/api/access/roles/${role}/assign-permission`, { permission });
-        showSuccess(`Assigned ${permission} to ${role}`);
+        showSuccess(t('admin.access.notifications.permissionAssigned', { permission, role }));
       }
       setRolePermissions((prev) => {
         const current = prev[role] ?? [];
@@ -120,7 +122,7 @@ const AccessManager: React.FC = () => {
         return { ...prev, [role]: updated };
       });
     } catch (err) {
-      showError('Failed to update permission');
+      showError(t('admin.access.notifications.updatePermissionFailed'));
     } finally {
       setMatrixLoading(false);
     }
@@ -129,30 +131,30 @@ const AccessManager: React.FC = () => {
   const fetchAiSuggestion = async () => {
     // Feature gate: AI must be enabled
     if (!hasAI) {
-      showInfo('AI features are not included in your current plan. Please upgrade to access AI suggestions.');
+      showInfo(t('admin.access.notifications.aiNotInPlan'));
       return;
     }
     
     setLoading(true);
     try {
       const res = await api.get('/api/ai/suggestions/access');
-      setAiSuggestion(res.data.suggestion || 'No suggestion available');
+      setAiSuggestion(res.data.suggestion || t('admin.access.ai.noSuggestion'));
     } catch (err) {
-      setAiSuggestion('Failed to fetch AI suggestion');
+      setAiSuggestion(t('admin.access.ai.fetchFailed'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <AdminLayout title="Access Management">
+    <AdminLayout title={t('admin.access.title')}>
       <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
         <Button variant="contained" onClick={handleMatrixOpen} sx={{ bgcolor: '#1976d2', color: '#fff' }}>
-          Edit Matrix (Roles × Permissions)
+          {t('admin.access.actions.editMatrix')}
         </Button>
         {hasAI && (
           <Button variant="outlined" onClick={fetchAiSuggestion}>
-            AI Suggestion
+            {t('admin.access.actions.aiSuggestion')}
           </Button>
         )}
       </Box>
@@ -169,7 +171,7 @@ const AccessManager: React.FC = () => {
         fullWidth
         disableRestoreFocus
       >
-        <DialogTitle>Roles × Permissions Matrix</DialogTitle>
+        <DialogTitle>{t('admin.access.matrix.title')}</DialogTitle>
         <DialogContent>
           {matrixLoading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
@@ -180,7 +182,7 @@ const AccessManager: React.FC = () => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Role</TableCell>
+                  <TableCell>{t('admin.access.matrix.role')}</TableCell>
                   {permissions.map((perm) => (
                     <TableCell key={perm.name} align="center">{perm.name}</TableCell>
                   ))}
@@ -207,7 +209,7 @@ const AccessManager: React.FC = () => {
           </TableContainer>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleMatrixClose}>Close</Button>
+          <Button onClick={handleMatrixClose}>{t('common.close')}</Button>
         </DialogActions>
       </Dialog>
     </AdminLayout>

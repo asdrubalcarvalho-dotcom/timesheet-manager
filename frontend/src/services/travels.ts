@@ -33,7 +33,10 @@ export const travelsApi = {
     api.get(`/api/travels/suggestions?technician_id=${technicianId}&project_id=${projectId}`)
       .then(res => res.data.suggestion as TravelSuggestion),
 
-  getTravelsByDate: (params: { technician_id?: number; month?: string; start_date?: string; end_date?: string; project_id?: number }) => {
+  getTravelsByDate: (
+    params: { technician_id?: number; month?: string; start_date?: string; end_date?: string; project_id?: number },
+    signal?: AbortSignal
+  ) => {
     const queryParams = new URLSearchParams();
     if (params.technician_id) queryParams.append('technician_id', params.technician_id.toString());
     if (params.month) queryParams.append('month', params.month);
@@ -41,6 +44,6 @@ export const travelsApi = {
     if (params.end_date) queryParams.append('end_date', params.end_date);
     if (params.project_id) queryParams.append('project_id', params.project_id.toString());
     
-    return api.get(`/api/travels/by-date?${queryParams.toString()}`).then(res => res.data);
+    return api.get(`/api/travels/by-date?${queryParams.toString()}`, { signal }).then(res => res.data);
   },
 };

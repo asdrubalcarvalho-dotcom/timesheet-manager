@@ -10,6 +10,7 @@
       "open": "Open {{tab}}",
       "close": "Close {{tab}}"
     },
+    "openButton": "Help / AI",
     "panelFallback": "Panel",
     "closePanel": "Close panel",
     "insights": {
@@ -108,11 +109,25 @@
     "ai": {
       "title": "Ask TimePerk AI",
       "subtitle": "Summarize anomalies, approvals, and trends.",
+      "examples": {
+        "title": "Examples",
+        "more": "View more examples",
+        "less": "View fewer examples",
+        "items": [
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00-13:00\nBloco 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00–13:00\nBloco 2: 14:00–18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\nBlock 1: 09:00-13:00\nBlock 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-10\nProjeto: \"Mobile Banking App\"\n09:00-10:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
+        ]
+      },
       "suggestions": {
         "flags": "What entries were flagged?",
         "overtime": "Where did overtime spike?",
         "approvals": "Which approvals are pending?",
-        "projectCosts": "Which projects exceed budgeted hours?"
+        "projectCosts": "Which projects exceed budgeted hours?",
+        "timesheetCreate": "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
       },
       "placeholderResponse": "I'm still learning. For now, I can summarize the report based on your question.",
       "errorFallback": "Something went wrong. Please try again.",
@@ -258,6 +273,7 @@
       "date": "Date",
       "startTime": "Start time",
       "endTime": "End time",
+      "duration": "Duration",
       "project": "Project",
       "task": "Task",
       "location": "Location",
@@ -386,6 +402,10 @@
     "clear": "Clear",
     "save": "Save",
     "saving": "Saving…",
+    "update": "Update",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "loading": "Loading...",
     "today": "Today",
     "week": "Week",
     "month": "Month",
@@ -537,6 +557,17 @@
       }
     }
   },
+  "superAdmin": {
+    "portalTitle": "Management Portal",
+    "portalPrompt": "Please authenticate to continue"
+  },
+  "team": {
+    "title": "👥 Team",
+    "comingSoon": "Team management coming soon..."
+  },
+  "header": {
+    "tagline": "The brain behind your team's time"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "timesheets": "Timesheets",
@@ -554,15 +585,225 @@
     "countries": "Countries",
     "users": "Users",
     "aiInsights": "AI Insights",
+    "aiTimesheetBuilder": "AI Timesheet Builder",
     "billing": "Billing",
     "resetData": "Reset data",
     "legal": "Legal",
     "terms": "Terms",
     "privacy": "Privacy",
     "acceptableUse": "Acceptable use",
+    "profile": "Profile",
     "logout": "Logout",
+    "logoutWithName": "Logout ({{name}})",
     "userFallback": "User",
     "tagline": "Smart Timesheet"
+  },
+  "aiTimesheet": {
+    "title": "AI Timesheet Builder",
+    "subtitle": "Generate draft entries from a natural language prompt.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Example: Create timesheet entries for 5 days (Mon-Fri), 09:00-18:00, lunch 12:30-13:30, project ACME, task Installation.",
+    "previewButton": "Preview",
+    "applyButton": "Apply",
+    "applySuccess": "Created {{count}} entries as drafts.",
+    "confirmCreate": "Confirm & create",
+    "previewSummary": {
+      "title": "Preview summary",
+      "dateRange": "Date range",
+      "totalWork": "Total work hours",
+      "totalBreaks": "Break time",
+      "blockTime": "Time",
+      "project": "Project",
+      "task": "Task",
+      "location": "Location",
+      "notes": "Notes",
+      "unassigned": "Unassigned",
+      "unknown": "-"
+    },
+    "previewErrors": {
+      "existingNoTime": {
+        "title": "Existing entries without time",
+        "message": "We cannot validate overlaps because there are existing entries without time on this day. The new AI proposal does include hours.",
+        "labels": {
+          "existingEntriesWithoutTime": "Existing entries without time",
+          "howToFix": "How to fix",
+          "reviewExistingEntries": "Review existing entries and add hours",
+          "replaceEntries": "Delete or replace existing entries"
+        },
+        "actions": {
+          "chooseDates": "Choose different dates"
+        }
+      },
+      "overlap": {
+        "title": "Time conflict",
+        "message": "Some time ranges overlap.",
+        "actions": {
+          "addTimes": "Provide start and end times for each block",
+          "adjustTimes": "Adjust the times so they do not overlap"
+        }
+      },
+      "break": {
+        "title": "Break required",
+        "message": "A break is required to comply with policy.",
+        "actions": {
+          "addBreak": "Add a break in the schedule",
+          "reviewPolicy": "Review the applied labour rule"
+        }
+      },
+      "project": {
+        "title": "Project not found",
+        "message": "We could not find the requested project.",
+        "actions": {
+          "checkProject": "Check the project name",
+          "pickAnother": "Choose another project"
+        }
+      },
+      "generic": {
+        "title": "Preview failed",
+        "message": "We could not interpret the request.",
+        "actions": {
+          "retry": "Try again with more detail",
+          "editPrompt": "Review the prompt text"
+        }
+      }
+    },
+    "missingFields": {
+      "title": "Missing details",
+      "message": "Please provide: {{fields}}",
+      "labels": {
+        "intent": "Intent",
+        "dateRange": "Date range",
+        "dateRangeCount": "Workday count",
+        "schedule": "Schedule",
+        "project": "Project",
+        "task": "Task",
+        "location": "Location"
+      }
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Welcome back, {{name}}! Here's your overview for the last {{days}} days.",
+    "userFallback": "User",
+    "noData": "No data available",
+    "errors": {
+      "loadFailed": "Failed to load dashboard statistics"
+    },
+    "cards": {
+      "totalHours": "Total hours",
+      "totalExpenses": "Total expenses",
+      "pendingDetail": "Pending ({{timesheets}}T + {{expenses}}E)",
+      "approvedDetail": "Approved ({{timesheets}}T + {{expenses}}E)"
+    },
+    "charts": {
+      "hoursByProject": "Hours by project",
+      "expensesByProject": "Expenses by project",
+      "timesheetsByStatus": "Timesheets by status",
+      "expensesByStatus": "Expenses by status",
+      "dailyHoursTrend": "Daily hours trend",
+      "dailyExpensesTrend": "Daily expenses trend"
+    },
+    "tooltips": {
+      "hours": "Hours: {{value}}",
+      "amount": "Amount: {{value}}",
+      "hoursValue": "{{value}} hours"
+    },
+    "legends": {
+      "hours": "Hours",
+      "amount": "Amount"
+    }
+  },
+  "billing": {
+    "readOnly": {
+      "expired": "Your subscription has expired. You are in read-only mode.",
+      "upgrade": "Upgrade"
+    },
+    "paymentMethods": {
+      "title": "Payment methods",
+      "subtitle": "Manage your credit and debit cards",
+      "addCard": "Add card",
+      "empty": "No payment methods added yet. Add a card to enable paid plan upgrades.",
+      "defaultLabel": "Default",
+      "expires": "Expires {{month}}/{{year}}",
+      "setDefault": "Set default",
+      "cannotRemoveOnly": "Cannot remove the only payment method",
+      "removeCard": "Remove card",
+      "confirmRemove": "Are you sure you want to remove this payment method?",
+      "toast": {
+        "added": "Card added successfully",
+        "removed": "Payment method removed",
+        "defaultUpdated": "Default payment method updated"
+      },
+      "errors": {
+        "loadFailed": "Failed to load payment methods",
+        "setDefaultFailed": "Failed to set default payment method",
+        "removeFailed": "Failed to remove payment method"
+      }
+    },
+    "addons": {
+      "upgradeTooltip": "Add-ons are not available on the Starter plan.",
+      "requiresUpgrade": "Requires upgrade",
+      "active": "Active",
+      "priceOfBase": "{{percent}}% of base price",
+      "planning": {
+        "name": "Planning module",
+        "description": "Gantt charts, project planning, resource allocation",
+        "tooltip": "Plan tasks and resources on a shared calendar.",
+        "addonTooltip": "Enable advanced planning with a {{percent}}% markup over the base value.",
+        "features": {
+          "ganttCharts": "Gantt charts",
+          "taskDependencies": "Task dependencies",
+          "resourcePlanning": "Resource planning",
+          "timelineViews": "Timeline views"
+        }
+      },
+      "ai": {
+        "name": "AI assistant",
+        "description": "AI-powered insights, predictions, and automation",
+        "tooltip": "Intelligent suggestions based on usage data.",
+        "addonTooltip": "Enable AI features with a {{percent}}% markup over the base value.",
+        "features": {
+          "smartSuggestions": "Smart suggestions",
+          "patternAnalysis": "Pattern analysis",
+          "anomalyDetection": "Anomaly detection",
+          "predictiveAnalytics": "Predictive analytics"
+        }
+      }
+    }
+  },
+  "planning": {
+    "gantt": {
+      "tooltips": {
+        "showGrid": "Show grid",
+        "hideGrid": "Hide grid",
+        "toggleColumns": "Show/Hide columns",
+        "fitToView": "Fit all tasks in view",
+        "goToToday": "Go to today",
+        "resetZoom": "Reset zoom to Month view"
+      },
+      "columns": {
+        "label": "Columns",
+        "alwaysVisible": "{{column}} (always visible)",
+        "location": "Location",
+        "task": "Task",
+        "users": "Users",
+        "project": "Project",
+        "start": "Start",
+        "end": "End",
+        "progress": "Progress"
+      },
+      "sidebar": {
+        "selectUsers": "Select users"
+      },
+      "manageTaskLocations": "Manage task locations",
+      "manageProjectMembers": "Manage project members",
+      "viewModes": {
+        "day": "Day",
+        "week": "Week",
+        "month": "Month",
+        "year": "Year"
+      }
+    }
   },
   "language": {
     "label": "Language",
@@ -580,11 +821,20 @@
       "expenses": "Expenses"
     },
     "scopeLabel": "Scope",
+    "scopes": {
+      "all": "All",
+      "self": "My items"
+    },
     "pendingLabel": "Pending",
     "approvedTimesheetsLabel": "Approved (timesheets)",
     "approvedExpensesLabel": "Approved (expenses)",
     "invalidRange": "Select a valid range (max 62 days) and include at least one type.",
     "loading": "Loading heatmap…",
+    "tooltip": {
+      "timesheetsPending": "Timesheets: {{count}} pending",
+      "expensesPending": "Expenses: {{count}} pending"
+    },
+    "rangeLabel": "Showing {{from}} → {{to}} (scoped: {{scope}})",
     "insights": {
       "summaryTitle": "Approval highlights",
       "summaryHint": "Overview of pending volume and busiest days.",
@@ -753,6 +1003,7 @@
     "travels": {
       "title": "Travel details",
       "empty": "No travel details found.",
+      "loadFailed": "Failed to load travel details.",
       "technician": "Technician",
       "project": "Project",
       "departure": "Departure",
@@ -760,7 +1011,88 @@
       "direction": "Direction",
       "duration": "Duration",
       "status": "Status",
-      "classificationReason": "Classification reason"
+      "classificationReason": "Classification reason",
+      "management": {
+        "title": "Travel management",
+        "subtitle": "Track technician travel segments and movement between project locations",
+        "emptyTitle": "No travel segments yet",
+        "emptySubtitle": "Create your first travel segment to start tracking technician movements",
+        "newTravel": "New travel",
+        "addAria": "Add travel"
+      },
+      "table": {
+        "start": "Start",
+        "end": "End",
+        "duration": "Duration",
+        "technician": "Technician",
+        "project": "Project",
+        "route": "Route",
+        "direction": "Direction",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "directionLabels": {
+        "departure": "Departure",
+        "arrival": "Arrival",
+        "project_to_project": "Project to project",
+        "internal": "Internal"
+      },
+      "statusLabels": {
+        "completed": "Completed",
+        "planned": "Planned",
+        "cancelled": "Cancelled"
+      },
+      "durationValue": "{{hours}}h {{minutes}}m",
+      "delete": {
+        "title": "Delete travel segment",
+        "message": "Are you sure you want to delete this travel from {{origin}} to {{destination}}?"
+      },
+      "errors": {
+        "loadFailed": "Failed to load travel segments",
+        "deleteFailed": "Failed to delete travel segment",
+        "saveFailed": "Failed to save travel segment"
+      },
+      "toast": {
+        "deleted": "Travel segment deleted successfully",
+        "created": "Travel segment created successfully",
+        "updated": "Travel segment updated successfully"
+      },
+      "fallbacks": {
+        "origin": "origin",
+        "destination": "destination"
+      },
+      "form": {
+        "newTitle": "New travel segment",
+        "editTitle": "Edit travel segment",
+        "technician": "Technician",
+        "technicianPlaceholder": "Search technicians...",
+        "technicianHelper": "Only team members from managed projects",
+        "project": "Project",
+        "projectPlaceholder": "Search projects...",
+        "startDate": "Start date",
+        "endDate": "End date",
+        "endDateRequired": "Required for completed status",
+        "status": "Status",
+        "origin": "Origin",
+        "destination": "Destination",
+        "originCountry": "Origin country",
+        "destinationCountry": "Destination country",
+        "originLocationOptional": "Origin location (optional)",
+        "destinationLocationOptional": "Destination location (optional)",
+        "originLocationPlaceholder": "Select origin location",
+        "destinationLocationPlaceholder": "Select destination location",
+        "selectTechnicianProject": "Select technician and project first",
+        "selectOriginCountryFirst": "Select origin country first",
+        "selectDestinationCountryFirst": "Select destination country first",
+        "projectLocationsOnly": "Project locations only",
+        "showingAllLocations": "Showing all locations",
+        "allAvailableLocations": "All available locations",
+        "aiNotInPlan": "AI features are not included in your current plan. Please upgrade to access AI travel suggestions.",
+        "aiSuggestion": "Get AI suggestion",
+        "aiSuggestionFailed": "Failed to get AI suggestion",
+        "aiSuggestionApplied": "AI suggestion applied",
+        "durationLabel": "⏱️ Duration: {{duration}}"
+      }
     }
   },
   "expenses": {
@@ -771,6 +1103,9 @@
       "title": "No expenses yet",
       "subtitle": "Click the + button to submit your first expense entry",
       "action": "Add expense"
+    },
+    "fab": {
+      "addAria": "Add expense"
     },
     "validation": {
       "projectForTechnician": "Please select a valid project for the chosen technician."
@@ -859,6 +1194,7 @@
     },
     "attachment": {
       "previewTitle": "Attachment preview",
+      "previewAlt": "Expense attachment",
       "previewUnavailable": "Preview not available for this file type",
       "downloadFile": "Download file"
     },
@@ -877,7 +1213,17 @@
   "reports": {
     "ai": {
       "openPanel": "Open AI",
-      "closePanel": "Close AI"
+      "closePanel": "Close AI",
+      "title": "AI"
+    },
+    "aiDrawer": {
+      "emptyPrompt": "Ask a question about the current report and date range.",
+      "you": "You",
+      "ai": "AI",
+      "questionLabel": "Question",
+      "thinking": "Thinking…",
+      "send": "Send",
+      "errorFallback": "Failed to get AI response"
     },
     "analysis": "Analysis",
     "heatmap": "Heatmap",
@@ -896,6 +1242,11 @@
       "validation": {
         "range": "Select a valid date range."
       },
+      "errors": {
+        "loadFailed": "Failed to load expenses.",
+        "loadFailedStatus": "Failed to load expenses: {{status}}"
+      },
+      "projectFallback": "Project #{{id}}",
       "loading": "Loading expenses…",
       "kpis": {
         "totalValue": "Total value",
@@ -908,6 +1259,7 @@
       "trends": {
         "title": "Trends",
         "subtitle": "Spend and expense count over time for the current filters",
+        "granularityAria": "Trends granularity",
         "daily": "Daily",
         "weekly": "Weekly",
         "monthly": "Monthly",
@@ -963,22 +1315,63 @@
         "title": "Spend mix",
         "subtitle": "Share of total spend by category and status",
         "categoryTitle": "Category mix",
-        "statusTitle": "Status mix"
+        "statusTitle": "Status mix",
+        "shareLabel": "Share"
       },
       "movers": {
         "title": "Top movers",
         "invalidRange": "Select a valid date range to compare with the previous period.",
         "subtitle": "Biggest spend deltas vs previous period {{from}} → {{to}}",
         "categories": "Categories",
-        "increases": "Increases"
+        "increases": "Increases",
+        "increasesUpper": "INCREASES",
+        "decreasesUpper": "DECREASES",
+        "projects": "Projects"
       },
       "noExpenses": "No expenses match the current filters.",
       "ai": {
+        "hint": "Try asking about “categories”, “projects”, “outliers”, “what changed”, “status funnel”, “data quality”, “movers”, or “mix”.",
         "noExpenses": "No expenses match the current filters.",
         "spendMixUnavailable": "Spend mix is not available (total spend is 0 for the current filters).",
         "spendMixHeader": "Spend mix (range {{from}} → {{to}}): total {{total}}",
         "topCategories": "Top categories:",
         "topStatuses": "Top statuses:",
+        "spendMixRow": "- {{label}}: {{share}}% ({{total}})",
+        "totalValue": "Total value is {{total}} across {{count}} expenses (range {{from}} → {{to}}).",
+        "statuses": "Statuses (range {{from}} → {{to}}): Pending Review {{pendingReview}}, Finance Review {{financeReview}}, Approved {{approved}}, Paid {{paid}}.",
+        "topCategoriesHeader": "Top categories (range {{from}} → {{to}}):",
+        "topCategoriesRow": "- {{category}}: {{total}} ({{count}})",
+        "topProjectsHeader": "Top projects (range {{from}} → {{to}}):",
+        "topProjectsRow": "- {{project}}: {{total}} ({{count}})",
+        "outliersUnavailable": "Outliers need more spend variation (IQR unavailable for the current result set).",
+        "outliersNone": "No outliers detected (threshold > {{threshold}}).",
+        "outliersHeader": "Outliers (threshold > {{threshold}}):",
+        "outliersRow": "- {{amount}} · {{project}} · {{category}} · {{date}}",
+        "compareMissingRange": "Select a valid date range to compare.",
+        "compareHeader": "Change vs previous period ({{from}} → {{to}}):",
+        "compareTotalLine": "Total: {{current}} vs {{previous}} ({{from}} → {{to}})",
+        "compareDeltaLine": "- {{totalLine}} · Δ {{delta}} · {{pct}}",
+        "compareCountLine": "- Count: {{current}} vs {{previous}} · Δ {{delta}} · {{pct}}",
+        "funnelHeader": "Status funnel (range {{from}} → {{to}}):",
+        "funnelLine": "- {{status}}: {{count}} · {{total}}",
+        "funnelRates": "Key rates: submitted→paid {{submittedToPaid}} · finance_review→finance_approved {{financeReviewToApproved}}",
+        "dataQualityHeader": "Data quality (range {{from}} → {{to}}):",
+        "dataQualityResults": "- Results: {{count}}",
+        "dataQualityMissingCategory": "- Missing category: {{count}}",
+        "dataQualityMissingProject": "- Missing project name: {{count}}",
+        "dataQualityUnparseableDates": "- Unparseable dates for trends: {{count}}",
+        "moversMissingRange": "Select a valid date range to compare.",
+        "moversHeader": "Top movers vs previous period ({{from}} → {{to}}):",
+        "moversCategoryIncreases": "Category increases:",
+        "moversCategoryDecreases": "Category decreases:",
+        "moversCategoryNone": "{{label}} {{fallback}}",
+        "moversCategoryRowIncrease": "- {{category}}: +{{delta}} (Δ {{countDelta}})",
+        "moversCategoryRowDecrease": "- {{category}}: {{delta}} (Δ {{countDelta}})",
+        "moversProjectIncreases": "Project increases:",
+        "moversProjectDecreases": "Project decreases:",
+        "moversProjectNone": "{{label}} {{fallback}}",
+        "moversProjectRowIncrease": "- {{project}}: +{{delta}} (Δ {{countDelta}})",
+        "moversProjectRowDecrease": "- {{project}}: {{delta}} (Δ {{countDelta}})",
         "summaryHeader": "Expenses analysis (range {{from}} → {{to}}):",
         "summaryTotal": "- Total: {{total}} ({{count}} expenses)",
         "summaryPending": "- Pending review: {{count}}",
@@ -986,6 +1379,459 @@
         "summaryApproved": "- Approved: {{count}}",
         "summaryPaid": "- Paid: {{count}}",
         "summaryPrompt": "Ask about “categories”, “projects”, “outliers”, “what changed”, “status funnel”, “data quality”, “movers”, or “mix”."
+      }
+    }
+  }
+
+  ,
+  "tour": {
+    "restart": "Restart guided tour",
+    "buttons": {
+      "back": "Back",
+      "close": "Close",
+      "finish": "Finish",
+      "next": "Next",
+      "skip": "Skip"
+    },
+    "steps": {
+      "menuTimesheets": "Open Timesheets from the left menu.",
+      "timesheetsCalendar": "This is your timesheet calendar. Navigate days/weeks/months and click a date to add entries.",
+      "timesheetsScope": "Use Scope to switch between your entries, others, or everyone (managers/admins).",
+      "aiTrigger": "Use this button to open Insights and AI tools.",
+      "rightPanelToggle": "Use the X to close the right panel.",
+      "aiTab": "Switch to the AI Chat tab here."
+    }
+  },
+  "admin": {
+    "dashboard": {
+      "title": "Admin",
+      "modules": {
+        "projects": {
+          "title": "Projects",
+          "description": "Create and maintain projects, dates, and status."
+        },
+        "tasks": {
+          "title": "Tasks",
+          "description": "Manage tasks, progress, dependencies, and locations."
+        },
+        "locations": {
+          "title": "Locations",
+          "description": "Maintain location records used in work logs and travels."
+        },
+        "users": {
+          "title": "Users",
+          "description": "Manage team members, roles, and payroll identifiers."
+        }
+      }
+    },
+    "access": {
+      "title": "Access & Permissions",
+      "actions": {
+        "editMatrix": "Edit matrix",
+        "aiSuggestion": "AI suggestion"
+      },
+      "matrix": {
+        "title": "Permission matrix",
+        "role": "Role"
+      },
+      "notifications": {
+        "loadFailed": "Failed to load roles/permissions.",
+        "loadMatrixFailed": "Failed to load role permissions.",
+        "updatePermissionFailed": "Failed to update permission.",
+        "permissionAssigned": "Assigned {{permission}} to {{role}}.",
+        "permissionRemoved": "Removed {{permission}} from {{role}}.",
+        "aiNotInPlan": "AI suggestions are not available on your plan."
+      },
+      "ai": {
+        "noSuggestion": "No suggestion available.",
+        "fetchFailed": "Failed to fetch AI suggestion."
+      }
+    },
+    "resetDataDialog": {
+      "title": {
+        "default": "Reset Tenant Data",
+        "success": "Reset Complete"
+      },
+      "notifications": {
+        "resetFailed": "Failed to reset data.",
+        "resetTenantFailed": "Failed to reset tenant data.",
+        "resetSuccessLoggingOut": "Tenant data has been reset successfully! Logging out..."
+      },
+      "step1": {
+        "danger": "DANGER: This action cannot be undone!",
+        "willDeletePrefix": "This will",
+        "willDeleteEmphasis": "permanently delete all data",
+        "willDeleteSuffix": "in this tenant database, including:",
+        "items": {
+          "timesheets": "All timesheets and time entries",
+          "expenses": "All expenses and receipts",
+          "travels": "All travel segments",
+          "projects": "All projects, tasks, and locations",
+          "users": "All users (except Owner)",
+          "permissions": "All permissions and role assignments"
+        },
+        "preserved": {
+          "title": "What will be preserved:",
+          "ownerAccount": "Your Owner account (email and password)",
+          "dbStructure": "Database structure (tables and migrations)"
+        },
+        "importantTitle": "Important:",
+        "important": {
+          "sessionClosed": "Your session will be closed automatically after reset",
+          "loginAgain": "You will need to login again with your Owner account",
+          "chooseOption": "After reset, you can choose to keep database clean or load demo data"
+        },
+        "preferenceTitle": "Select your preference:",
+        "options": {
+          "demo": {
+            "title": "Load demo data (Recommended)",
+            "description": "Create sample projects, tasks, locations, and users for testing"
+          },
+          "clean": {
+            "title": "Clean database (No demo data)",
+            "description": "Start with empty database (only Owner account)"
+          }
+        }
+      },
+      "step2": {
+        "title": "FINAL CONFIRMATION",
+        "subtitle": "Are you absolutely sure you want to proceed?",
+        "selectedOptionLabel": "Selected option:",
+        "selectedOption": {
+          "demo": "✓ Delete all data and load demo data",
+          "clean": "✓ Delete all data (clean database)"
+        },
+        "notice": "This action will immediately delete all existing data.",
+        "confirmHint": "Click \"RESET DATA NOW\" to confirm."
+      },
+      "step3": {
+        "title": "Data Reset Successful!",
+        "message": {
+          "demo": "All tenant data has been reset and demo data has been loaded.",
+          "clean": "All tenant data has been deleted. Database is now clean."
+        },
+        "logoutHint": "You will be logged out automatically in 2 seconds..."
+      },
+      "actions": {
+        "proceed": "I Understand, Proceed",
+        "goBack": "Go Back",
+        "resetting": "Resetting...",
+        "resetNow": "RESET DATA NOW"
+      }
+    },
+    "shared": {
+      "columns": {
+        "id": "ID",
+        "name": "Name",
+        "description": "Description",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      }
+    },
+    "locations": {
+      "columns": {
+        "address": "Address",
+        "city": "City",
+        "country": "Country",
+        "postalCode": "Postcode",
+        "coordinates": "Coordinates"
+      },
+      "confirmDelete": {
+        "title": "Delete location",
+        "message": "Are you sure you want to delete this location? This action cannot be undone."
+      },
+      "notifications": {
+        "loadFailed": "Failed to load locations.",
+        "loadCountriesFailed": "Failed to load countries.",
+        "requiredFields": "Please fill in all required fields.",
+        "createSuccess": "Location created successfully.",
+        "updateSuccess": "Location updated successfully.",
+        "saveFailed": "Failed to save location.",
+        "deleteSuccess": "Location deleted successfully.",
+        "deleteFailed": "Failed to delete location."
+      }
+    },
+    "projects": {
+      "managementTitle": "Projects Management",
+      "empty": {
+        "title": "No projects yet",
+        "subtitle": "Create your first project to start tracking work"
+      },
+      "actions": {
+        "new": "New Project",
+        "edit": "Edit Project"
+      },
+      "columns": {
+        "startDate": "Start Date",
+        "endDate": "End Date"
+      },
+      "fields": {
+        "startDate": "Start Date",
+        "endDate": "End Date"
+      },
+      "status": {
+        "active": "Active",
+        "completed": "Completed",
+        "on_hold": "On hold"
+      },
+      "tabs": {
+        "details": "Details",
+        "tasks": "Tasks"
+      },
+      "notifications": {
+        "loadFailed": "Failed to load projects.",
+        "loadTasksFailed": "Failed to load project tasks.",
+        "createSuccess": "Project created successfully.",
+        "updateSuccess": "Project updated successfully.",
+        "saveFailed": "Failed to save project.",
+        "deleteSuccess": "Project deleted successfully.",
+        "deleteFailed": "Failed to delete project."
+      },
+      "confirmDelete": {
+        "title": "Delete project",
+        "message": "Are you sure you want to delete this project? This action cannot be undone."
+      },
+      "tasksTab": {
+        "subtitle": "Manage tasks for this project",
+        "addTask": "Add task",
+        "columns": {
+          "start": "Start",
+          "end": "End",
+          "progress": "Progress"
+        },
+        "empty": "No tasks for this project yet."
+      },
+      "tasksDialog": {
+        "addTask": "Add Task",
+        "editTask": "Edit Task",
+        "fields": {
+          "estimatedHours": "Estimated Hours",
+          "progress": "Progress (%)"
+        },
+        "validation": {
+          "nameRequired": "Task name is required.",
+          "startDateRequired": "Start date is required.",
+          "endDateAfterStart": "End date must be after start date.",
+          "progressRange": "Progress must be between 0 and 100.",
+          "estimatedHoursPositive": "Estimated hours must be a positive number."
+        },
+        "notifications": {
+          "createSuccess": "Task created successfully.",
+          "updateSuccess": "Task updated successfully.",
+          "saveFailed": "Failed to save task.",
+          "deleteSuccess": "Task deleted successfully.",
+          "deleteFailed": "Failed to delete task."
+        },
+        "confirmDelete": {
+          "title": "Delete task",
+          "message": "Are you sure you want to delete this task? This action cannot be undone."
+        }
+      },
+      "membersDialog": {
+        "title": "Manage members — {{project}}",
+        "empty": "No members are linked to this project yet.",
+        "unnamedUser": "Unnamed user",
+        "noEmail": "No email provided",
+        "removeAria": "Remove member",
+        "fields": {
+          "user": "User",
+          "timesheetRole": "Timesheet role",
+          "expenseRole": "Expense role",
+          "financeRole": "Finance role"
+        },
+        "addSectionTitle": "Add new member",
+        "noAssignableUsers": "No users are available to assign. Create a technician first.",
+        "actions": {
+          "close": "Close",
+          "assignUser": "Assign user"
+        },
+        "confirmRemove": {
+          "title": "Remove member",
+          "message": "Are you sure you want to remove this member from the project?",
+          "confirm": "Remove"
+        },
+        "notifications": {
+          "loadMembersFailed": "Failed to load project members",
+          "loadUsersFailed": "Failed to load available users",
+          "rolesUpdated": "Roles updated successfully",
+          "updateRolesFailed": "Unable to update roles",
+          "memberRemoved": "Member removed",
+          "removeMemberFailed": "Failed to remove member",
+          "memberAdded": "Member added to the project",
+          "addMemberFailed": "Failed to add member"
+        }
+      }
+    },
+    "tasks": {
+      "managementTitle": "Tasks Management",
+      "empty": {
+        "title": "No tasks yet",
+        "subtitle": "Create your first task to organise work"
+      },
+      "actions": {
+        "new": "New Task",
+        "edit": "Edit Task",
+        "manageLocations": "Manage locations"
+      },
+      "columns": {
+        "type": "Type",
+        "start": "Start",
+        "end": "End",
+        "progress": "Progress",
+        "project": "Project",
+        "locations": "Locations"
+      },
+      "locations": {
+        "none": "No locations",
+        "count_one": "{{count}} location",
+        "count_other": "{{count}} locations"
+      },
+      "fields": {
+        "project": "Project",
+        "taskType": "Task Type",
+        "estimatedHours": "Estimated Hours",
+        "startDate": "Start Date",
+        "endDate": "End Date",
+        "progress": "Progress (%)",
+        "dependencies": "Dependencies"
+      },
+      "confirmDelete": {
+        "title": "Delete task",
+        "message": "Are you sure you want to delete this task? This action cannot be undone."
+      },
+      "notifications": {
+        "loadFailed": "Failed to load tasks.",
+        "loadProjectsLocationsFailed": "Failed to load projects or locations.",
+        "createSuccess": "Task created successfully.",
+        "updateSuccess": "Task updated successfully.",
+        "saveFailed": "Failed to save task.",
+        "deleteSuccess": "Task deleted successfully.",
+        "deleteFailed": "Failed to delete task."
+      },
+      "locationDialog": {
+        "title": "Manage locations for: {{taskName}}",
+        "emptyLocations": "No locations available.",
+        "selectLabel": "Locations",
+        "noneSelected": "None selected",
+        "selectedCount_one": "{{count}} selected",
+        "selectedCount_other": "{{count}} selected",
+        "helper": "Choose which locations are available for this task.",
+        "notifications": {
+          "loadTaskLocationsFailed": "Failed to load task locations.",
+          "allLocationsRemoved": "All locations removed.",
+          "updatedWithLocations": "Updated with {{count}} location(s).",
+          "updateFailed": "Failed to update task locations."
+        }
+      }
+    },
+    "users": {
+      "managementTitle": "Users Management",
+      "empty": {
+        "title": "No users yet",
+        "subtitle": "Create your first user to start managing your team"
+      },
+      "actions": {
+        "new": "New User",
+        "manageAccess": "Manage Access & Permissions",
+        "createWithoutEmail": "Create without email"
+      },
+      "columns": {
+        "email": "Email",
+        "role": "Role",
+        "hourlyRate": "Hourly Rate",
+        "workerId": "Worker ID",
+        "workerName": "Worker Name",
+        "contractCountry": "Contract Country"
+      },
+      "roles": {
+        "owner": "Owner",
+        "manager": "Manager",
+        "technician": "Technician",
+        "admin": "Admin"
+      },
+      "perHourSuffix": "/hr",
+      "dialog": {
+        "newUser": "New User",
+        "editUser": "Edit User",
+        "editOwnerProfile": "Edit Owner Profile"
+      },
+      "fields": {
+        "email": "Email",
+        "role": "Role",
+        "hourlyRate": "Hourly Rate",
+        "workerId": "Worker ID",
+        "workerName": "Worker Name",
+        "contractCountry": "Worker Contract Country",
+        "password": "Password",
+        "newPasswordKeepCurrent": "New Password (leave blank to keep current)"
+      },
+      "helpers": {
+        "ownerEmailLocked": "Owner email cannot be changed",
+        "ownerRoleLocked": "Owner role cannot be changed",
+        "workerId": "Optional unique identifier used for payroll exports",
+        "workerName": "Optional legal name for payroll if different from display name",
+        "contractCountry": "Country where the worker's contract is registered (e.g., Portugal, Spain)"
+      },
+      "errors": {
+        "ownerEditSelfOnly": "Owner users can only be edited by themselves.",
+        "ownerDeleteBlocked": "Owner users cannot be deleted.",
+        "userLimitReachedDefault": "User limit reached. Purchase more licences in Billing before adding new users.",
+        "licenseLimitReached": "Licence limit reached: Your {{planName}} plan allows {{user_limit}} users maximum. You currently have {{user_count}}. Please upgrade your plan in the Billing page to add more users."
+      },
+      "notifications": {
+        "loadFailed": "Failed to load users.",
+        "createSuccess": "User created successfully.",
+        "updateSuccess": "User updated successfully.",
+        "saveFailed": "Failed to save user.",
+        "deleteSuccess": "User deleted successfully.",
+        "deleteFailed": "Failed to delete user."
+      },
+      "confirmDelete": {
+        "title": "Delete user",
+        "message": "Are you sure you want to delete this user? This action cannot be undone."
+      }
+    },
+    "countries": {
+      "title": "Countries",
+      "empty": {
+        "title": "No countries",
+        "subtitle": "Create your first country to use it in dropdowns."
+      },
+      "actions": {
+        "add": "Add Country"
+      },
+      "columns": {
+        "iso2": "ISO-2"
+      },
+      "dialog": {
+        "newTitle": "New Country",
+        "editTitle": "Edit Country"
+      },
+      "fields": {
+        "iso2": "ISO-2"
+      },
+      "helpers": {
+        "iso2": "2 letters (e.g. PT, ES, FR)"
+      },
+      "validation": {
+        "nameAndIso2Required": "Name is required and ISO-2 must be 2 letters."
+      },
+      "confirmForceDelete": {
+        "title": "Country is in use",
+        "message": "This country is referenced by existing locations. Do you want to force delete it? Locations will NOT be deleted; their country may become empty.",
+        "confirmText": "Force delete"
+      },
+      "notifications": {
+        "loadFailed": "Failed to load countries.",
+        "createSuccess": "Country created successfully.",
+        "updateSuccess": "Country updated successfully.",
+        "saveFailed": "Failed to save country.",
+        "deleteSuccess": "Country deleted successfully.",
+        "deleteFailed": "Failed to delete country."
       }
     }
   }

@@ -21,6 +21,7 @@ import ConfirmationDialog from '../Common/ConfirmationDialog';
 import api from '../../services/api';
 import type { ProjectMember, Technician } from '../../types';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useTranslation } from 'react-i18next';
 
 interface ProjectSummary {
   id: number;
@@ -52,6 +53,7 @@ const normalizeArray = <T,>(payload: unknown): T[] => {
 };
 
 const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, project, onClose }) => {
+  const { t } = useTranslation();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-project-members');
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -96,7 +98,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
       setMembers(normalizeArray<ProjectMember>(response.data));
     } catch {
       setMembers([]);
-      showSnackbar('Failed to load project members', 'error');
+      showSnackbar(t('admin.projects.membersDialog.notifications.loadMembersFailed'), 'error');
     } finally {
       setLoadingMembers(false);
     }
@@ -107,7 +109,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
       const response = await api.get('/api/technicians');
       setAvailableUsers(normalizeArray<Technician>(response.data));
     } catch {
-      showSnackbar('Failed to load available users', 'error');
+      showSnackbar(t('admin.projects.membersDialog.notifications.loadUsersFailed'), 'error');
     }
   };
 
@@ -135,9 +137,9 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
       };
       const response = await api.put(`/api/projects/${project.id}/members/${member.user_id}`, payload);
       setMembers((prev) => prev.map((item) => (item.id === member.id ? response.data : item)));
-      showSnackbar('Roles updated successfully', 'success');
+      showSnackbar(t('admin.projects.membersDialog.notifications.rolesUpdated'), 'success');
     } catch {
-      showSnackbar('Unable to update roles', 'error');
+      showSnackbar(t('admin.projects.membersDialog.notifications.updateRolesFailed'), 'error');
     } finally {
       setUpdatingMemberId(null);
     }
@@ -151,8 +153,8 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
     
     setConfirmDialog({
       open: true,
-      title: 'Remove Member',
-      message: `Are you sure you want to remove this member from the project?`,
+      title: t('admin.projects.membersDialog.confirmRemove.title'),
+      message: t('admin.projects.membersDialog.confirmRemove.message'),
       recordDetails: {
         name: member.user?.name,
         email: member.user?.email,
@@ -168,9 +170,9 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
         try {
           await api.delete(`/api/projects/${project.id}/members/${member.user_id}`);
           setMembers((prev) => prev.filter((item) => item.id !== member.id));
-          showSnackbar('Member removed', 'success');
+          showSnackbar(t('admin.projects.membersDialog.notifications.memberRemoved'), 'success');
         } catch {
-          showSnackbar('Failed to remove member', 'error');
+          showSnackbar(t('admin.projects.membersDialog.notifications.removeMemberFailed'), 'error');
         } finally {
           setUpdatingMemberId(null);
         }
@@ -195,9 +197,9 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
       });
       setMembers((prev) => [...prev, response.data]);
       resetForm();
-      showSnackbar('Member added to the project', 'success');
+      showSnackbar(t('admin.projects.membersDialog.notifications.memberAdded'), 'success');
     } catch {
-      showSnackbar('Failed to add member', 'error');
+      showSnackbar(t('admin.projects.membersDialog.notifications.addMemberFailed'), 'error');
     } finally {
       setSavingNewMember(false);
     }
@@ -215,14 +217,14 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
       maxWidth="md"
       disableRestoreFocus
     >
-      <DialogTitle>Manage members — {project.name}</DialogTitle>
+      <DialogTitle>{t('admin.projects.membersDialog.title', { project: project.name })}</DialogTitle>
       <DialogContent dividers>
         {loadingMembers ? (
           <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
             <CircularProgress size={32} />
           </Box>
         ) : members.length === 0 ? (
-          <Alert severity="info">No members are linked to this project yet.</Alert>
+          <Alert severity="info">{t('admin.projects.membersDialog.empty')}</Alert>
         ) : (
           <Stack spacing={2}>
             {members.map((member) => (
@@ -241,14 +243,14 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Box>
                     <Typography variant="subtitle1" fontWeight={600}>
-                      {member.user?.name ?? 'Unnamed user'}
+                      {member.user?.name ?? t('admin.projects.membersDialog.unnamedUser')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {member.user?.email ?? 'No email provided'}
+                      {member.user?.email ?? t('admin.projects.membersDialog.noEmail')}
                     </Typography>
                   </Box>
                   <IconButton
-                    aria-label="Remove member"
+                    aria-label={t('admin.projects.membersDialog.removeAria')}
                     color="error"
                     size="small"
                     onClick={() => handleRemoveMember(member)}
@@ -262,7 +264,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                   <TextField
                     select
                     fullWidth
-                    label="Timesheet Role"
+                    label={t('admin.projects.membersDialog.fields.timesheetRole')}
                     value={member.project_role}
                     onChange={(event) =>
                       handleMemberRoleChange(member, 'project_role', event.target.value as Role)
@@ -270,16 +272,16 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                     disabled={isReadOnly || updatingMemberId === member.user_id}
                   >
                     <MenuItem value="none">
-                      <em>None</em>
+                      <em>{t('approvals.roles.none')}</em>
                     </MenuItem>
-                    <MenuItem value="member">Member</MenuItem>
-                    <MenuItem value="manager">Manager</MenuItem>
+                    <MenuItem value="member">{t('approvals.roles.member')}</MenuItem>
+                    <MenuItem value="manager">{t('approvals.roles.manager')}</MenuItem>
                   </TextField>
 
                   <TextField
                     select
                     fullWidth
-                    label="Expense Role"
+                    label={t('admin.projects.membersDialog.fields.expenseRole')}
                     value={member.expense_role}
                     onChange={(event) =>
                       handleMemberRoleChange(member, 'expense_role', event.target.value as Role)
@@ -287,16 +289,16 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                     disabled={isReadOnly || updatingMemberId === member.user_id}
                   >
                     <MenuItem value="none">
-                      <em>None</em>
+                      <em>{t('approvals.roles.none')}</em>
                     </MenuItem>
-                    <MenuItem value="member">Member</MenuItem>
-                    <MenuItem value="manager">Manager</MenuItem>
+                    <MenuItem value="member">{t('approvals.roles.member')}</MenuItem>
+                    <MenuItem value="manager">{t('approvals.roles.manager')}</MenuItem>
                   </TextField>
 
                   <TextField
                     select
                     fullWidth
-                    label="Finance Role"
+                    label={t('admin.projects.membersDialog.fields.financeRole')}
                     value={member.finance_role || 'none'}
                     onChange={(event) =>
                       handleMemberRoleChange(member, 'finance_role', event.target.value as Role)
@@ -304,10 +306,10 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                     disabled={isReadOnly || updatingMemberId === member.user_id}
                   >
                     <MenuItem value="none">
-                      <em>None</em>
+                      <em>{t('approvals.roles.none')}</em>
                     </MenuItem>
-                    <MenuItem value="member">Member</MenuItem>
-                    <MenuItem value="manager">Manager</MenuItem>
+                    <MenuItem value="member">{t('approvals.roles.member')}</MenuItem>
+                    <MenuItem value="manager">{t('approvals.roles.manager')}</MenuItem>
                   </TextField>
                 </Stack>
               </Box>
@@ -318,18 +320,18 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-          Add new member
+          {t('admin.projects.membersDialog.addSectionTitle')}
         </Typography>
 
         {assignableUsers.length === 0 ? (
           <Alert severity="warning">
-            No users are available to assign. Create a technician first.
+            {t('admin.projects.membersDialog.noAssignableUsers')}
           </Alert>
         ) : (
           <Stack spacing={2} mt={1}>
             <TextField
               select
-              label="User"
+              label={t('admin.projects.membersDialog.fields.user')}
               fullWidth
               value={formData.user_id}
               onChange={(event) =>
@@ -348,7 +350,7 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
               <TextField
                 select
                 fullWidth
-                label="Timesheet Role"
+                label={t('admin.projects.membersDialog.fields.timesheetRole')}
                 value={formData.project_role}
                 onChange={(event) =>
                   setFormData({ ...formData, project_role: event.target.value as Role })
@@ -356,16 +358,16 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                 disabled={isReadOnly || savingNewMember}
               >
                 <MenuItem value="none">
-                  <em>None</em>
+                  <em>{t('approvals.roles.none')}</em>
                 </MenuItem>
-                <MenuItem value="member">Member</MenuItem>
-                <MenuItem value="manager">Manager</MenuItem>
+                <MenuItem value="member">{t('approvals.roles.member')}</MenuItem>
+                <MenuItem value="manager">{t('approvals.roles.manager')}</MenuItem>
               </TextField>
 
               <TextField
                 select
                 fullWidth
-                label="Expense Role"
+                label={t('admin.projects.membersDialog.fields.expenseRole')}
                 value={formData.expense_role}
                 onChange={(event) =>
                   setFormData({ ...formData, expense_role: event.target.value as Role })
@@ -373,16 +375,16 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                 disabled={isReadOnly || savingNewMember}
               >
                 <MenuItem value="none">
-                  <em>None</em>
+                  <em>{t('approvals.roles.none')}</em>
                 </MenuItem>
-                <MenuItem value="member">Member</MenuItem>
-                <MenuItem value="manager">Manager</MenuItem>
+                <MenuItem value="member">{t('approvals.roles.member')}</MenuItem>
+                <MenuItem value="manager">{t('approvals.roles.manager')}</MenuItem>
               </TextField>
 
               <TextField
                 select
                 fullWidth
-                label="Finance Role"
+                label={t('admin.projects.membersDialog.fields.financeRole')}
                 value={formData.finance_role}
                 onChange={(event) =>
                   setFormData({ ...formData, finance_role: event.target.value as Role })
@@ -390,23 +392,23 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
                 disabled={isReadOnly || savingNewMember}
               >
                 <MenuItem value="none">
-                  <em>None</em>
+                  <em>{t('approvals.roles.none')}</em>
                 </MenuItem>
-                <MenuItem value="member">Member</MenuItem>
-                <MenuItem value="manager">Manager</MenuItem>
+                <MenuItem value="member">{t('approvals.roles.member')}</MenuItem>
+                <MenuItem value="manager">{t('approvals.roles.manager')}</MenuItem>
               </TextField>
             </Stack>
           </Stack>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>{t('admin.projects.membersDialog.actions.close')}</Button>
         <Button
           variant="contained"
           onClick={handleAddMember}
           disabled={isReadOnly || savingNewMember || formData.user_id === ''}
         >
-          Assign user
+          {t('admin.projects.membersDialog.actions.assignUser')}
         </Button>
       </DialogActions>
 
@@ -430,8 +432,8 @@ const ProjectMembersDialog: React.FC<ProjectMembersDialogProps> = ({ open, proje
         title={confirmDialog.title}
         message={confirmDialog.message}
         recordDetails={confirmDialog.recordDetails}
-        confirmText="Remove"
-        cancelText="Cancel"
+        confirmText={t('admin.projects.membersDialog.confirmRemove.confirm')}
+        cancelText={t('common.cancel')}
         confirmColor="error"
         onConfirm={confirmDialog.action}
         onCancel={() => setConfirmDialog({ ...confirmDialog, open: false })}

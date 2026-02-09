@@ -16,6 +16,9 @@
       "emptyValue": "—"
     },
     "help": {
+      "sidebar": {
+        "selectUsers": "Selecionar utilizadores"
+      },
       "title": "Precisa de ajuda?",
       "subtitle": "Consulte a documentação e dicas de IA para respostas mais rápidas.",
       "tip": "Dica: use a aba de IA para resumos, anomalias e próximos passos.",
@@ -108,11 +111,25 @@
     "ai": {
       "title": "Pergunte à IA TimePerk",
       "subtitle": "Resuma anomalias, aprovações e tendências.",
+      "examples": {
+        "title": "Exemplos",
+        "more": "Ver mais exemplos",
+        "less": "Ver menos exemplos",
+        "items": [
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00-13:00\nBloco 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00–13:00\nBloco 2: 14:00–18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\nBlock 1: 09:00-13:00\nBlock 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-10\nProjeto: \"Mobile Banking App\"\n09:00-10:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
+        ]
+      },
       "suggestions": {
         "flags": "Quais lançamentos foram sinalizados?",
         "overtime": "Onde as horas extras aumentaram?",
         "approvals": "Quais aprovações estão pendentes?",
-        "projectCosts": "Quais projetos excederam as horas previstas?"
+        "projectCosts": "Quais projetos excederam as horas previstas?",
+        "timesheetCreate": "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
       },
       "placeholderResponse": "Ainda estou a aprender. Por enquanto, posso resumir o relatório com base na tua pergunta.",
       "errorFallback": "Algo errado ocorreu. Tente novamente.",

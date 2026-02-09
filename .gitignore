@@ -114,7 +114,9 @@ test_*.sh
 setup_tenant.sh
 check_users.sh
 delete_user.sh
+<<<<<<< HEAD
 
+frontend/tmp/
 
 # Local dev certs (mkcert / letsencrypt local)
 docker/letsencrypt/

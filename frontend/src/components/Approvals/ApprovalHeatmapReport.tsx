@@ -288,13 +288,23 @@ const ApprovalHeatmapReport: React.FC = () => {
       totalApprovedExpenses += typeof v.expenses?.approved === 'number' ? v.expenses.approved : 0;
     }
 
+    const scopedRaw = data?.meta?.scoped ? String(data.meta.scoped) : '';
+    const scopedNorm = scopedRaw.trim().toLowerCase();
+    const scopedLabel = scopedRaw
+      ? scopedNorm === 'all'
+        ? t('approvalHeatmap.scopes.all')
+        : scopedNorm === 'self' || scopedNorm === 'mine' || scopedNorm === 'me'
+          ? t('approvalHeatmap.scopes.self')
+          : scopedRaw
+      : '—';
+
     return {
-      scoped: data?.meta?.scoped ? String(data.meta.scoped) : '—',
+      scoped: scopedLabel,
       totalPending,
       totalApprovedTimesheets,
       totalApprovedExpenses,
     };
-  }, [data]);
+  }, [data, t]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -632,10 +642,10 @@ const ApprovalHeatmapReport: React.FC = () => {
 
                   const lines: string[] = [header];
                   if (includeTimesheets) {
-                    lines.push(`Timesheets: ${tsPending} pending`);
+                    lines.push(t('approvalHeatmap.tooltip.timesheetsPending', { count: tsPending }));
                   }
                   if (includeExpenses) {
-                    lines.push(`Expenses: ${exPending} pending`);
+                    lines.push(t('approvalHeatmap.tooltip.expensesPending', { count: exPending }));
                   }
                   return lines.join('\n');
                 })();
@@ -671,7 +681,7 @@ const ApprovalHeatmapReport: React.FC = () => {
                 return (
                   <Tooltip
                     key={cellKey}
-                    title={<span style={{ whiteSpace: 'pre-line' }}>{tooltip}</span>}
+                    title={<Box component="span" sx={{ whiteSpace: 'pre-line' }}>{tooltip}</Box>}
                     placement="top"
                     arrow
                   >
@@ -682,7 +692,11 @@ const ApprovalHeatmapReport: React.FC = () => {
             </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              Showing {formatTenantDate(String(data.meta.from ?? ''), tenantContext)} → {formatTenantDate(String(data.meta.to ?? ''), tenantContext)} (scoped: {data.meta.scoped})
+              {t('approvalHeatmap.rangeLabel', {
+                from: formatTenantDate(String(data.meta.from ?? ''), tenantContext),
+                to: formatTenantDate(String(data.meta.to ?? ''), tenantContext),
+                scope: totals.scoped,
+              })}
             </Typography>
           </Box>
         )}

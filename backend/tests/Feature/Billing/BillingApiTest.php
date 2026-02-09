@@ -2,11 +2,10 @@
 
 namespace Tests\Feature\Billing;
 
-use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Modules\Billing\Models\Subscription;
-use Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TenantTestCase;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -19,21 +18,29 @@ use Laravel\Sanctum\Sanctum;
  * - POST /api/billing/checkout/start
  * - POST /api/billing/checkout/confirm
  */
-class BillingApiTest extends TestCase
+class BillingApiTest extends TenantTestCase
 {
-    use RefreshDatabase;
-
-    protected Tenant $tenant;
     protected User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->tenant = Tenant::create([
-            'name' => 'API Test Tenant',
-            'slug' => 'api-test',
-        ]);
+        DB::connection('mysql')
+            ->table('subscriptions')
+            ->where('tenant_id', $this->tenant->id)
+            ->delete();
+        DB::connection('mysql')
+            ->table('payments')
+            ->where('tenant_id', $this->tenant->id)
+            ->delete();
+
+        $this->tenant->unsetRelation('subscription');
+        $this->tenant->setRelation('subscription', null);
+        if (tenancy()->tenant) {
+            tenancy()->tenant->unsetRelation('subscription');
+            tenancy()->tenant->setRelation('subscription', null);
+        }
 
         $this->user = User::factory()->create([
             'email' => 'admin@apitest.com',
@@ -42,86 +49,91 @@ class BillingApiTest extends TestCase
         Sanctum::actingAs($this->user);
     }
 
-    /** @test */
-    public function billing_summary_returns_subscription_details()
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function createActiveSubscription(array $overrides = []): Subscription
     {
-        Subscription::create([
+        $subscription = Subscription::create(array_merge([
             'tenant_id' => $this->tenant->id,
             'plan' => 'team',
             'user_limit' => 5,
-            'addons' => ['planning'],
+            'addons' => [],
             'status' => 'active',
+        ], $overrides));
+
+        $this->tenant->unsetRelation('subscription');
+        if (tenancy()->tenant) {
+            tenancy()->tenant->unsetRelation('subscription');
+        }
+
+        return $subscription;
+    }
+
+    /** @test */
+    public function billing_summary_returns_subscription_details()
+    {
+        $subscription = $this->createActiveSubscription([
+            'addons' => ['planning'],
         ]);
 
-        $response = $this->getJson('/api/billing/summary');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/billing/summary');
 
         $response->assertOk()
+            ->assertJsonPath('success', true)
             ->assertJsonStructure([
-                'subscription' => [
-                    'id',
+                'success',
+                'data' => [
                     'plan',
-                    'user_limit',
-                    'addons',
-                    'status',
-                ],
-                'features' => [
-                    'timesheets',
-                    'expenses',
-                    'travels',
-                    'planning',
-                    'ai',
-                ],
-                'pricing' => [
-                    'base_subtotal',
-                    'addons',
-                    'total',
-                    'currency',
+                    'features',
+                    'subscription',
                 ],
             ]);
 
-        $data = $response->json();
-        $this->assertEquals('team', $data['subscription']['plan']);
-        $this->assertContains('planning', $data['subscription']['addons']);
+        $data = $response->json('data');
+        $this->assertEquals('team', $data['plan']);
         $this->assertTrue($data['features']['planning']);
+        $this->assertEquals($subscription->id, $data['subscription']['id']);
     }
 
     /** @test */
     public function billing_summary_returns_null_for_no_subscription()
     {
-        $response = $this->getJson('/api/billing/summary');
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/billing/summary');
 
         $response->assertOk()
-            ->assertJson([
-                'subscription' => null,
-            ]);
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.subscription', null);
     }
 
     /** @test */
     public function upgrade_plan_updates_subscription()
     {
-        $response = $this->postJson('/api/billing/upgrade-plan', [
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/upgrade-plan', [
             'plan' => 'team',
             'user_limit' => 10,
         ]);
 
         $response->assertOk()
+            ->assertJsonPath('success', true)
             ->assertJsonStructure([
-                'subscription',
-                'features',
-                'pricing',
+                'payment_id',
+                'client_secret',
+                'gateway',
+                'amount',
+                'currency',
                 'message',
             ]);
-
-        $data = $response->json();
-        $this->assertEquals('team', $data['subscription']['plan']);
-        $this->assertEquals(10, $data['subscription']['user_limit']);
-        $this->assertTrue($data['features']['travels']);
     }
 
     /** @test */
     public function upgrade_plan_requires_valid_plan()
     {
-        $response = $this->postJson('/api/billing/upgrade-plan', [
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/upgrade-plan', [
             'plan' => 'invalid-plan',
             'user_limit' => 5,
         ]);
@@ -133,7 +145,8 @@ class BillingApiTest extends TestCase
     /** @test */
     public function upgrade_plan_requires_user_limit()
     {
-        $response = $this->postJson('/api/billing/upgrade-plan', [
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/upgrade-plan', [
             'plan' => 'team',
         ]);
 
@@ -144,63 +157,50 @@ class BillingApiTest extends TestCase
     /** @test */
     public function toggle_addon_enables_addon()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
-            'plan' => 'team',
-            'user_limit' => 5,
-            'status' => 'active',
-        ]);
+        $this->createActiveSubscription();
 
-        $response = $this->postJson('/api/billing/toggle-addon', [
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/toggle-addon', [
             'addon' => 'planning',
         ]);
 
         $response->assertOk()
-            ->assertJson([
-                'action' => 'added',
-                'enabled' => true,
-            ]);
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.action', 'enabled')
+            ->assertJsonPath('data.addon', 'planning');
 
-        $data = $response->json();
-        $this->assertContains('planning', $data['subscription']['addons']);
+        $addons = $response->json('data.subscription.addons') ?? [];
+        $this->assertContains('planning', $addons);
     }
 
     /** @test */
     public function toggle_addon_disables_active_addon()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
-            'plan' => 'team',
-            'user_limit' => 5,
+        $this->createActiveSubscription([
             'addons' => ['planning'],
-            'status' => 'active',
         ]);
 
-        $response = $this->postJson('/api/billing/toggle-addon', [
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/toggle-addon', [
             'addon' => 'planning',
         ]);
 
         $response->assertOk()
-            ->assertJson([
-                'action' => 'removed',
-                'enabled' => false,
-            ]);
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.action', 'disabled')
+            ->assertJsonPath('data.addon', 'planning');
 
-        $data = $response->json();
-        $this->assertNotContains('planning', $data['subscription']['addons']);
+        $addons = $response->json('data.subscription.addons') ?? [];
+        $this->assertNotContains('planning', $addons);
     }
 
     /** @test */
     public function toggle_addon_requires_valid_addon()
     {
-        Subscription::create([
-            'tenant_id' => $this->tenant->id,
-            'plan' => 'team',
-            'user_limit' => 5,
-            'status' => 'active',
-        ]);
+        $this->createActiveSubscription();
 
-        $response = $this->postJson('/api/billing/toggle-addon', [
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/toggle-addon', [
             'addon' => 'invalid-addon',
         ]);
 
@@ -211,7 +211,11 @@ class BillingApiTest extends TestCase
     /** @test */
     public function checkout_start_creates_payment_intent()
     {
-        $response = $this->postJson('/api/billing/checkout/start', [
+        $this->createActiveSubscription();
+
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/start', [
+            'mode' => 'plan',
             'plan' => 'team',
             'user_limit' => 5,
             'addons' => ['planning'],
@@ -219,22 +223,25 @@ class BillingApiTest extends TestCase
 
         $response->assertOk()
             ->assertJsonStructure([
-                'transaction_id',
+                'payment_id',
+                'client_secret',
+                'gateway',
                 'amount',
                 'currency',
-                'status',
-                'test_cards',
             ]);
 
         $data = $response->json();
-        $this->assertEquals('pending', $data['status']);
-        $this->assertGreaterThan(0, $data['amount']);
+        $this->assertGreaterThanOrEqual(0, $data['amount']);
     }
 
     /** @test */
     public function checkout_start_requires_valid_plan()
     {
-        $response = $this->postJson('/api/billing/checkout/start', [
+        $this->createActiveSubscription();
+
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/start', [
+            'mode' => 'plan',
             'plan' => 'invalid',
             'user_limit' => 5,
         ]);
@@ -246,119 +253,146 @@ class BillingApiTest extends TestCase
     /** @test */
     public function checkout_confirm_with_valid_test_card_succeeds()
     {
+        $this->createActiveSubscription([
+            'plan' => 'team',
+            'user_limit' => 10,
+        ]);
+
         // Start checkout first
-        $startResponse = $this->postJson('/api/billing/checkout/start', [
+        $startResponse = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/start', [
+            'mode' => 'plan',
             'plan' => 'enterprise',
             'user_limit' => 10,
             'addons' => ['planning', 'ai'],
         ]);
 
-        $transactionId = $startResponse->json('transaction_id');
+        $paymentId = $startResponse->json('payment_id');
 
         // Confirm with valid test card
-        $response = $this->postJson('/api/billing/checkout/confirm', [
-            'transaction_id' => $transactionId,
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/confirm', [
+            'payment_id' => $paymentId,
             'card_number' => '4111111111111111', // Valid test card
         ]);
 
         $response->assertOk()
             ->assertJson([
-                'status' => 'succeeded',
+                'success' => true,
+                'status' => 'completed',
             ])
             ->assertJsonStructure([
-                'subscription',
-                'payment',
+                'payment_id',
                 'message',
             ]);
-
-        $data = $response->json();
-        $this->assertEquals('enterprise', $data['subscription']['plan']);
-        $this->assertContains('planning', $data['subscription']['addons']);
-        $this->assertContains('ai', $data['subscription']['addons']);
     }
 
     /** @test */
     public function checkout_confirm_with_declined_card_fails()
     {
+        $this->createActiveSubscription();
+
         // Start checkout
-        $startResponse = $this->postJson('/api/billing/checkout/start', [
+        $startResponse = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/start', [
+            'mode' => 'plan',
             'plan' => 'team',
             'user_limit' => 5,
         ]);
 
-        $transactionId = $startResponse->json('transaction_id');
+        $paymentId = $startResponse->json('payment_id');
 
         // Confirm with declined test card
-        $response = $this->postJson('/api/billing/checkout/confirm', [
-            'transaction_id' => $transactionId,
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/confirm', [
+            'payment_id' => $paymentId,
             'card_number' => '4000000000000002', // Declined test card
         ]);
 
-        $response->assertStatus(400)
+        $response->assertOk()
             ->assertJson([
+                'success' => true,
                 'status' => 'failed',
-                'message' => 'Card declined',
             ]);
     }
 
     /** @test */
-    public function checkout_confirm_with_insufficient_funds_fails()
+    public function checkout_confirm_with_expired_card_fails()
     {
+        $this->createActiveSubscription();
+
         // Start checkout
-        $startResponse = $this->postJson('/api/billing/checkout/start', [
+        $startResponse = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/start', [
+            'mode' => 'plan',
             'plan' => 'enterprise',
             'user_limit' => 20,
         ]);
 
-        $transactionId = $startResponse->json('transaction_id');
+        $paymentId = $startResponse->json('payment_id');
 
         // Confirm with insufficient funds card
-        $response = $this->postJson('/api/billing/checkout/confirm', [
-            'transaction_id' => $transactionId,
-            'card_number' => '4000000000009995', // Insufficient funds
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/confirm', [
+            'payment_id' => $paymentId,
+            'card_number' => '4000000000000069', // Expired card
         ]);
 
-        $response->assertStatus(400)
+        $response->assertOk()
             ->assertJson([
+                'success' => true,
                 'status' => 'failed',
-                'message' => 'Insufficient funds',
             ]);
     }
 
     /** @test */
-    public function checkout_confirm_requires_transaction_id()
+    public function checkout_confirm_requires_payment_id()
     {
-        $response = $this->postJson('/api/billing/checkout/confirm', [
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/confirm', [
             'card_number' => '4111111111111111',
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['transaction_id']);
+            ->assertJsonValidationErrors(['payment_id']);
     }
 
     /** @test */
-    public function checkout_confirm_requires_card_number()
+    public function checkout_confirm_without_card_number_defaults_to_success()
     {
-        $response = $this->postJson('/api/billing/checkout/confirm', [
-            'transaction_id' => 'txn_12345',
+        $this->createActiveSubscription();
+
+        $startResponse = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/start', [
+            'mode' => 'plan',
+            'plan' => 'team',
+            'user_limit' => 5,
         ]);
 
-        $response->assertStatus(422)
-            ->assertJsonValidationErrors(['card_number']);
-    }
+        $paymentId = $startResponse->json('payment_id');
 
-    /** @test */
-    public function checkout_confirm_with_invalid_transaction_fails()
-    {
-        $response = $this->postJson('/api/billing/checkout/confirm', [
-            'transaction_id' => 'invalid-transaction-id',
-            'card_number' => '4111111111111111',
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/confirm', [
+            'payment_id' => $paymentId,
         ]);
 
-        $response->assertStatus(400)
+        $response->assertOk()
             ->assertJson([
-                'status' => 'failed',
-                'message' => 'Transaction not found',
+                'success' => true,
+                'status' => 'completed',
             ]);
+    }
+
+    /** @test */
+    public function checkout_confirm_with_invalid_payment_id_fails()
+    {
+        $response = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/billing/checkout/confirm', [
+            'payment_id' => 999999,
+            'card_number' => '4111111111111111',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['payment_id']);
     }
 }

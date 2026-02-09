@@ -225,6 +225,9 @@ class BillingSummaryApiTest extends TestCase
     /** @test */
     public function summary_returns_team_plan_with_both_addons()
     {
+        $this->tenant->ai_enabled = true;
+        $this->tenant->save();
+
         // Create Team subscription with both addons
         Subscription::create([
             'tenant_id' => $this->tenant->id,
@@ -269,6 +272,9 @@ class BillingSummaryApiTest extends TestCase
     /** @test */
     public function summary_returns_enterprise_plan()
     {
+        $this->tenant->ai_enabled = true;
+        $this->tenant->save();
+
         // Create Enterprise subscription
         Subscription::create([
             'tenant_id' => $this->tenant->id,
@@ -322,6 +328,9 @@ class BillingSummaryApiTest extends TestCase
             'is_trial' => true,
             'trial_ends_at' => Carbon::now()->addDays(10),
         ]);
+            $this->tenant->ai_enabled = true;
+            $this->tenant->save();
+
 
         // Mock PriceCalculator for Trial Enterprise (free, unlimited users)
         $this->mockPriceCalculator([

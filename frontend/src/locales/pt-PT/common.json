@@ -10,6 +10,7 @@
       "open": "Abrir {{tab}}",
       "close": "Fechar {{tab}}"
     },
+    "openButton": "Ajuda / IA",
     "panelFallback": "Painel",
     "closePanel": "Fechar painel",
     "insights": {
@@ -20,6 +21,7 @@
       "subtitle": "Consulte a documentação e dicas de IA para respostas mais rápidas.",
       "tip": "Dica: use a aba de IA para resumos, anomalias e próximos passos.",
       "fallbackTitle": "Ajuda",
+      "duration": "Duração",
       "fallbackBody": "Ainda não há ajuda disponível para esta página.",
       "timesheets": {
         "title": "Ajuda de timesheets",
@@ -108,11 +110,25 @@
     "ai": {
       "title": "Pergunte à IA TimePerk",
       "subtitle": "Resuma anomalias, aprovações e tendências.",
+      "examples": {
+        "title": "Exemplos",
+        "more": "Ver mais exemplos",
+        "less": "Ver menos exemplos",
+        "items": [
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00-13:00\nBloco 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\nBloco 1: 09:00–13:00\nBloco 2: 14:00–18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\nBlock 1: 09:00-13:00\nBlock 2: 14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-10\nProjeto: \"Mobile Banking App\"\n09:00-10:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProjeto: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00",
+          "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
+        ]
+      },
       "suggestions": {
         "flags": "Quais lançamentos foram sinalizados?",
         "overtime": "Onde as horas extras aumentaram?",
         "approvals": "Quais aprovações estão pendentes?",
-        "projectCosts": "Quais projetos excederam as horas previstas?"
+        "projectCosts": "Quais projetos excederam as horas previstas?",
+        "timesheetCreate": "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
       },
       "placeholderResponse": "Ainda estou a aprender. Por enquanto, posso resumir o relatório com base na tua pergunta.",
       "errorFallback": "Algo errado ocorreu. Tente novamente.",
@@ -253,6 +269,10 @@
     "clear": "Limpar",
     "save": "Guardar",
     "saving": "A guardar…",
+    "update": "Atualizar",
+    "expand": "Expandir",
+    "collapse": "Recolher",
+    "loading": "A carregar...",
     "today": "Hoje",
     "week": "Semana",
     "month": "Mês",
@@ -404,6 +424,17 @@
       }
     }
   },
+  "superAdmin": {
+    "portalTitle": "Portal de Gestão",
+    "portalPrompt": "Autentique-se para continuar"
+  },
+  "team": {
+    "title": "👥 Equipa",
+    "comingSoon": "Gestão de equipa disponível em breve..."
+  },
+  "header": {
+    "tagline": "O cérebro por trás do tempo da sua equipa"
+  },
   "nav": {
     "dashboard": "Painel",
     "timesheets": "Timesheets",
@@ -421,21 +452,199 @@
     "countries": "Países",
     "users": "Utilizadores",
     "aiInsights": "Insights de IA",
+    "aiTimesheetBuilder": "Construtor IA de Timesheets",
     "billing": "Faturação",
     "resetData": "Repor dados",
     "legal": "Legal",
     "terms": "Termos",
     "privacy": "Privacidade",
     "acceptableUse": "Uso aceitável",
+    "profile": "Perfil",
     "logout": "Terminar sessão",
+    "logoutWithName": "Terminar sessão ({{name}})",
     "userFallback": "Utilizador",
     "tagline": "Folha de horas inteligente"
+  },
+  "aiTimesheet": {
+    "title": "Construtor IA de Timesheets",
+    "subtitle": "Gera lancamentos em rascunho a partir de um prompt.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Exemplo: Criar lancamentos para 5 dias (Seg-Sex), 09:00-18:00, almoco 12:30-13:30, projeto ACME, tarefa Instalacao.",
+    "previewButton": "Pre-visualizar",
+    "applyButton": "Aplicar",
+    "applySuccess": "Criados {{count}} lancamentos em rascunho.",
+    "confirmCreate": "Confirmar e criar",
+    "previewSummary": {
+      "title": "Resumo da pre-visualizacao",
+      "dateRange": "Intervalo de datas",
+      "totalWork": "Horas de trabalho",
+      "totalBreaks": "Tempo de pausa",
+      "blockTime": "Horario",
+      "project": "Projeto",
+      "task": "Tarefa",
+      "location": "Localizacao",
+      "notes": "Notas",
+      "unassigned": "Sem projeto",
+      "unknown": "-"
+    },
+    "previewErrors": {
+      "existingNoTime": {
+        "title": "Lancamentos existentes sem horario",
+        "message": "Nao e possivel validar sobreposicoes porque existem lancamentos sem horario nesse dia. A nova proposta da IA inclui horas.",
+        "labels": {
+          "existingEntriesWithoutTime": "Lancamentos existentes sem horario",
+          "howToFix": "Como resolver",
+          "reviewExistingEntries": "Reveja os lancamentos existentes e adicione horas",
+          "replaceEntries": "Apague ou substitua os lancamentos existentes"
+        },
+        "actions": {
+          "chooseDates": "Escolha datas diferentes"
+        }
+      },
+      "overlap": {
+        "title": "Conflito de horarios",
+        "message": "Existem intervalos que se sobrepoem.",
+        "actions": {
+          "addTimes": "Indique horas de inicio e fim para cada bloco",
+          "adjustTimes": "Ajuste os intervalos para evitar sobreposicoes"
+        }
+      },
+      "break": {
+        "title": "Pausa obrigatoria",
+        "message": "E necessario adicionar uma pausa.",
+        "actions": {
+          "addBreak": "Adicione uma pausa no horario",
+          "reviewPolicy": "Confirme o requisito legal aplicado"
+        }
+      },
+      "project": {
+        "title": "Projeto nao encontrado",
+        "message": "Nao foi possivel encontrar o projeto indicado.",
+        "actions": {
+          "checkProject": "Verifique o nome do projeto",
+          "pickAnother": "Escolha outro projeto"
+        }
+      },
+      "generic": {
+        "title": "Nao foi possivel pre-visualizar",
+        "message": "Nao foi possivel interpretar o pedido.",
+        "actions": {
+          "retry": "Tente novamente com mais detalhe",
+          "editPrompt": "Revise o texto do prompt"
+        }
+      }
+    },
+    "missingFields": {
+      "title": "Falta informar",
+      "message": "Por favor indique: {{fields}}",
+      "labels": {
+        "intent": "Intencao",
+        "dateRange": "Intervalo de datas",
+        "dateRangeCount": "Quantidade de dias uteis",
+        "schedule": "Horario",
+        "project": "Projeto",
+        "task": "Tarefa",
+        "location": "Localizacao"
+      }
+    }
   },
   "language": {
     "label": "Idioma",
     "enUS": "Inglês (EUA)",
     "enGB": "Inglês (Reino Unido)",
     "ptPT": "Português (PT)"
+  },
+  "billing": {
+    "readOnly": {
+      "expired": "A sua subscrição expirou. Está em modo só de leitura.",
+      "upgrade": "Upgrade"
+    },
+    "paymentMethods": {
+      "title": "Métodos de pagamento",
+      "subtitle": "Gira os seus cartões de crédito e débito",
+      "addCard": "Adicionar cartão",
+      "empty": "Ainda não há métodos de pagamento. Adicione um cartão para ativar planos pagos.",
+      "defaultLabel": "Predefinido",
+      "expires": "Expira {{month}}/{{year}}",
+      "setDefault": "Definir como predefinido",
+      "cannotRemoveOnly": "Não é possível remover o único método de pagamento",
+      "removeCard": "Remover cartão",
+      "confirmRemove": "Tem a certeza de que quer remover este método de pagamento?",
+      "toast": {
+        "added": "Cartão adicionado com sucesso",
+        "removed": "Método de pagamento removido",
+        "defaultUpdated": "Método de pagamento predefinido atualizado"
+      },
+      "errors": {
+        "loadFailed": "Falha ao carregar métodos de pagamento",
+        "setDefaultFailed": "Falha ao definir método de pagamento predefinido",
+        "removeFailed": "Falha ao remover método de pagamento"
+      }
+    },
+    "addons": {
+      "upgradeTooltip": "Os add-ons não estão disponíveis no plano Starter.",
+      "requiresUpgrade": "Requer upgrade",
+      "active": "Ativo",
+      "priceOfBase": "{{percent}}% do preço base",
+      "planning": {
+        "name": "Módulo de planeamento",
+        "description": "Gráficos Gantt, planeamento de projetos, alocação de recursos",
+        "tooltip": "Planeie tarefas e recursos num calendário partilhado.",
+        "addonTooltip": "Ative o planeamento avançado com um acréscimo de {{percent}}% sobre o valor base.",
+        "features": {
+          "ganttCharts": "Gráficos Gantt",
+          "taskDependencies": "Dependências de tarefas",
+          "resourcePlanning": "Planeamento de recursos",
+          "timelineViews": "Vistas de cronograma"
+        }
+      },
+      "ai": {
+        "name": "Assistente de IA",
+        "description": "Insights, previsões e automação com IA",
+        "tooltip": "Sugestões inteligentes com base nos dados de utilização.",
+        "addonTooltip": "Ative funcionalidades de IA com um acréscimo de {{percent}}% sobre o valor base.",
+        "features": {
+          "smartSuggestions": "Sugestões inteligentes",
+          "patternAnalysis": "Análise de padrões",
+          "anomalyDetection": "Deteção de anomalias",
+          "predictiveAnalytics": "Análise preditiva"
+        }
+      }
+    }
+  },
+  "planning": {
+    "gantt": {
+      "tooltips": {
+        "showGrid": "Mostrar grelha",
+        "hideGrid": "Ocultar grelha",
+        "toggleColumns": "Mostrar/ocultar colunas",
+        "fitToView": "Ajustar todas as tarefas à vista",
+        "goToToday": "Ir para hoje",
+        "resetZoom": "Repor zoom para vista Mensal"
+      },
+      "columns": {
+        "label": "Colunas",
+        "alwaysVisible": "{{column}} (sempre visível)",
+        "location": "Localização",
+        "task": "Tarefa",
+        "users": "Utilizadores",
+        "project": "Projeto",
+        "start": "Início",
+        "end": "Fim",
+        "progress": "Progresso"
+      },
+      "sidebar": {
+        "selectUsers": "Selecionar utilizadores"
+      },
+      "manageTaskLocations": "Gerir localizações da tarefa",
+      "manageProjectMembers": "Gerir membros do projeto",
+      "viewModes": {
+        "day": "Dia",
+        "week": "Semana",
+        "month": "Mês",
+        "year": "Ano"
+      }
+    }
   },
   "approvalHeatmap": {
     "title": "Mapa de calor de aprovações",
@@ -447,11 +656,20 @@
       "expenses": "Despesas"
     },
     "scopeLabel": "Âmbito",
+    "scopes": {
+      "all": "Todos",
+      "self": "Meus"
+    },
     "pendingLabel": "Pendentes",
     "approvedTimesheetsLabel": "Aprovadas (timesheets)",
     "approvedExpensesLabel": "Aprovadas (despesas)",
     "invalidRange": "Seleciona um intervalo válido (máx. 62 dias) e inclui pelo menos um tipo.",
     "loading": "A carregar mapa de calor…",
+    "tooltip": {
+      "timesheetsPending": "Timesheets: {{count}} pendentes",
+      "expensesPending": "Despesas: {{count}} pendentes"
+    },
+    "rangeLabel": "A mostrar {{from}} → {{to}} (âmbito: {{scope}})",
     "insights": {
       "summaryTitle": "Destaques de aprovações",
       "summaryHint": "Visão geral do volume pendente e dos dias mais cheios.",
@@ -620,6 +838,7 @@
     "travels": {
       "title": "Detalhes da viagem",
       "empty": "Sem detalhes de viagem.",
+      "loadFailed": "Falha ao carregar detalhes de viagem.",
       "technician": "Técnico",
       "project": "Projeto",
       "departure": "Partida",
@@ -627,7 +846,88 @@
       "direction": "Direção",
       "duration": "Duração",
       "status": "Estado",
-      "classificationReason": "Motivo da classificação"
+      "classificationReason": "Motivo da classificação",
+      "management": {
+        "title": "Gestão de viagens",
+        "subtitle": "Acompanhe segmentos de viagem e movimentos entre locais do projeto",
+        "emptyTitle": "Ainda não existem segmentos de viagem",
+        "emptySubtitle": "Crie o seu primeiro segmento de viagem para começar a acompanhar deslocações",
+        "newTravel": "Nova viagem",
+        "addAria": "Adicionar viagem"
+      },
+      "table": {
+        "start": "Início",
+        "end": "Fim",
+        "duration": "Duração",
+        "technician": "Técnico",
+        "project": "Projeto",
+        "route": "Rota",
+        "direction": "Direção",
+        "status": "Estado",
+        "actions": "Ações"
+      },
+      "directionLabels": {
+        "departure": "Partida",
+        "arrival": "Chegada",
+        "project_to_project": "Projeto para projeto",
+        "internal": "Interna"
+      },
+      "statusLabels": {
+        "completed": "Concluída",
+        "planned": "Planeada",
+        "cancelled": "Cancelada"
+      },
+      "durationValue": "{{hours}}h {{minutes}}m",
+      "delete": {
+        "title": "Eliminar segmento de viagem",
+        "message": "Tem a certeza de que quer eliminar esta viagem de {{origin}} para {{destination}}?"
+      },
+      "errors": {
+        "loadFailed": "Falha ao carregar segmentos de viagem",
+        "deleteFailed": "Falha ao eliminar segmento de viagem",
+        "saveFailed": "Falha ao guardar segmento de viagem"
+      },
+      "toast": {
+        "deleted": "Segmento de viagem eliminado com sucesso",
+        "created": "Segmento de viagem criado com sucesso",
+        "updated": "Segmento de viagem atualizado com sucesso"
+      },
+      "fallbacks": {
+        "origin": "origem",
+        "destination": "destino"
+      },
+      "form": {
+        "newTitle": "Novo segmento de viagem",
+        "editTitle": "Editar segmento de viagem",
+        "technician": "Técnico",
+        "technicianPlaceholder": "Pesquisar técnicos...",
+        "technicianHelper": "Apenas membros de equipas de projetos geridos",
+        "project": "Projeto",
+        "projectPlaceholder": "Pesquisar projetos...",
+        "startDate": "Data de início",
+        "endDate": "Data de fim",
+        "endDateRequired": "Obrigatório para estado concluído",
+        "status": "Estado",
+        "origin": "Origem",
+        "destination": "Destino",
+        "originCountry": "País de origem",
+        "destinationCountry": "País de destino",
+        "originLocationOptional": "Localização de origem (opcional)",
+        "destinationLocationOptional": "Localização de destino (opcional)",
+        "originLocationPlaceholder": "Selecionar localização de origem",
+        "destinationLocationPlaceholder": "Selecionar localização de destino",
+        "selectTechnicianProject": "Selecione primeiro o técnico e o projeto",
+        "selectOriginCountryFirst": "Selecione primeiro o país de origem",
+        "selectDestinationCountryFirst": "Selecione primeiro o país de destino",
+        "projectLocationsOnly": "Apenas localizações do projeto",
+        "showingAllLocations": "A mostrar todas as localizações",
+        "allAvailableLocations": "Todas as localizações disponíveis",
+        "aiNotInPlan": "As funcionalidades de IA não estão incluídas no seu plano atual. Faça upgrade para aceder a sugestões de viagem com IA.",
+        "aiSuggestion": "Obter sugestão de IA",
+        "aiSuggestionFailed": "Falha ao obter sugestão de IA",
+        "aiSuggestionApplied": "Sugestão de IA aplicada",
+        "durationLabel": "⏱️ Duração: {{duration}}"
+      }
     }
   },
   "expenses": {
@@ -638,6 +938,9 @@
       "title": "Ainda não existem despesas",
       "subtitle": "Clique no botão + para submeter a sua primeira despesa",
       "action": "Adicionar despesa"
+    },
+    "fab": {
+      "addAria": "Adicionar despesa"
     },
     "validation": {
       "projectForTechnician": "Selecione um projeto válido para o técnico escolhido."
@@ -727,7 +1030,8 @@
     "attachment": {
       "previewTitle": "Pré-visualização do anexo",
       "previewUnavailable": "Pré-visualização indisponível para este tipo de ficheiro",
-      "downloadFile": "Descarregar ficheiro"
+      "downloadFile": "Descarregar ficheiro",
+      "previewAlt": "Anexo da despesa"
     },
     "categories": {
       "general": "Geral",
@@ -744,7 +1048,17 @@
   "reports": {
     "ai": {
       "openPanel": "Abrir IA",
-      "closePanel": "Fechar IA"
+      "closePanel": "Fechar IA",
+      "title": "IA"
+    },
+    "aiDrawer": {
+      "emptyPrompt": "Faça uma pergunta sobre o relatório atual e o intervalo de datas.",
+      "you": "Você",
+      "ai": "IA",
+      "questionLabel": "Pergunta",
+      "thinking": "A pensar…",
+      "send": "Enviar",
+      "errorFallback": "Falha ao obter resposta da IA"
     },
     "analysis": "Análise",
     "heatmap": "Mapa de calor",
@@ -763,6 +1077,11 @@
       "validation": {
         "range": "Selecione um intervalo de datas válido."
       },
+      "errors": {
+        "loadFailed": "Falha ao carregar despesas.",
+        "loadFailedStatus": "Falha ao carregar despesas: {{status}}"
+      },
+      "projectFallback": "Projeto #{{id}}",
       "loading": "A carregar despesas…",
       "kpis": {
         "totalValue": "Valor total",
@@ -775,6 +1094,7 @@
       "trends": {
         "title": "Tendências",
         "subtitle": "Gasto e número de despesas ao longo do tempo para os filtros atuais",
+        "granularityAria": "Granularidade das tendências",
         "daily": "Diário",
         "weekly": "Semanal",
         "monthly": "Mensal",
@@ -830,22 +1150,63 @@
         "title": "Mix de gastos",
         "subtitle": "Quota do total por categoria e estado",
         "categoryTitle": "Mix por categoria",
-        "statusTitle": "Mix por estado"
+        "statusTitle": "Mix por estado",
+        "shareLabel": "Quota"
       },
       "movers": {
         "title": "Maiores variações",
         "invalidRange": "Selecione um intervalo de datas válido para comparar com o período anterior.",
         "subtitle": "Maiores variações de gasto vs período anterior {{from}} → {{to}}",
         "categories": "Categorias",
-        "increases": "Aumentos"
+        "increases": "Aumentos",
+        "increasesUpper": "AUMENTOS",
+        "decreasesUpper": "DIMINUIÇÕES",
+        "projects": "Projetos"
       },
       "noExpenses": "Não existem despesas para os filtros atuais.",
       "ai": {
+        "hint": "Experimente perguntar sobre “categorias”, “projetos”, “outliers”, “o que mudou”, “funil de estados”, “qualidade dos dados”, “movimentos” ou “mix”.",
         "noExpenses": "Não existem despesas para os filtros atuais.",
         "spendMixUnavailable": "O mix de gastos não está disponível (gasto total é 0 para os filtros atuais).",
         "spendMixHeader": "Mix de gastos (intervalo {{from}} → {{to}}): total {{total}}",
         "topCategories": "Top categorias:",
         "topStatuses": "Top estados:",
+        "spendMixRow": "- {{label}}: {{share}}% ({{total}})",
+        "totalValue": "O valor total é {{total}} em {{count}} despesas (intervalo {{from}} → {{to}}).",
+        "statuses": "Estados (intervalo {{from}} → {{to}}): Revisão pendente {{pendingReview}}, Revisão financeira {{financeReview}}, Aprovado {{approved}}, Pago {{paid}}.",
+        "topCategoriesHeader": "Principais categorias (intervalo {{from}} → {{to}}):",
+        "topCategoriesRow": "- {{category}}: {{total}} ({{count}})",
+        "topProjectsHeader": "Principais projetos (intervalo {{from}} → {{to}}):",
+        "topProjectsRow": "- {{project}}: {{total}} ({{count}})",
+        "outliersUnavailable": "Os outliers precisam de mais variação de valores (IQR indisponível para o conjunto atual).",
+        "outliersNone": "Nenhum outlier detetado (limiar > {{threshold}}).",
+        "outliersHeader": "Outliers (limiar > {{threshold}}):",
+        "outliersRow": "- {{amount}} · {{project}} · {{category}} · {{date}}",
+        "compareMissingRange": "Selecione um intervalo de datas válido para comparar.",
+        "compareHeader": "Variação vs período anterior ({{from}} → {{to}}):",
+        "compareTotalLine": "Total: {{current}} vs {{previous}} ({{from}} → {{to}})",
+        "compareDeltaLine": "- {{totalLine}} · Δ {{delta}} · {{pct}}",
+        "compareCountLine": "- Quantidade: {{current}} vs {{previous}} · Δ {{delta}} · {{pct}}",
+        "funnelHeader": "Funil de estados (intervalo {{from}} → {{to}}):",
+        "funnelLine": "- {{status}}: {{count}} · {{total}}",
+        "funnelRates": "Taxas chave: submetido→pago {{submittedToPaid}} · revisão_financeira→aprovado_financeiro {{financeReviewToApproved}}",
+        "dataQualityHeader": "Qualidade dos dados (intervalo {{from}} → {{to}}):",
+        "dataQualityResults": "- Resultados: {{count}}",
+        "dataQualityMissingCategory": "- Categoria em falta: {{count}}",
+        "dataQualityMissingProject": "- Nome do projeto em falta: {{count}}",
+        "dataQualityUnparseableDates": "- Datas não interpretáveis para tendências: {{count}}",
+        "moversMissingRange": "Selecione um intervalo de datas válido para comparar.",
+        "moversHeader": "Maiores variações vs período anterior ({{from}} → {{to}}):",
+        "moversCategoryIncreases": "Aumentos de categoria:",
+        "moversCategoryDecreases": "Diminuições de categoria:",
+        "moversCategoryNone": "{{label}} {{fallback}}",
+        "moversCategoryRowIncrease": "- {{category}}: +{{delta}} (Δ {{countDelta}})",
+        "moversCategoryRowDecrease": "- {{category}}: {{delta}} (Δ {{countDelta}})",
+        "moversProjectIncreases": "Aumentos de projeto:",
+        "moversProjectDecreases": "Diminuições de projeto:",
+        "moversProjectNone": "{{label}} {{fallback}}",
+        "moversProjectRowIncrease": "- {{project}}: +{{delta}} (Δ {{countDelta}})",
+        "moversProjectRowDecrease": "- {{project}}: {{delta}} (Δ {{countDelta}})",
         "summaryHeader": "Análise de despesas (intervalo {{from}} → {{to}}):",
         "summaryTotal": "- Total: {{total}} ({{count}} despesas)",
         "summaryPending": "- Pendente: {{count}}",
@@ -854,6 +1215,38 @@
         "summaryPaid": "- Pago: {{count}}",
         "summaryPrompt": "Pergunte sobre “categorias”, “projetos”, “outliers”, “o que mudou”, “funil de estados”, “qualidade de dados”, “variações”, ou “mix”."
       }
+    }
+  },
+  "dashboard": {
+    "title": "Painel",
+    "subtitle": "Bem-vindo de volta, {{name}}! Eis o seu resumo dos últimos {{days}} dias.",
+    "userFallback": "Utilizador",
+    "noData": "Sem dados disponíveis",
+    "errors": {
+      "loadFailed": "Falha ao carregar estatísticas do painel"
+    },
+    "cards": {
+      "totalHours": "Total de horas",
+      "totalExpenses": "Total de despesas",
+      "pendingDetail": "Pendente ({{timesheets}}T + {{expenses}}D)",
+      "approvedDetail": "Aprovado ({{timesheets}}T + {{expenses}}D)"
+    },
+    "charts": {
+      "hoursByProject": "Horas por projeto",
+      "expensesByProject": "Despesas por projeto",
+      "timesheetsByStatus": "Folhas de horas por estado",
+      "expensesByStatus": "Despesas por estado",
+      "dailyHoursTrend": "Tendência diária de horas",
+      "dailyExpensesTrend": "Tendência diária de despesas"
+    },
+    "tooltips": {
+      "hours": "Horas: {{value}}",
+      "amount": "Valor: {{value}}",
+      "hoursValue": "{{value}} horas"
+    },
+    "legends": {
+      "hours": "Horas",
+      "amount": "Valor"
     }
   },
   "timesheets": {
@@ -986,6 +1379,459 @@
         "direction": "Direção",
         "status": "Estado",
         "classificationReason": "Motivo de classificação"
+      }
+    }
+  }
+
+  ,
+  "tour": {
+    "restart": "Reiniciar visita guiada",
+    "buttons": {
+      "back": "Anterior",
+      "close": "Fechar",
+      "finish": "Terminar",
+      "next": "Seguinte",
+      "skip": "Saltar"
+    },
+    "steps": {
+      "menuTimesheets": "Abra as Folhas de Horas no menu à esquerda.",
+      "timesheetsCalendar": "Este é o teu calendário de folhas de horas. Navega por dias/semanas/meses e clica numa data para adicionar registos.",
+      "timesheetsScope": "Usa o Âmbito para alternar entre os teus registos, os de outros, ou todos (gestores/admins).",
+      "aiTrigger": "Use este botão para abrir Insights e ferramentas de IA.",
+      "rightPanelToggle": "Use o X para fechar o painel lateral.",
+      "aiTab": "Mude para o separador de Chat de IA aqui."
+    }
+  },
+  "admin": {
+    "dashboard": {
+      "title": "Administração",
+      "modules": {
+        "projects": {
+          "title": "Projetos",
+          "description": "Criar e gerir projetos, datas e estado."
+        },
+        "tasks": {
+          "title": "Tarefas",
+          "description": "Gerir tarefas, progresso, dependências e locais."
+        },
+        "locations": {
+          "title": "Locais",
+          "description": "Manter locais usados em registos de trabalho e viagens."
+        },
+        "users": {
+          "title": "Utilizadores",
+          "description": "Gerir membros da equipa, funções e identificadores de payroll."
+        }
+      }
+    },
+    "access": {
+      "title": "Acesso e Permissões",
+      "actions": {
+        "editMatrix": "Editar matriz",
+        "aiSuggestion": "Sugestão de IA"
+      },
+      "matrix": {
+        "title": "Matriz de permissões",
+        "role": "Função"
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar perfis/permissões.",
+        "loadMatrixFailed": "Falha ao carregar permissões por perfil.",
+        "updatePermissionFailed": "Falha ao atualizar permissão.",
+        "permissionAssigned": "Permissão {{permission}} atribuída a {{role}}.",
+        "permissionRemoved": "Permissão {{permission}} removida de {{role}}.",
+        "aiNotInPlan": "As sugestões de IA não estão disponíveis no seu plano."
+      },
+      "ai": {
+        "noSuggestion": "Sem sugestão disponível.",
+        "fetchFailed": "Falha ao obter sugestão de IA."
+      }
+    },
+    "resetDataDialog": {
+      "title": {
+        "default": "Repor dados do tenant",
+        "success": "Reposição concluída"
+      },
+      "notifications": {
+        "resetFailed": "Falha ao repor dados.",
+        "resetTenantFailed": "Falha ao repor dados do tenant.",
+        "resetSuccessLoggingOut": "Os dados do tenant foram repostos com sucesso! A terminar sessão..."
+      },
+      "step1": {
+        "danger": "PERIGO: Esta ação não pode ser anulada!",
+        "willDeletePrefix": "Isto irá",
+        "willDeleteEmphasis": "eliminar permanentemente todos os dados",
+        "willDeleteSuffix": "desta base de dados do tenant, incluindo:",
+        "items": {
+          "timesheets": "Todas as folhas de horas e registos de tempo",
+          "expenses": "Todas as despesas e recibos",
+          "travels": "Todos os segmentos de viagem",
+          "projects": "Todos os projetos, tarefas e locais",
+          "users": "Todos os utilizadores (exceto Owner)",
+          "permissions": "Todas as permissões e atribuições de perfis"
+        },
+        "preserved": {
+          "title": "O que será preservado:",
+          "ownerAccount": "A sua conta Owner (email e palavra-passe)",
+          "dbStructure": "Estrutura da base de dados (tabelas e migrações)"
+        },
+        "importantTitle": "Importante:",
+        "important": {
+          "sessionClosed": "A sua sessão será terminada automaticamente após a reposição",
+          "loginAgain": "Terá de iniciar sessão novamente com a sua conta Owner",
+          "chooseOption": "Após a reposição, pode manter a base de dados limpa ou carregar dados de demonstração"
+        },
+        "preferenceTitle": "Selecione a sua preferência:",
+        "options": {
+          "demo": {
+            "title": "Carregar dados de demonstração (Recomendado)",
+            "description": "Criar projetos, tarefas, locais e utilizadores de exemplo para teste"
+          },
+          "clean": {
+            "title": "Base de dados limpa (Sem dados de demonstração)",
+            "description": "Começar com base de dados vazia (apenas conta Owner)"
+          }
+        }
+      },
+      "step2": {
+        "title": "CONFIRMAÇÃO FINAL",
+        "subtitle": "Tem a certeza absoluta de que pretende continuar?",
+        "selectedOptionLabel": "Opção selecionada:",
+        "selectedOption": {
+          "demo": "✓ Eliminar todos os dados e carregar dados de demonstração",
+          "clean": "✓ Eliminar todos os dados (base de dados limpa)"
+        },
+        "notice": "Esta ação irá eliminar imediatamente todos os dados existentes.",
+        "confirmHint": "Clique em \"REPÔR DADOS AGORA\" para confirmar."
+      },
+      "step3": {
+        "title": "Reposição de dados concluída!",
+        "message": {
+          "demo": "Todos os dados do tenant foram repostos e os dados de demonstração foram carregados.",
+          "clean": "Todos os dados do tenant foram eliminados. A base de dados está agora limpa."
+        },
+        "logoutHint": "Vai terminar sessão automaticamente em 2 segundos..."
+      },
+      "actions": {
+        "proceed": "Compreendo, continuar",
+        "goBack": "Voltar",
+        "resetting": "A repor...",
+        "resetNow": "REPÔR DADOS AGORA"
+      }
+    },
+    "shared": {
+      "columns": {
+        "id": "ID",
+        "name": "Nome",
+        "description": "Descrição",
+        "status": "Estado",
+        "actions": "Ações"
+      },
+      "status": {
+        "active": "Ativo",
+        "inactive": "Inativo"
+      }
+    },
+    "locations": {
+      "columns": {
+        "address": "Morada",
+        "city": "Cidade",
+        "country": "País",
+        "postalCode": "Código Postal",
+        "coordinates": "Coordenadas"
+      },
+      "confirmDelete": {
+        "title": "Eliminar local",
+        "message": "Tem a certeza que pretende eliminar este local? Esta ação não pode ser anulada."
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar locais.",
+        "loadCountriesFailed": "Falha ao carregar países.",
+        "requiredFields": "Preencha todos os campos obrigatórios.",
+        "createSuccess": "Local criado com sucesso.",
+        "updateSuccess": "Local atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar local.",
+        "deleteSuccess": "Local eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar local."
+      }
+    },
+    "projects": {
+      "managementTitle": "Gestão de Projetos",
+      "empty": {
+        "title": "Ainda não há projetos",
+        "subtitle": "Crie o seu primeiro projeto para começar a registar trabalho"
+      },
+      "actions": {
+        "new": "Novo Projeto",
+        "edit": "Editar Projeto"
+      },
+      "columns": {
+        "startDate": "Data de início",
+        "endDate": "Data de fim"
+      },
+      "fields": {
+        "startDate": "Data de início",
+        "endDate": "Data de fim"
+      },
+      "status": {
+        "active": "Ativo",
+        "completed": "Concluído",
+        "on_hold": "Em pausa"
+      },
+      "tabs": {
+        "details": "Detalhes",
+        "tasks": "Tarefas"
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar projetos.",
+        "loadTasksFailed": "Falha ao carregar tarefas do projeto.",
+        "createSuccess": "Projeto criado com sucesso.",
+        "updateSuccess": "Projeto atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar projeto.",
+        "deleteSuccess": "Projeto eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar projeto."
+      },
+      "confirmDelete": {
+        "title": "Eliminar projeto",
+        "message": "Tem a certeza que pretende eliminar este projeto? Esta ação não pode ser anulada."
+      },
+      "tasksTab": {
+        "subtitle": "Gerir tarefas deste projeto",
+        "addTask": "Adicionar tarefa",
+        "columns": {
+          "start": "Início",
+          "end": "Fim",
+          "progress": "Progresso"
+        },
+        "empty": "Ainda não há tarefas para este projeto."
+      },
+      "tasksDialog": {
+        "addTask": "Adicionar Tarefa",
+        "editTask": "Editar Tarefa",
+        "fields": {
+          "estimatedHours": "Horas estimadas",
+          "progress": "Progresso (%)"
+        },
+        "validation": {
+          "nameRequired": "O nome da tarefa é obrigatório.",
+          "startDateRequired": "A data de início é obrigatória.",
+          "endDateAfterStart": "A data de fim tem de ser posterior à data de início.",
+          "progressRange": "O progresso tem de estar entre 0 e 100.",
+          "estimatedHoursPositive": "As horas estimadas têm de ser um número positivo."
+        },
+        "notifications": {
+          "createSuccess": "Tarefa criada com sucesso.",
+          "updateSuccess": "Tarefa atualizada com sucesso.",
+          "saveFailed": "Falha ao guardar tarefa.",
+          "deleteSuccess": "Tarefa eliminada com sucesso.",
+          "deleteFailed": "Falha ao eliminar tarefa."
+        },
+        "confirmDelete": {
+          "title": "Eliminar tarefa",
+          "message": "Tem a certeza que pretende eliminar esta tarefa? Esta ação não pode ser anulada."
+        }
+      },
+      "membersDialog": {
+        "title": "Gerir membros — {{project}}",
+        "empty": "Ainda não existem membros associados a este projeto.",
+        "unnamedUser": "Utilizador sem nome",
+        "noEmail": "Sem email",
+        "removeAria": "Remover membro",
+        "fields": {
+          "user": "Utilizador",
+          "timesheetRole": "Perfil de horas",
+          "expenseRole": "Perfil de despesas",
+          "financeRole": "Perfil financeiro"
+        },
+        "addSectionTitle": "Adicionar novo membro",
+        "noAssignableUsers": "Não existem utilizadores disponíveis para atribuir. Crie primeiro um técnico.",
+        "actions": {
+          "close": "Fechar",
+          "assignUser": "Atribuir utilizador"
+        },
+        "confirmRemove": {
+          "title": "Remover membro",
+          "message": "Tem a certeza que pretende remover este membro do projeto?",
+          "confirm": "Remover"
+        },
+        "notifications": {
+          "loadMembersFailed": "Falha ao carregar membros do projeto",
+          "loadUsersFailed": "Falha ao carregar utilizadores disponíveis",
+          "rolesUpdated": "Perfis atualizados com sucesso",
+          "updateRolesFailed": "Não foi possível atualizar os perfis",
+          "memberRemoved": "Membro removido",
+          "removeMemberFailed": "Falha ao remover membro",
+          "memberAdded": "Membro adicionado ao projeto",
+          "addMemberFailed": "Falha ao adicionar membro"
+        }
+      }
+    },
+    "tasks": {
+      "managementTitle": "Gestão de Tarefas",
+      "empty": {
+        "title": "Ainda não há tarefas",
+        "subtitle": "Crie a sua primeira tarefa para organizar o trabalho"
+      },
+      "actions": {
+        "new": "Nova Tarefa",
+        "edit": "Editar Tarefa",
+        "manageLocations": "Gerir locais"
+      },
+      "columns": {
+        "type": "Tipo",
+        "start": "Início",
+        "end": "Fim",
+        "progress": "Progresso",
+        "project": "Projeto",
+        "locations": "Locais"
+      },
+      "locations": {
+        "none": "Sem locais",
+        "count_one": "{{count}} local",
+        "count_other": "{{count}} locais"
+      },
+      "fields": {
+        "project": "Projeto",
+        "taskType": "Tipo de tarefa",
+        "estimatedHours": "Horas estimadas",
+        "startDate": "Data de início",
+        "endDate": "Data de fim",
+        "progress": "Progresso (%)",
+        "dependencies": "Dependências"
+      },
+      "confirmDelete": {
+        "title": "Eliminar tarefa",
+        "message": "Tem a certeza que pretende eliminar esta tarefa? Esta ação não pode ser anulada."
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar tarefas.",
+        "loadProjectsLocationsFailed": "Falha ao carregar projetos ou locais.",
+        "createSuccess": "Tarefa criada com sucesso.",
+        "updateSuccess": "Tarefa atualizada com sucesso.",
+        "saveFailed": "Falha ao guardar tarefa.",
+        "deleteSuccess": "Tarefa eliminada com sucesso.",
+        "deleteFailed": "Falha ao eliminar tarefa."
+      },
+      "locationDialog": {
+        "title": "Gerir locais para: {{taskName}}",
+        "emptyLocations": "Não há locais disponíveis.",
+        "selectLabel": "Locais",
+        "noneSelected": "Nenhum selecionado",
+        "selectedCount_one": "{{count}} selecionado",
+        "selectedCount_other": "{{count}} selecionados",
+        "helper": "Escolha quais os locais disponíveis para esta tarefa.",
+        "notifications": {
+          "loadTaskLocationsFailed": "Falha ao carregar locais da tarefa.",
+          "allLocationsRemoved": "Todos os locais foram removidos.",
+          "updatedWithLocations": "Atualizado com {{count}} local(is).",
+          "updateFailed": "Falha ao atualizar locais da tarefa."
+        }
+      }
+    },
+    "users": {
+      "managementTitle": "Gestão de Utilizadores",
+      "empty": {
+        "title": "Ainda não há utilizadores",
+        "subtitle": "Crie o seu primeiro utilizador para começar a gerir a equipa"
+      },
+      "actions": {
+        "new": "Novo Utilizador",
+        "manageAccess": "Gerir Acesso e Permissões",
+        "createWithoutEmail": "Criar sem email"
+      },
+      "columns": {
+        "email": "Email",
+        "role": "Função",
+        "hourlyRate": "Taxa horária",
+        "workerId": "ID do colaborador",
+        "workerName": "Nome do colaborador",
+        "contractCountry": "País do contrato"
+      },
+      "roles": {
+        "owner": "Proprietário",
+        "manager": "Gestor",
+        "technician": "Técnico",
+        "admin": "Administrador"
+      },
+      "perHourSuffix": "/h",
+      "dialog": {
+        "newUser": "Novo Utilizador",
+        "editUser": "Editar Utilizador",
+        "editOwnerProfile": "Editar Perfil do Proprietário"
+      },
+      "fields": {
+        "email": "Email",
+        "role": "Função",
+        "hourlyRate": "Taxa horária",
+        "workerId": "ID do colaborador",
+        "workerName": "Nome do colaborador",
+        "contractCountry": "País do contrato do colaborador",
+        "password": "Palavra-passe",
+        "newPasswordKeepCurrent": "Nova palavra-passe (deixe vazio para manter a atual)"
+      },
+      "helpers": {
+        "ownerEmailLocked": "O email do proprietário não pode ser alterado",
+        "ownerRoleLocked": "A função do proprietário não pode ser alterada",
+        "workerId": "Identificador único opcional para exportações de payroll",
+        "workerName": "Nome legal opcional para payroll se diferente do nome apresentado",
+        "contractCountry": "País onde o contrato do colaborador está registado (ex.: Portugal, Espanha)"
+      },
+      "errors": {
+        "ownerEditSelfOnly": "Os utilizadores proprietários só podem ser editados por si próprios.",
+        "ownerDeleteBlocked": "Os utilizadores proprietários não podem ser eliminados.",
+        "userLimitReachedDefault": "Limite de utilizadores atingido. Compre mais licenças na Faturação antes de adicionar novos utilizadores.",
+        "licenseLimitReached": "Limite de licenças atingido: o seu plano {{planName}} permite no máximo {{user_limit}} utilizadores. Atualmente tem {{user_count}}. Faça upgrade do plano na página de Faturação para adicionar mais utilizadores."
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar utilizadores.",
+        "createSuccess": "Utilizador criado com sucesso.",
+        "updateSuccess": "Utilizador atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar utilizador.",
+        "deleteSuccess": "Utilizador eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar utilizador."
+      },
+      "confirmDelete": {
+        "title": "Eliminar utilizador",
+        "message": "Tem a certeza que pretende eliminar este utilizador? Esta ação não pode ser anulada."
+      }
+    },
+    "countries": {
+      "title": "Países",
+      "empty": {
+        "title": "Sem países",
+        "subtitle": "Crie o seu primeiro país para o usar em listas."
+      },
+      "actions": {
+        "add": "Adicionar País"
+      },
+      "columns": {
+        "iso2": "ISO-2"
+      },
+      "dialog": {
+        "newTitle": "Novo País",
+        "editTitle": "Editar País"
+      },
+      "fields": {
+        "iso2": "ISO-2"
+      },
+      "helpers": {
+        "iso2": "2 letras (ex.: PT, ES, FR)"
+      },
+      "validation": {
+        "nameAndIso2Required": "O nome é obrigatório e o ISO-2 tem de ter 2 letras."
+      },
+      "confirmForceDelete": {
+        "title": "O país está a ser utilizado",
+        "message": "Este país é referenciado por locais existentes. Pretende forçar a eliminação? Os locais NÃO serão eliminados; o país poderá ficar vazio.",
+        "confirmText": "Forçar eliminação"
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar países.",
+        "createSuccess": "País criado com sucesso.",
+        "updateSuccess": "País atualizado com sucesso.",
+        "saveFailed": "Falha ao guardar país.",
+        "deleteSuccess": "País eliminado com sucesso.",
+        "deleteFailed": "Falha ao eliminar país."
       }
     }
   }

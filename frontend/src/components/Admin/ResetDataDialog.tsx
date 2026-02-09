@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { API_URL, getAuthHeaders } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useTranslation } from 'react-i18next';
 
 interface ResetDataDialogProps {
   open: boolean;
@@ -34,6 +35,7 @@ interface ResetDataDialogProps {
 }
 
 const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
+  const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [confirmStep, setConfirmStep] = useState(1); // 1 = warning, 2 = confirm, 3 = success
@@ -55,12 +57,12 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to reset data');
+        throw new Error(error.message || t('admin.resetDataDialog.notifications.resetFailed'));
       }
 
       await response.json(); // Consume response
       
-      showSuccess('Tenant data has been reset successfully! Logging out...');
+      showSuccess(t('admin.resetDataDialog.notifications.resetSuccessLoggingOut'));
       setConfirmStep(3); // Show success step
       
       // Clear auth data and redirect to login after 2 seconds
@@ -72,7 +74,7 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
       
     } catch (error: any) {
       console.error('Reset data error:', error);
-      showError(error.message || 'Failed to reset tenant data');
+      showError(error.message || t('admin.resetDataDialog.notifications.resetTenantFailed'));
       setConfirmStep(1); // Back to warning
     } finally {
       setLoading(false);
@@ -113,12 +115,12 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
         {confirmStep === 3 ? (
           <>
             <CheckIcon />
-            Reset Complete
+            {t('admin.resetDataDialog.title.success')}
           </>
         ) : (
           <>
             <WarningIcon />
-            Reset Tenant Data
+            {t('admin.resetDataDialog.title.default')}
           </>
         )}
       </DialogTitle>
@@ -129,12 +131,14 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
           <Box>
             <Alert severity="error" sx={{ mb: 2 }}>
               <Typography variant="subtitle2" fontWeight="bold">
-                DANGER: This action cannot be undone!
+                {t('admin.resetDataDialog.step1.danger')}
               </Typography>
             </Alert>
 
             <Typography variant="body1" gutterBottom>
-              This will <strong>permanently delete all data</strong> in this tenant database, including:
+              {t('admin.resetDataDialog.step1.willDeletePrefix')}{' '}
+              <strong>{t('admin.resetDataDialog.step1.willDeleteEmphasis')}</strong>{' '}
+              {t('admin.resetDataDialog.step1.willDeleteSuffix')}
             </Typography>
 
             <List dense sx={{ mb: 2 }}>
@@ -142,66 +146,66 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
                 <ListItemIcon sx={{ minWidth: 32 }}>
                   <ErrorIcon color="error" fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary="All timesheets and time entries" />
+                <ListItemText primary={t('admin.resetDataDialog.step1.items.timesheets')} />
               </ListItem>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 32 }}>
                   <ErrorIcon color="error" fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary="All expenses and receipts" />
+                <ListItemText primary={t('admin.resetDataDialog.step1.items.expenses')} />
               </ListItem>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 32 }}>
                   <ErrorIcon color="error" fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary="All travel segments" />
+                <ListItemText primary={t('admin.resetDataDialog.step1.items.travels')} />
               </ListItem>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 32 }}>
                   <ErrorIcon color="error" fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary="All projects, tasks, and locations" />
+                <ListItemText primary={t('admin.resetDataDialog.step1.items.projects')} />
               </ListItem>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 32 }}>
                   <ErrorIcon color="error" fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary="All users (except Owner)" />
+                <ListItemText primary={t('admin.resetDataDialog.step1.items.users')} />
               </ListItem>
               <ListItem>
                 <ListItemIcon sx={{ minWidth: 32 }}>
                   <ErrorIcon color="error" fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary="All permissions and role assignments" />
+                <ListItemText primary={t('admin.resetDataDialog.step1.items.permissions')} />
               </ListItem>
             </List>
 
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="body2">
-                <strong>What will be preserved:</strong>
+                <strong>{t('admin.resetDataDialog.step1.preserved.title')}</strong>
                 <br />
-                • Your Owner account (email and password)
+                • {t('admin.resetDataDialog.step1.preserved.ownerAccount')}
                 <br />
-                • Database structure (tables and migrations)
+                • {t('admin.resetDataDialog.step1.preserved.dbStructure')}
               </Typography>
             </Alert>
 
             <Alert severity="warning" sx={{ mb: 2 }}>
               <Typography variant="body2" fontWeight="medium" gutterBottom>
-                Important:
+                {t('admin.resetDataDialog.step1.importantTitle')}
               </Typography>
               <Typography variant="body2" component="div">
-                • Your session will be closed automatically after reset
+                • {t('admin.resetDataDialog.step1.important.sessionClosed')}
                 <br />
-                • You will need to login again with your Owner account
+                • {t('admin.resetDataDialog.step1.important.loginAgain')}
                 <br />
-                • After reset, you can choose to keep database clean or load demo data
+                • {t('admin.resetDataDialog.step1.important.chooseOption')}
               </Typography>
             </Alert>
 
             <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                Select your preference:
+                {t('admin.resetDataDialog.step1.preferenceTitle')}
               </Typography>
               
               <RadioGroup
@@ -216,10 +220,10 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
                       <ScienceIcon fontSize="small" color="primary" />
                       <Box>
                         <Typography variant="body2" fontWeight="medium">
-                          Load demo data (Recommended)
+                          {t('admin.resetDataDialog.step1.options.demo.title')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Create sample projects, tasks, locations, and users for testing
+                          {t('admin.resetDataDialog.step1.options.demo.description')}
                         </Typography>
                       </Box>
                     </Box>
@@ -233,10 +237,10 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
                       <DeleteIcon fontSize="small" color="action" />
                       <Box>
                         <Typography variant="body2" fontWeight="medium">
-                          Clean database (No demo data)
+                          {t('admin.resetDataDialog.step1.options.clean.title')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Start with empty database (only Owner account)
+                          {t('admin.resetDataDialog.step1.options.clean.description')}
                         </Typography>
                       </Box>
                     </Box>
@@ -252,28 +256,28 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
           <Box>
             <Alert severity="warning" sx={{ mb: 3 }}>
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                FINAL CONFIRMATION
+                {t('admin.resetDataDialog.step2.title')}
               </Typography>
               <Typography variant="body2">
-                Are you absolutely sure you want to proceed?
+                {t('admin.resetDataDialog.step2.subtitle')}
               </Typography>
             </Alert>
 
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="body2" fontWeight="medium">
-                Selected option:
+                {t('admin.resetDataDialog.step2.selectedOptionLabel')}
               </Typography>
               <Typography variant="body2">
                 {resetOption === 'demo' 
-                  ? '✓ Delete all data and load demo data' 
-                  : '✓ Delete all data (clean database)'}
+                  ? t('admin.resetDataDialog.step2.selectedOption.demo')
+                  : t('admin.resetDataDialog.step2.selectedOption.clean')}
               </Typography>
             </Alert>
 
             <Typography variant="body1" color="text.secondary" align="center">
-              This action will immediately delete all existing data.
+              {t('admin.resetDataDialog.step2.notice')}
               <br /><br />
-              <strong>Click "RESET DATA NOW" to confirm.</strong>
+              <strong>{t('admin.resetDataDialog.step2.confirmHint')}</strong>
             </Typography>
           </Box>
         )}
@@ -283,14 +287,14 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
           <Box textAlign="center" py={3}>
             <CheckIcon color="success" sx={{ fontSize: 64, mb: 2 }} />
             <Typography variant="h6" gutterBottom>
-              Data Reset Successful!
+              {t('admin.resetDataDialog.step3.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {resetOption === 'demo' 
-                ? 'All tenant data has been reset and demo data has been loaded.'
-                : 'All tenant data has been deleted. Database is now clean.'}
+                ? t('admin.resetDataDialog.step3.message.demo')
+                : t('admin.resetDataDialog.step3.message.clean')}
               <br />
-              You will be logged out automatically in 2 seconds...
+              {t('admin.resetDataDialog.step3.logoutHint')}
             </Typography>
           </Box>
         )}
@@ -304,7 +308,7 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
               variant="outlined"
               disabled={loading}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button 
               onClick={handleProceedToConfirm}
@@ -312,7 +316,7 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
               color="warning"
               disabled={loading}
             >
-              I Understand, Proceed
+              {t('admin.resetDataDialog.actions.proceed')}
             </Button>
           </>
         )}
@@ -324,7 +328,7 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
               variant="outlined"
               disabled={loading}
             >
-              Go Back
+              {t('admin.resetDataDialog.actions.goBack')}
             </Button>
             <Button 
               onClick={handleReset}
@@ -333,7 +337,7 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
               disabled={loading}
               startIcon={loading ? <CircularProgress size={20} /> : <WarningIcon />}
             >
-              {loading ? 'Resetting...' : 'RESET DATA NOW'}
+              {loading ? t('admin.resetDataDialog.actions.resetting') : t('admin.resetDataDialog.actions.resetNow')}
             </Button>
           </>
         )}
@@ -344,7 +348,7 @@ const ResetDataDialog: React.FC<ResetDataDialogProps> = ({ open, onClose }) => {
             variant="contained"
             color="success"
           >
-            Close
+            {t('common.close')}
           </Button>
         )}
       </DialogActions>

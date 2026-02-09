@@ -4,6 +4,8 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
+import enGbLocale from '@fullcalendar/core/locales/en-gb';
+import ptLocale from '@fullcalendar/core/locales/pt';
 import { timesheetsApi, projectsApi, tasksApi, locationsApi, techniciansApi } from '../../services/api';
 import { travelsApi } from '../../services/travels';
 import type { Project, Timesheet, Task, Location, Technician, ProjectMember } from '../../types';
@@ -180,7 +182,7 @@ const DAILY_HOUR_CAP = 12;
 
 
 const TimesheetCalendar: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, tenant, isManager, isAdmin, loading: authLoading, tenantContext } = useAuth();
   const navigate = useNavigate();
   const { hasTravels } = useFeatures();
@@ -196,6 +198,19 @@ const TimesheetCalendar: React.FC = () => {
   const sourceWeekStart = tenantContext?.week_start ?? tenant?.week_start;
   const weekFirstDay = useMemo(() => weekStartToFirstDay(sourceWeekStart), [sourceWeekStart]);
 
+  const fullCalendarLocale = useMemo(() => {
+    const lang = String(i18n.resolvedLanguage ?? i18n.language ?? 'en').toLowerCase();
+    if (lang.startsWith('pt')) return 'pt';
+    if (lang === 'en-gb') return 'en-gb';
+    return 'en';
+  }, [i18n.language, i18n.resolvedLanguage]);
+
+  const fullCalendarLocaleInput = useMemo(() => {
+    if (fullCalendarLocale === 'pt') return ptLocale;
+    if (fullCalendarLocale === 'en-gb') return enGbLocale;
+    return 'en';
+  }, [fullCalendarLocale]);
+
   useEffect(() => {
     console.debug('[TimesheetCalendar] week start debug', {
       region: tenantContext?.region,
@@ -208,6 +223,9 @@ const TimesheetCalendar: React.FC = () => {
   // Calendar ref to access API methods
   const calendarRef = useRef<FullCalendar>(null);
   const calendarContainerRef = useRef<HTMLDivElement>(null);
+  const lastMonthRef = useRef<string | null>(null);
+  const selectedTechnicianRef = useRef<number | undefined>(undefined);
+  const hasTravelsRef = useRef<boolean>(hasTravels);
   
   // State variables
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
@@ -225,6 +243,7 @@ const TimesheetCalendar: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState<Timesheet | null>(null);
   const [currentCalendarViewType, setCurrentCalendarViewType] = useState<string>('dayGridMonth');
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string | null>(null);
+  const [month, setMonth] = useState<string>(() => dayjs().format('YYYY-MM'));
 
   const isTenantDrivenFirstDayView =
     currentCalendarViewType === 'timeGridWeek' ||
@@ -323,11 +342,24 @@ const TimesheetCalendar: React.FC = () => {
   const userIsManager = isManager();
   const userIsAdmin = isAdmin();
 
+  useEffect(() => {
+    selectedTechnicianRef.current = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined;
+  }, [selectedTechnicianId]);
+
+  useEffect(() => {
+    hasTravelsRef.current = hasTravels;
+  }, [hasTravels]);
+
   const roleIsAssigned = (role?: 'member' | 'manager' | 'none') => role && role !== 'none';
 
   const formatRoleLabel = (role?: 'member' | 'manager' | 'none') => {
-    if (!role || role === 'none') return 'Nenhum';
-    return role.charAt(0).toUpperCase() + role.slice(1);
+    const labels: Record<'member' | 'manager' | 'none', string> = {
+      member: t('approvals.roles.member'),
+      manager: t('approvals.roles.manager'),
+      none: t('approvals.roles.none'),
+    };
+    if (!role || role === 'none') return labels.none;
+    return labels[role] ?? role;
   };
 
   // AI Suggestion state - with localStorage persistence
@@ -553,26 +585,30 @@ const TimesheetCalendar: React.FC = () => {
     }
   }, [showError]);
 
-  const loadTravels = useCallback(
-    async (month?: string, technicianId?: number) => {
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadTravels = async () => {
       // Load travels for calendar month view integration
-      if (!hasTravels) {
+      if (!hasTravelsRef.current) {
         setTravelsByDate({});
         return;
       }
 
       try {
-        const params: Record<string, string | number> = {};
+        const params: Record<string, string | number> = {
+          month,
+        };
 
-        params.month = month ?? dayjs().format('YYYY-MM');
-
-        // Use provided technician filter when explicitly supplied
+        const technicianId = selectedTechnicianRef.current;
         if (technicianId) {
           params.technician_id = technicianId;
         }
 
         console.log('🛫 [TRAVELS] Loading with params:', params);
-        const response = await travelsApi.getTravelsByDate(params);
+        const response = await travelsApi.getTravelsByDate(params, controller.signal);
+
+        if (controller.signal.aborted) return;
 
         console.log('🛫 [TRAVELS] API Response:', response);
 
@@ -589,13 +625,17 @@ const TimesheetCalendar: React.FC = () => {
           setTravelsByDate({});
         }
       } catch (error: unknown) {
+        if (controller.signal.aborted) return;
         console.error('🛫 [TRAVELS] Error loading travels:', error);
         setTravelsByDate({});
         // Fail silently - travels are supplementary info to timesheets
       }
-    },
-    [hasTravels]
-  );
+    };
+
+    void loadTravels();
+
+    return () => controller.abort();
+  }, [month]);
 
   const loadProjects = useCallback(
     async (technicianId?: number | '') => {
@@ -645,14 +685,22 @@ const TimesheetCalendar: React.FC = () => {
     loadTasks();
     loadLocations();
     loadTechnicians();
-    loadTravels(); // Load travel indicators for calendar
-  }, [authLoading, user, loadTasks, loadLocations, loadTechnicians, loadTravels]);
+  }, [authLoading, user, loadTasks, loadLocations, loadTechnicians]);
 
   // Refetch projects and timesheets when technician selection changes (or on initial load)
   useEffect(() => {
     if (authLoading || !user) return;
     loadTimesheets();
   }, [authLoading, user, loadTimesheets]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      void loadTimesheets();
+    };
+
+    window.addEventListener('timesheets:refresh', handleRefresh);
+    return () => window.removeEventListener('timesheets:refresh', handleRefresh);
+  }, [loadTimesheets]);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -737,14 +785,13 @@ const TimesheetCalendar: React.FC = () => {
         void loadWeekSummary(info.startStr);
       }
 
-      // Keep travel indicators in sync with the current visible range (month key)
-      if (hasTravels) {
-        const monthKey = dayjs(info.start).format('YYYY-MM');
-        const technicianFilter = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined;
-        void loadTravels(monthKey, technicianFilter);
+      const monthKey = dayjs(info.start).format('YYYY-MM');
+      if (lastMonthRef.current !== monthKey) {
+        lastMonthRef.current = monthKey;
+        setMonth(monthKey);
       }
     },
-    [hasTravels, loadWeekSummary, loadTravels, selectedTechnicianId]
+    [loadWeekSummary]
   );
 
   const calculateHours = (startTime: Dayjs | null, endTime: Dayjs | null): number => {
@@ -2326,6 +2373,7 @@ const TimesheetCalendar: React.FC = () => {
               </Box>
               {(userIsManager || userIsAdmin) && (
                 <ToggleButtonGroup
+                  data-tour="timesheets-scope"
                   value={timesheetScope}
                   exclusive
                   onChange={handleTimesheetScopeChange}
@@ -2410,6 +2458,7 @@ const TimesheetCalendar: React.FC = () => {
         tabId="timesheet-insights"
         tooltip={t('rightPanel.trigger.tooltip')}
         icon={<SmartToyIcon fontSize="small" />}
+        dataTour="ai-trigger"
         ariaLabel={{
           open: t('rightPanel.trigger.open', { tab: t('rightPanel.tabs.insights') }),
           close: t('rightPanel.trigger.close', { tab: t('rightPanel.tabs.insights') }),
@@ -2429,6 +2478,7 @@ const TimesheetCalendar: React.FC = () => {
       <Box ref={calendarContainerRef} sx={{ flex: 1, minWidth: 0, display: 'flex' }}>
         <Paper 
           elevation={0}
+          data-tour="timesheets-calendar"
           sx={{ 
             borderRadius: 0,
             overflow: 'auto',
@@ -2672,9 +2722,10 @@ const TimesheetCalendar: React.FC = () => {
         }}
         >
           <FullCalendar
-            key={`weekFirstDay:${weekFirstDay}`}
+            key={`weekFirstDay:${weekFirstDay}:locale:${fullCalendarLocale}`}
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+            locales={[enGbLocale, ptLocale]}
             initialView="dayGridMonth"
             headerToolbar={{
               left: 'prev,next today',
@@ -2705,7 +2756,7 @@ const TimesheetCalendar: React.FC = () => {
             eventClick={handleEventClick}
             dateClick={handleDateClick}
             height="100%" // Usar 100% da altura disponível
-            locale="en"
+            locale={fullCalendarLocaleInput}
             firstDay={
               currentCalendarViewType === 'timeGridWeek' ||
               currentCalendarViewType === 'listWeek' ||
@@ -2723,6 +2774,7 @@ const TimesheetCalendar: React.FC = () => {
               //   where date corresponds to the visible first day column.
               dayGridMonth: {
                 firstDay: weekFirstDay,
+                titleFormat: { year: 'numeric', month: 'long' },
               },
               timeGridWeek: {
                 firstDay: weekFirstDay,
@@ -2732,6 +2784,7 @@ const TimesheetCalendar: React.FC = () => {
               },
               listMonth: {
                 firstDay: weekFirstDay,
+                titleFormat: { year: 'numeric', month: 'long' },
               },
             }}
             weekNumbers={!isMobile}
@@ -3114,7 +3167,7 @@ const TimesheetCalendar: React.FC = () => {
                                       {roleIsAssigned(projectRoleMap[project.id]?.projectRole) && (
                                         <Chip
                                           size="small"
-                                          icon={<span style={{ fontSize: '14px' }}>⏱️</span>}
+                                          icon={<Box component="span" sx={{ fontSize: '14px' }}>⏱️</Box>}
                                           color={projectRoleMap[project.id]?.projectRole === 'manager' ? 'primary' : 'default'}
                                           label={formatRoleLabel(projectRoleMap[project.id]?.projectRole)}
                                           sx={{ 
@@ -3126,7 +3179,7 @@ const TimesheetCalendar: React.FC = () => {
                                       {roleIsAssigned(projectRoleMap[project.id]?.expenseRole) && (
                                         <Chip
                                           size="small"
-                                          icon={<span style={{ fontSize: '14px' }}>💰</span>}
+                                          icon={<Box component="span" sx={{ fontSize: '14px' }}>💰</Box>}
                                           color={projectRoleMap[project.id]?.expenseRole === 'manager' ? 'warning' : 'default'}
                                           label={formatRoleLabel(projectRoleMap[project.id]?.expenseRole)}
                                           sx={{ 

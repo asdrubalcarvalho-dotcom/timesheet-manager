@@ -24,6 +24,7 @@ import EmptyState from '../Common/EmptyState';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
+import { useTranslation } from 'react-i18next';
 
 interface Country {
   id: number;
@@ -61,6 +62,7 @@ const normalizeApiResponse = <T,>(payload: unknown): T[] => {
 };
 
 const CountriesManager: React.FC = () => {
+  const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-countries');
 
@@ -75,8 +77,8 @@ const CountriesManager: React.FC = () => {
     title: '',
     message: '',
     recordDetails: undefined,
-    confirmText: 'Confirm',
-    cancelText: 'Cancel',
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
     confirmColor: 'error',
     action: () => {},
   });
@@ -96,7 +98,7 @@ const CountriesManager: React.FC = () => {
       const response = await api.get('/api/countries');
       setCountries(normalizeApiResponse<Country>(response.data));
     } catch {
-      showError('Failed to load countries');
+      showError(t('admin.countries.notifications.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -137,7 +139,7 @@ const CountriesManager: React.FC = () => {
     const iso2 = formData.iso2.trim().toUpperCase();
 
     if (!name || iso2.length !== 2) {
-      showError('Name is required and ISO-2 must be 2 letters');
+      showError(t('admin.countries.validation.nameAndIso2Required'));
       return;
     }
 
@@ -146,16 +148,16 @@ const CountriesManager: React.FC = () => {
 
       if (editingCountry) {
         await api.put(`/api/countries/${editingCountry.id}`, payload);
-        showSuccess('Country updated successfully');
+        showSuccess(t('admin.countries.notifications.updateSuccess'));
       } else {
         await api.post('/api/countries', payload);
-        showSuccess('Country created successfully');
+        showSuccess(t('admin.countries.notifications.createSuccess'));
       }
 
       fetchCountries();
       handleCloseDialog();
     } catch (error: any) {
-      const msg = error?.response?.data?.message || 'Failed to save country';
+      const msg = error?.response?.data?.message || t('admin.countries.notifications.saveFailed');
       showError(msg);
     }
   };
@@ -175,7 +177,7 @@ const CountriesManager: React.FC = () => {
     // First attempt: normal delete
     try {
       await attemptDelete(country, false);
-      showSuccess('Country deleted successfully');
+      showSuccess(t('admin.countries.notifications.deleteSuccess'));
       fetchCountries();
       return;
     } catch (error: any) {
@@ -184,15 +186,14 @@ const CountriesManager: React.FC = () => {
 
         setConfirmDialog({
           open: true,
-          title: 'Country is in use',
-          message:
-            'This country is referenced by existing locations. Do you want to force delete it? Locations will NOT be deleted; their country_id may become null.',
+          title: t('admin.countries.confirmForceDelete.title'),
+          message: t('admin.countries.confirmForceDelete.message'),
           recordDetails: {
             name: country.name,
             code: country.iso2,
             locations_count: locationsCount
           },
-          confirmText: 'Force delete',
+          confirmText: t('admin.countries.confirmForceDelete.confirmText'),
           confirmColor: 'warning',
           action: async () => {
             if (!ensureWritable()) {
@@ -200,10 +201,10 @@ const CountriesManager: React.FC = () => {
             }
             try {
               await attemptDelete(country, true);
-              showSuccess('Country deleted successfully');
+              showSuccess(t('admin.countries.notifications.deleteSuccess'));
               fetchCountries();
             } catch (e: any) {
-              showError(e?.response?.data?.message || 'Failed to delete country');
+              showError(e?.response?.data?.message || t('admin.countries.notifications.deleteFailed'));
             }
             setConfirmDialog(prev => ({ ...prev, open: false }));
           }
@@ -211,16 +212,16 @@ const CountriesManager: React.FC = () => {
         return;
       }
 
-      showError(error?.response?.data?.message || 'Failed to delete country');
+      showError(error?.response?.data?.message || t('admin.countries.notifications.deleteFailed'));
     }
   };
 
   const columns: GridColDef[] = [
-    { field: 'name', headerName: 'Name', flex: 1, minWidth: 200 },
-    { field: 'iso2', headerName: 'ISO-2', width: 120 },
+    { field: 'name', headerName: t('admin.shared.columns.name'), flex: 1, minWidth: 200 },
+    { field: 'iso2', headerName: t('admin.countries.columns.iso2'), width: 120 },
     {
       field: 'actions',
-      headerName: 'Actions',
+      headerName: t('admin.shared.columns.actions'),
       width: 140,
       sortable: false,
       renderCell: ({ row }: GridRenderCellParams<Country>) => (
@@ -237,13 +238,13 @@ const CountriesManager: React.FC = () => {
   ];
 
   return (
-    <AdminLayout title="Countries">
+    <AdminLayout title={t('admin.countries.title')}>
       {countries.length === 0 && !loading ? (
         <EmptyState
           icon={PublicIcon}
-          title="No countries"
-          subtitle="Create your first country to use it in dropdowns."
-          actionLabel="Add Country"
+          title={t('admin.countries.empty.title')}
+          subtitle={t('admin.countries.empty.subtitle')}
+          actionLabel={t('admin.countries.actions.add')}
           onAction={() => {
             if (!ensureWritable()) {
               return;
@@ -291,17 +292,19 @@ const CountriesManager: React.FC = () => {
       )}
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingCountry ? 'Edit Country' : 'New Country'}</DialogTitle>
+        <DialogTitle>
+          {editingCountry ? t('admin.countries.dialog.editTitle') : t('admin.countries.dialog.newTitle')}
+        </DialogTitle>
         <Box component="form" onSubmit={handleSave}>
           <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
-              label="Name"
+              label={t('common.name')}
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
             />
             <TextField
-              label="ISO-2"
+              label={t('admin.countries.fields.iso2')}
               value={formData.iso2}
               inputProps={{ maxLength: 2 }}
               onChange={(e) => {
@@ -309,13 +312,13 @@ const CountriesManager: React.FC = () => {
                 setFormData(prev => ({ ...prev, iso2: value }));
               }}
               required
-              helperText="2 letters (e.g. PT, ES, FR)"
+              helperText={t('admin.countries.helpers.iso2')}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
+            <Button onClick={handleCloseDialog} color="inherit">{t('common.cancel')}</Button>
             <Button type="submit" variant="contained" disabled={isReadOnly}>
-              {editingCountry ? 'Update' : 'Create'}
+              {editingCountry ? t('common.update') : t('common.create')}
             </Button>
           </DialogActions>
         </Box>

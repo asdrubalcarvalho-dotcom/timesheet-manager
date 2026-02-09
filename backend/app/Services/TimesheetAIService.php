@@ -50,6 +50,50 @@ class TimesheetAIService
     }
 
     /**
+     * Parse a natural-language prompt into a structured intent JSON.
+     *
+     * @return array{success: bool, response?: string, error?: string}
+     */
+    public function parseTimesheetIntent(string $prompt, string $timezone, ?string $weekStart): array
+    {
+        if (!$this->ollamaEnabled) {
+            return [
+                'success' => false,
+                'error' => 'AI intent parser is disabled.',
+            ];
+        }
+
+        $aiPrompt = $this->buildIntentPrompt($prompt, $timezone, $weekStart);
+
+        try {
+            $response = Http::timeout(30)->post("{$this->ollamaUrl}/api/generate", [
+                'model' => 'gemma2:2b',
+                'prompt' => $aiPrompt,
+                'stream' => false,
+                'options' => [
+                    'temperature' => 0.1,
+                    'top_p' => 0.8,
+                    'num_predict' => 320,
+                ],
+            ]);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'response' => (string) ($response->json('response') ?? ''),
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning('Ollama intent parser error: ' . $e->getMessage());
+        }
+
+        return [
+            'success' => false,
+            'error' => 'AI intent parser failed.',
+        ];
+    }
+
+    /**
      * Lightweight anomaly detection used by validation snapshots.
      */
     public function analyzeTimesheet(TimesheetValidationSnapshot $snapshot): array
@@ -213,6 +257,42 @@ Respond ONLY with valid JSON in this exact format:
 {\"hours\": 8.0, \"description\": \"Frontend development\", \"confidence\": 85}
 
 JSON Response:";
+    }
+
+    private function buildIntentPrompt(string $prompt, string $timezone, ?string $weekStart): string
+    {
+        $weekStartValue = $weekStart ?: 'monday';
+
+        return <<<PROMPT
+You are a strict JSON generator for TimePerk timesheet intent parsing.
+Output ONLY valid JSON. No markdown, no explanations.
+
+Required schema:
+{
+  "intent": "create_timesheets",
+  "date_range": {"type": "absolute|relative", "from": "YYYY-MM-DD", "to": "YYYY-MM-DD", "value": "this_week|last_week|next_week|last_n_workdays", "count": 5},
+  "schedule": [{"from": "HH:mm", "to": "HH:mm"}],
+  "breaks": [{"from": "HH:mm", "to": "HH:mm"}],
+  "project": "string",
+  "task": "string",
+  "description": "string",
+  "location": "string",
+  "notes": "string",
+  "missing_fields": ["date_range", "schedule", "project"]
+}
+
+Rules:
+- Always include intent and missing_fields.
+- Use timezone {$timezone}.
+- Week starts on {$weekStartValue}.
+- If any required field is missing, list it in missing_fields and do NOT guess values.
+- If relative date range is "last_n_workdays", include count.
+
+User prompt:
+{$prompt}
+
+JSON:
+PROMPT;
     }
     
     /**
