@@ -81,7 +81,7 @@ In the Edit Project page:
 - Planning shows updated tasks after refresh.
 - No regressions in Planning or Users views.
 */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   CircularProgress,
@@ -113,6 +113,7 @@ import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate } from '../../utils/tenantFormatting';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { useLocation } from 'react-router-dom';
 
 interface Project {
   id: number;
@@ -436,6 +437,7 @@ const PlanningGantt: React.FC<PlanningGanttProps> = ({ initialView = 'projects' 
   useTenantGuard();
   const { hasPermission, tenantContext } = useAuth();
   const canCreatePlanning = hasPermission('create-planning');
+  const location = useLocation();
 
   const formatGridDate = useMemo(() => {
     const toYmd = (value: unknown): string | null => {
@@ -454,6 +456,37 @@ const PlanningGantt: React.FC<PlanningGanttProps> = ({ initialView = 'projects' 
       return ymd ? formatTenantDate(ymd, tenantContext) : '';
     };
   }, [tenantContext]);
+
+  const queryRange = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const from = params.get('from');
+    const to = params.get('to');
+    const isValidDate = (value: string | null) =>
+      typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+    return {
+      from: isValidDate(from) ? from : null,
+      to: isValidDate(to) ? to : null,
+    };
+  }, [location.search]);
+
+  const taskMatchesQueryRange = useCallback(
+    (task: PlanningTask): boolean => {
+      if (!queryRange.from || !queryRange.to) return true;
+      const normalizeDate = (value?: string | null): string | null => {
+        if (!value) return null;
+        const trimmed = value.trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+        return null;
+      };
+
+      const start = normalizeDate(task.start_date);
+      const end = normalizeDate(task.end_date) || start;
+      if (!start || !end) return false;
+      return start <= queryRange.to && end >= queryRange.from;
+    },
+    [queryRange.from, queryRange.to]
+  );
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
@@ -624,7 +657,9 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
           return first?.name?.trim();
         };
 
-        const filteredTasks = allTasks.filter((task) => selectedProjectIds.includes(task.project_id || 0));
+        const filteredTasks = allTasks
+          .filter((task) => selectedProjectIds.includes(task.project_id || 0))
+          .filter(taskMatchesQueryRange);
 
         const enrichedTasks = filteredTasks.map((task) => {
           const project = projects.find((p) => p.id === task.project_id);
@@ -647,7 +682,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
     };
 
     fetchTasksForProjects();
-  }, [planningView, selectedProjectIds, projects]);
+  }, [planningView, selectedProjectIds, projects, taskMatchesQueryRange]);
 
   useEffect(() => {
     if (planningView !== 'locations') return;
@@ -686,7 +721,8 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
               location_name: deriveLocationName(task),
             };
           })
-          .filter((t) => hasAnyLocation(t));
+          .filter((t) => hasAnyLocation(t))
+          .filter(taskMatchesQueryRange);
 
         setRawTasks(enriched);
       } catch (err) {
@@ -700,7 +736,7 @@ const [visibleColumns, setVisibleColumns] = useState<VisibleColumnsState>(DEFAUL
     };
 
     fetchTasksForLocations();
-  }, [planningView, projects, reloadLocationsNonce]);
+  }, [planningView, projects, reloadLocationsNonce, taskMatchesQueryRange]);
 
 
 

@@ -18,15 +18,26 @@ type Props = {
   ariaLabel?: { open: string; close: string };
   onClick?: () => void;
   dataTour?: string;
+  registerFloatingTrigger?: boolean;
 };
 
-export const RightPanelTrigger: React.FC<Props> = ({ tabId, tooltip, icon, badge, sx, ariaLabel, onClick, dataTour }) => {
+export const RightPanelTrigger: React.FC<Props> = ({
+  tabId,
+  tooltip,
+  icon,
+  badge,
+  sx,
+  ariaLabel,
+  onClick,
+  dataTour,
+  registerFloatingTrigger = true,
+}) => {
   const theme = useTheme();
   const { isOpen, activeTabId, toggle } = useRightPanel();
 
   // When this component is mounted on a page, we consider that page to have a floating entrypoint.
   // The layout can hide any redundant top-right "Help/AI" button accordingly.
-  useRegisterRightPanelFloatingTrigger();
+  useRegisterRightPanelFloatingTrigger(registerFloatingTrigger);
 
   const openForThisTab = isOpen && activeTabId === tabId;
 

@@ -28,15 +28,14 @@ import { RightPanelProvider } from './components/RightPanel/RightPanelProvider';
 import { RightPanelEntrypointProvider } from './components/RightPanel/RightPanelEntrypointProvider';
 import { GlobalRightPanelTabs } from './components/RightPanel/GlobalRightPanelTabs';
 import { RightPanel } from './components/RightPanel/RightPanel';
-import { useRightPanel } from './components/RightPanel/useRightPanel';
 import { useRightPanelEntrypoint } from './components/RightPanel/useRightPanelEntrypoint';
+import AiHelpTriggerFab from './components/RightPanel/AiHelpTriggerFab';
 import { TourController } from './components/Common/Tour/TourController';
 import { LoginForm } from './components/Auth/LoginForm';
 import TenantRegistration from './components/Auth/TenantRegistration';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import SuperAdminApp from './components/SuperAdmin/SuperAdminApp';
 import SsoCallback from './pages/SsoCallback';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 const TermsOfService = React.lazy(() => import('./pages/legal/TermsOfService'));
 const PrivacyPolicy = React.lazy(() => import('./pages/legal/PrivacyPolicy'));
 const AcceptableUsePolicy = React.lazy(() => import('./pages/legal/AcceptableUsePolicy'));
@@ -76,7 +75,6 @@ const PaymentMethodsPage = React.lazy(() => import('./pages/Billing/PaymentMetho
 const TimesheetPivotReport = React.lazy(() => import('./components/Timesheets/TimesheetPivotReport'));
 const ApprovalHeatmapReport = React.lazy(() => import('./components/Approvals/ApprovalHeatmapReport'));
 const ExpensesAnalysisReport = React.lazy(() => import('./components/Reports/Expenses/ExpensesAnalysisReport'));
-const AiTimesheetBuilder = React.lazy(() => import('./pages/AiTimesheetBuilder'));
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -109,7 +107,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'ai-timesheet-builder' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
+type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -122,7 +120,6 @@ const pageToPath: Record<Page, string> = {
   approvals: '/approvals',
   dashboard: '/dashboard',
   'ai-insights': '/ai-insights',
-  'ai-timesheet-builder': '/timesheets/ai-builder',
   team: '/team',
   planning: '/planning',
   'planning-locations': '/planning/locations',
@@ -181,7 +178,6 @@ const AppContent: React.FC = () => {
   const { billingSummary } = useBilling();
   const location = useLocation();
   const navigate = useNavigate();
-  const { open: openRightPanel } = useRightPanel();
   const { hasFloatingTrigger } = useRightPanelEntrypoint();
   const { t } = useTranslation();
 
@@ -316,12 +312,6 @@ const AppContent: React.FC = () => {
             <AIInsights />
           </RequireFeature>
         );
-      case 'ai-timesheet-builder':
-        return (
-          <RequireFeature feature="ai">
-            <AiTimesheetBuilder />
-          </RequireFeature>
-        );
       case 'team':
         return (
           <Box sx={{ p: 3 }}>
@@ -407,18 +397,7 @@ const AppContent: React.FC = () => {
           overflowX: 'hidden'
         }}
       >
-        {!hasFloatingTrigger ? (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-            <Button
-              variant="outlined"
-              startIcon={<HelpOutlineIcon />}
-              onClick={() => openRightPanel('help')}
-              sx={{ textTransform: 'none' }}
-            >
-              {t('rightPanel.openButton')}
-            </Button>
-          </Box>
-        ) : null}
+        {!hasFloatingTrigger ? <AiHelpTriggerFab /> : null}
         {billingSummary?.read_only === true && !isTrialActive && (
           <Alert
             severity="warning"

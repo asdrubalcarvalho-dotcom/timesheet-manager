@@ -136,13 +136,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       show: hasPermission('view-timesheets')
     },
     {
-      id: 'ai-timesheet-builder',
-      label: t('nav.aiTimesheetBuilder'),
-      icon: <AIIcon />,
-      path: 'ai-timesheet-builder',
-      show: hasAI && hasPermission('create-timesheets')
-    },
-    {
       id: 'travels',
       label: t('nav.travels'),
       icon: <TravelsIcon />,

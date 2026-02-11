@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -29,6 +29,7 @@ import { useTenantGuard } from '../../hooks/useTenantGuard';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import {
   displayDistanceToKm,
   displayRateToRatePerKm,
@@ -89,6 +90,7 @@ export const ExpenseManager: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError, showWarning } = useNotification();
   const { tenantContext } = useAuth();
+  const location = useLocation();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const distanceUnit = getTenantDistanceUnit(tenantContext);
   useTenantGuard(); // Ensure tenant_slug exists
@@ -122,6 +124,42 @@ export const ExpenseManager: React.FC = () => {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreviewOpen, setAttachmentPreviewOpen] = useState(false);
   const [previewAttachmentUrl, setPreviewAttachmentUrl] = useState<string>('');
+
+  const queryFilters = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const from = params.get('from');
+    const to = params.get('to');
+    const status = params.get('status');
+    const isValidDate = (value: string | null) =>
+      typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+    return {
+      from: isValidDate(from) ? from : null,
+      to: isValidDate(to) ? to : null,
+      status: status ? status.trim().toLowerCase() : null,
+    };
+  }, [location.search]);
+
+  const filteredExpenses = useMemo(() => {
+    let filtered = expenses;
+
+    if (queryFilters.from && queryFilters.to) {
+      filtered = filtered.filter(
+        (expense) => expense.date >= queryFilters.from! && expense.date <= queryFilters.to!
+      );
+    }
+
+    if (queryFilters.status) {
+      if (queryFilters.status === 'pending') {
+        const pendingStatuses = new Set(['submitted', 'finance_review', 'rejected']);
+        filtered = filtered.filter((expense) => pendingStatuses.has(expense.status));
+      } else {
+        filtered = filtered.filter((expense) => expense.status === queryFilters.status);
+      }
+    }
+
+    return filtered;
+  }, [expenses, queryFilters.from, queryFilters.to, queryFilters.status]);
 
   // Load data on mount
   useEffect(() => {
@@ -658,7 +696,7 @@ export const ExpenseManager: React.FC = () => {
           </Typography>
         )}
 
-        {!loading && expenses.length === 0 && (
+        {!loading && filteredExpenses.length === 0 && (
           <EmptyState
             icon={ReceiptIcon}
             title={t('expenses.empty.title')}
@@ -668,10 +706,10 @@ export const ExpenseManager: React.FC = () => {
           />
         )}
 
-      {!loading && expenses.length > 0 && (
+      {!loading && filteredExpenses.length > 0 && (
         <Box sx={{ height: 560, width: '100%' }}>
           <DataGrid
-            rows={expenses}
+            rows={filteredExpenses}
             columns={columns}
             loading={loading}
             disableRowSelectionOnClick
@@ -685,7 +723,7 @@ export const ExpenseManager: React.FC = () => {
       )}
 
       {/* Floating Action Button - always visible when there are expenses */}
-      {expenses.length > 0 && (
+      {filteredExpenses.length > 0 && (
         <Fab
           color="primary"
           aria-label={t('expenses.fab.addAria')}

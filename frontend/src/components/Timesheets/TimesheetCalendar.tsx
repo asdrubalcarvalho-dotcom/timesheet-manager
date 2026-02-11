@@ -12,7 +12,7 @@ import type { Project, Timesheet, Task, Location, Technician, ProjectMember } fr
 import type { TravelSegment } from '../../services/travels';
 import { useAuth } from '../Auth/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ConfirmationDialog from '../Common/ConfirmationDialog';
 import { useFeatures } from '../../contexts/FeatureContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
@@ -184,6 +184,7 @@ const DAILY_HOUR_CAP = 12;
 const TimesheetCalendar: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user, tenant, isManager, isAdmin, loading: authLoading, tenantContext } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const { hasTravels } = useFeatures();
   const theme = useTheme();
@@ -336,15 +337,56 @@ const TimesheetCalendar: React.FC = () => {
   const [description, setDescription] = useState('');
   const [startTimeObj, setStartTimeObj] = useState<Dayjs | null>(dayjs().hour(9).minute(0).second(0));
   const [endTimeObj, setEndTimeObj] = useState<Dayjs | null>(dayjs().hour(10).minute(0).second(0));
+  const queryFilters = useMemo<{
+    from: string | null;
+    to: string | null;
+    validation: 'ai_flagged' | 'overcap' | null;
+  }>(() => {
+    const params = new URLSearchParams(location.search);
+    const from = params.get('from');
+    const to = params.get('to');
+    const validation = params.get('validation');
+    const isValidDate = (value: string | null) =>
+      typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+    return {
+      from: isValidDate(from) ? from : null,
+      to: isValidDate(to) ? to : null,
+      validation:
+        validation === 'ai_flagged' || validation === 'overcap' ? validation : null,
+    };
+  }, [location.search]);
+
   // Default to 'all' to show all timesheets (not just 'mine')
   const [timesheetScope, setTimesheetScope] = useState<'mine' | 'others' | 'all'>('all');
-  const [validationFilter, setValidationFilter] = useState<'all' | 'ai_flagged' | 'overcap'>('all');
+  const [validationFilter, setValidationFilter] = useState<'all' | 'ai_flagged' | 'overcap'>(
+    queryFilters.validation ?? 'all'
+  );
+  const [queryRange, setQueryRange] = useState<{ from: string | null; to: string | null }>({
+    from: queryFilters.from,
+    to: queryFilters.to,
+  });
   const userIsManager = isManager();
   const userIsAdmin = isAdmin();
 
   useEffect(() => {
     selectedTechnicianRef.current = typeof selectedTechnicianId === 'number' ? selectedTechnicianId : undefined;
   }, [selectedTechnicianId]);
+
+  useEffect(() => {
+    setQueryRange({ from: queryFilters.from, to: queryFilters.to });
+    if (queryFilters.validation) {
+      setValidationFilter(queryFilters.validation);
+    }
+  }, [queryFilters.from, queryFilters.to, queryFilters.validation]);
+
+  useEffect(() => {
+    if (!queryRange.from) return;
+    const api = calendarRef.current?.getApi();
+    if (api) {
+      api.gotoDate(queryRange.from);
+    }
+  }, [queryRange.from]);
 
   useEffect(() => {
     hasTravelsRef.current = hasTravels;
@@ -505,7 +547,10 @@ const TimesheetCalendar: React.FC = () => {
   const loadTimesheets = useCallback(async () => {
     try {
       setLoading(true);
-      const response: unknown = await timesheetsApi.getAll();
+      const response: unknown = await timesheetsApi.getAll({
+        start_date: queryRange.from ?? undefined,
+        end_date: queryRange.to ?? undefined,
+      });
       console.log('Loaded timesheets:', response);
 
       let timesheetsData: Timesheet[] = [];
@@ -522,7 +567,7 @@ const TimesheetCalendar: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [showError]);
+  }, [queryRange.from, queryRange.to, showError]);
 
   const loadTasks = useCallback(async () => {
     try {

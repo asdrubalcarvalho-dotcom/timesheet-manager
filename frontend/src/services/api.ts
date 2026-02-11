@@ -289,9 +289,22 @@ export const timesheetsApi = {
     technician_id?: number; 
     project_id?: number; 
     date_from?: string; 
-    date_to?: string; 
+    date_to?: string;
+    start_date?: string;
+    end_date?: string;
+    status?: string;
   }): Promise<Timesheet[]> =>
-    api.get('/api/timesheets', { params }).then(res => res.data),
+    api
+      .get('/api/timesheets', {
+        params: params
+          ? {
+              ...params,
+              start_date: params.start_date || params.date_from,
+              end_date: params.end_date || params.date_to,
+            }
+          : undefined,
+      })
+      .then(res => res.data),
 
   getSummary: (params: {
     date: string;
@@ -338,9 +351,22 @@ export const expensesApi = {
     technician_id?: number; 
     project_id?: number; 
     date_from?: string; 
-    date_to?: string; 
+    date_to?: string;
+    start_date?: string;
+    end_date?: string;
+    status?: string;
   }): Promise<ApiResponse<Expense[]>> =>
-    api.get('/api/expenses', { params }).then(res => res.data),
+    api
+      .get('/api/expenses', {
+        params: params
+          ? {
+              ...params,
+              start_date: params.start_date || params.date_from,
+              end_date: params.end_date || params.date_to,
+            }
+          : undefined,
+      })
+      .then(res => res.data),
   
   getById: (id: number): Promise<ApiResponse<Expense>> =>
     api.get(`/api/expenses/${id}`).then(res => res.data),

@@ -129,6 +129,103 @@
         "projectCosts": "Which projects exceed budgeted hours?",
         "timesheetCreate": "DATE_RANGE=2026-02-10..2026-02-14\nProject: \"Mobile Banking App\"\n09:00-13:00\n14:00-18:00"
       },
+      "guidedFlagged": {
+        "question": "Which data should I check?",
+        "timesheets": "Timesheets",
+        "expenses": "Expenses",
+        "approvals": "Approvals",
+        "planning": "Planning",
+        "projects": "Projects",
+        "periodQuestion": "Which period should I use?",
+        "periods": {
+          "last7": "Last 7 days",
+          "month": "This month",
+          "last30": "Last 30 days",
+          "custom": "Custom range"
+        },
+        "customHelp": "Send a date range like 2026-02-01..2026-02-28.",
+        "prompts": {
+          "timesheets": "Which entries were flagged in the period {{from}}..{{to}}?",
+          "expenses": "Which expenses were flagged in the period {{from}}..{{to}}?",
+          "approvals": "Which approvals are pending or flagged in the period {{from}}..{{to}}?",
+          "planning": "Which planning risks were detected in the period {{from}}..{{to}}?",
+          "projects": "Which projects exceeded budgeted hours in the period {{from}}..{{to}}?"
+        }
+      },
+      "guidedPeriod": {
+        "question": "Which period should I use?",
+        "prompts": {
+          "overtime": "Where did overtime spike in the period {{from}}..{{to}}?",
+          "projectBudget": "Which projects exceeded budgeted hours in the period {{from}}..{{to}}?"
+        }
+      },
+      "guidedFilter": {
+        "question": "Do you want to filter by project or technician?",
+        "none": "No filter",
+        "project": "Filter by project",
+        "technician": "Filter by technician",
+        "projectAsk": "Type the project name.",
+        "technicianAsk": "Type the technician name.",
+        "projectPrompt": "Project: ",
+        "technicianPrompt": "Technician: "
+      },
+      "guidedSelection": {
+        "domain": "Domain: {{domain}}",
+        "period": "Period: {{period}}",
+        "filter": "Filter: {{filter}}"
+      },
+      "followUps": {
+        "changeDomain": "Change domain",
+        "changePeriod": "Change period",
+        "showMore": "Show more",
+        "openPage": "Open page"
+      },
+      "flaggedResults": {
+        "title": "{{domain}} flagged ({{from}}..{{to}})",
+        "count": "{{count}} flagged items found.",
+        "none": "No flagged {{domain}} found in this period.",
+        "examplesTitle": "Examples",
+        "reasonFallback": "Alert",
+        "reasonOvercap": "Daily hours exceeded cap ({{cap}}h)",
+        "draftsHint": "{{count}} drafts exist in this period. Drafts are not AI-flagged.",
+        "cta": {
+          "timesheets": "Open timesheets",
+          "approvals": "Open approvals",
+          "expenses": "Open expenses"
+        },
+        "example": {
+          "timesheet": "{{date}} - {{technician}} - {{project}} - {{reason}}",
+          "expense": "{{date}} - {{technician}} - {{title}} - {{amount}} - {{status}}",
+          "approvalTimesheet": "Timesheet: {{date}} - {{technician}} - {{project}}",
+          "approvalExpense": "Expense: {{date}} - {{technician}} - {{project}} - {{status}}"
+        }
+      },
+      "overtimeResults": {
+        "title": "Overtime spikes ({{from}}..{{to}})",
+        "count": "{{count}} technicians with overtime ({{total}}h total).",
+        "none": "No overtime spikes found in this period.",
+        "examplesTitle": "Top overtime",
+        "example": "{{technician}} - {{hours}}h overtime",
+        "cta": "Open timesheets"
+      },
+      "projectBudgetResults": {
+        "title": "Projects over budget ({{from}}..{{to}})",
+        "count": "{{count}} projects exceeded budgeted hours.",
+        "none": "No projects exceeded budgeted hours in this period.",
+        "examplesTitle": "Top overruns",
+        "example": "{{project}} - +{{delta}}h ({{logged}}h vs {{planned}}h)",
+        "cta": "Open planning"
+      },
+      "planningResults": {
+        "title": "Planning risks ({{from}}..{{to}})",
+        "unsupported": "Planning risk signals are not available yet. Review tasks for this period in Planning.",
+        "filtersNotice": "Project/technician filters are not available for Planning yet.",
+        "cta": "Open planning"
+      },
+      "unsupported": {
+        "title": "Supported insights",
+        "message": "I can help with flagged entries, pending approvals, overtime spikes, and project budget overruns. Pick one below or include a date range."
+      },
       "placeholderResponse": "I'm still learning. For now, I can summarize the report based on your question.",
       "errorFallback": "Something went wrong. Please try again.",
       "viewBilling": "View billing",
@@ -585,7 +682,6 @@
     "countries": "Countries",
     "users": "Users",
     "aiInsights": "AI Insights",
-    "aiTimesheetBuilder": "AI Timesheet Builder",
     "billing": "Billing",
     "resetData": "Reset data",
     "legal": "Legal",

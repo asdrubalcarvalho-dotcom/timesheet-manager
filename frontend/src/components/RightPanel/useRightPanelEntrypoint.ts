@@ -9,11 +9,12 @@ export const useRightPanelEntrypoint = () => {
   return ctx;
 };
 
-export const useRegisterRightPanelFloatingTrigger = (): void => {
+export const useRegisterRightPanelFloatingTrigger = (enabled: boolean = true): void => {
   const { registerFloatingTrigger } = useRightPanelEntrypoint();
 
   // Use layout effect to minimize header flicker (button hiding) when mounting the floating trigger.
   useLayoutEffect(() => {
+    if (!enabled) return;
     return registerFloatingTrigger();
-  }, [registerFloatingTrigger]);
+  }, [enabled, registerFloatingTrigger]);
 };
