@@ -224,9 +224,11 @@ const TimesheetCalendar: React.FC = () => {
   // Calendar ref to access API methods
   const calendarRef = useRef<FullCalendar>(null);
   const calendarContainerRef = useRef<HTMLDivElement>(null);
-  const lastMonthRef = useRef<string | null>(null);
   const selectedTechnicianRef = useRef<number | undefined>(undefined);
   const hasTravelsRef = useRef<boolean>(hasTravels);
+  const travelsRequestIdRef = useRef(0);
+  const loadedTravelMonthsRef = useRef<Set<string>>(new Set());
+  const visibleMonthsKeyRef = useRef<string>('');
   
   // State variables
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
@@ -244,7 +246,7 @@ const TimesheetCalendar: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState<Timesheet | null>(null);
   const [currentCalendarViewType, setCurrentCalendarViewType] = useState<string>('dayGridMonth');
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string | null>(null);
-  const [month, setMonth] = useState<string>(() => dayjs().format('YYYY-MM'));
+  const [visibleMonths, setVisibleMonths] = useState<string[]>([dayjs().format('YYYY-MM')]);
 
   const isTenantDrivenFirstDayView =
     currentCalendarViewType === 'timeGridWeek' ||
@@ -391,6 +393,18 @@ const TimesheetCalendar: React.FC = () => {
   useEffect(() => {
     hasTravelsRef.current = hasTravels;
   }, [hasTravels]);
+
+  useEffect(() => {
+    if (!hasTravels) {
+      loadedTravelMonthsRef.current = new Set();
+      setTravelsByDate({});
+    }
+  }, [hasTravels]);
+
+  useEffect(() => {
+    loadedTravelMonthsRef.current = new Set();
+    setTravelsByDate({});
+  }, [selectedTechnicianId]);
 
   const roleIsAssigned = (role?: 'member' | 'manager' | 'none') => role && role !== 'none';
 
@@ -632,55 +646,82 @@ const TimesheetCalendar: React.FC = () => {
 
   useEffect(() => {
     const controller = new AbortController();
+    const requestId = ++travelsRequestIdRef.current;
 
     const loadTravels = async () => {
-      // Load travels for calendar month view integration
       if (!hasTravelsRef.current) {
+        loadedTravelMonthsRef.current = new Set();
         setTravelsByDate({});
         return;
       }
 
-      try {
-        const params: Record<string, string | number> = {
-          month,
-        };
-
-        const technicianId = selectedTechnicianRef.current;
-        if (technicianId) {
-          params.technician_id = technicianId;
-        }
-
-        console.log('🛫 [TRAVELS] Loading with params:', params);
-        const response = await travelsApi.getTravelsByDate(params, controller.signal);
-
-        if (controller.signal.aborted) return;
-
-        console.log('🛫 [TRAVELS] API Response:', response);
-
-        if (response && response.travels_by_date) {
-          const travelCount = Object.keys(response.travels_by_date).length;
-          const totalSegments = Object.values(response.travels_by_date).flat().length;
-          console.log(
-            `🛫 [TRAVELS] Loaded ${totalSegments} segments across ${travelCount} dates:`,
-            response.travels_by_date
-          );
-          setTravelsByDate(response.travels_by_date);
-        } else {
-          console.warn('🛫 [TRAVELS] No travels_by_date in response:', response);
-          setTravelsByDate({});
-        }
-      } catch (error: unknown) {
-        if (controller.signal.aborted) return;
-        console.error('🛫 [TRAVELS] Error loading travels:', error);
-        setTravelsByDate({});
-        // Fail silently - travels are supplementary info to timesheets
+      const monthsToLoad = visibleMonths.filter((monthKey) => !loadedTravelMonthsRef.current.has(monthKey));
+      if (monthsToLoad.length === 0) {
+        return;
       }
+
+      console.log('🛫 [TRAVELS] Months for range:', monthsToLoad);
+
+      await Promise.all(
+        monthsToLoad.map(async (monthKey) => {
+          try {
+            const params: Record<string, string | number> = {
+              month: monthKey,
+            };
+
+            const technicianId = selectedTechnicianRef.current;
+            if (technicianId) {
+              params.technician_id = technicianId;
+            }
+
+            console.log('🛫 [TRAVELS] Loading with params:', params);
+            const response = await travelsApi.getTravelsByDate(params, controller.signal);
+
+            if (controller.signal.aborted) return;
+            if (requestId !== travelsRequestIdRef.current) {
+              console.warn('🛫 [TRAVELS] Ignoring stale response for month:', monthKey);
+              return;
+            }
+
+            console.log('🛫 [TRAVELS] API Response:', response);
+
+            if (response && response.travels_by_date) {
+              const totalSegments = Object.values(response.travels_by_date).reduce(
+                (acc: number, arr: unknown) => acc + (Array.isArray(arr) ? arr.length : 0),
+                0
+              );
+              console.log(`🛫 [TRAVELS] Merging ${totalSegments} segments for month ${monthKey}`);
+              loadedTravelMonthsRef.current.add(monthKey);
+              setTravelsByDate((prev) => ({
+                ...prev,
+                ...response.travels_by_date,
+              }));
+            } else {
+              console.warn('🛫 [TRAVELS] No travels_by_date in response:', response);
+              loadedTravelMonthsRef.current.add(monthKey);
+            }
+          } catch (error: unknown) {
+            if (controller.signal.aborted) return;
+            if (requestId !== travelsRequestIdRef.current) {
+              console.warn('🛫 [TRAVELS] Ignoring stale error for month:', monthKey);
+              return;
+            }
+            console.error('🛫 [TRAVELS] Error loading travels:', error);
+          }
+        })
+      );
     };
 
     void loadTravels();
 
     return () => controller.abort();
-  }, [month]);
+  }, [visibleMonths, selectedTechnicianId]);
+
+  useEffect(() => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    requestAnimationFrame(() => api.rerenderDates());
+  }, [travelsByDate]);
 
   const loadProjects = useCallback(
     async (technicianId?: number | '') => {
@@ -830,11 +871,26 @@ const TimesheetCalendar: React.FC = () => {
         void loadWeekSummary(info.startStr);
       }
 
-      const monthKey = dayjs(info.start).format('YYYY-MM');
-      if (lastMonthRef.current !== monthKey) {
-        lastMonthRef.current = monthKey;
-        setMonth(monthKey);
+      const rangeStart = dayjs(info.start);
+      const rangeEnd = dayjs(info.end).subtract(1, 'day');
+      const months: string[] = [];
+      let cursor = rangeStart.startOf('month');
+      const endCursor = rangeEnd.startOf('month');
+
+      while (cursor.isBefore(endCursor) || cursor.isSame(endCursor)) {
+        months.push(cursor.format('YYYY-MM'));
+        cursor = cursor.add(1, 'month');
       }
+
+      const monthsKey = months.join(',');
+      if (monthsKey !== visibleMonthsKeyRef.current) {
+        visibleMonthsKeyRef.current = monthsKey;
+        loadedTravelMonthsRef.current = new Set();
+        setTravelsByDate({});
+      }
+
+      console.log('🛫 [TRAVELS] Range months calculated:', months);
+      setVisibleMonths(months);
     },
     [loadWeekSummary]
   );
