@@ -12,6 +12,10 @@ const AiTimesheetPreviewDetails: React.FC<AiTimesheetPreviewDetailsProps> = ({ p
   const { t } = useTranslation();
 
   const metrics = useMemo(() => getAiTimesheetPlanMetrics(plan), [plan]);
+  const days = plan.days ?? [];
+
+  // Temporary debug: confirm preview day count.
+  console.log('[AiTimesheetPreviewDetails] days', days.length);
 
   const startDate = plan.range?.start_date ?? null;
   const endDate = plan.range?.end_date ?? null;
@@ -38,9 +42,10 @@ const AiTimesheetPreviewDetails: React.FC<AiTimesheetPreviewDetailsProps> = ({ p
         </Typography>
       </Stack>
 
-      <Stack spacing={1.5}>
-        {plan.days.map((day) => (
-          <Box key={day.date}>
+      <Stack spacing={1.5} sx={{ minHeight: 0 }}>
+        <Box sx={{ minHeight: 0, overflowY: 'auto' }}>
+          {days.map((day) => (
+            <Box key={day.date}>
             <Typography variant="subtitle2">{day.date}</Typography>
             <Stack spacing={0.5} sx={{ mt: 0.5 }}>
               {day.work_blocks.map((block, idx) => {
@@ -80,8 +85,9 @@ const AiTimesheetPreviewDetails: React.FC<AiTimesheetPreviewDetailsProps> = ({ p
               })}
             </Stack>
             <Divider sx={{ mt: 1.5 }} />
-          </Box>
-        ))}
+            </Box>
+          ))}
+        </Box>
       </Stack>
     </Stack>
   );
