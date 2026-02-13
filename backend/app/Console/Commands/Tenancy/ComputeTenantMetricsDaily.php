@@ -39,8 +39,7 @@ class ComputeTenantMetricsDaily extends Command
         $limit = (int) $this->option('limit');
 
         $dateInput = $this->option('date');
-        $asOfDate = $dateInput ? Carbon::parse((string) $dateInput)->startOfDay() : now()->startOfDay();
-        $ymd = $asOfDate->toDateString();
+        $dateLabel = $dateInput ? (string) $dateInput : 'today';
 
         $tenantSlug = $this->option('tenant');
 
@@ -59,7 +58,7 @@ class ComputeTenantMetricsDaily extends Command
             return Command::SUCCESS;
         }
 
-        $this->info(sprintf('Computing metrics for %d tenant(s) @ %s%s', $tenants->count(), $ymd, $dryRun ? ' (dry-run)' : ''));
+        $this->info(sprintf('Computing metrics for %d tenant(s) @ %s%s', $tenants->count(), $dateLabel, $dryRun ? ' (dry-run)' : ''));
 
         $processed = 0;
         $failed = 0;
@@ -68,9 +67,24 @@ class ComputeTenantMetricsDaily extends Command
             $processed++;
             $this->line(sprintf('[%d/%d] %s', $processed, $tenants->count(), $tenant->slug));
 
+            $startLocal = null;
             try {
-                $metrics = $tenant->run(function () use ($asOfDate) {
-                    $start = $asOfDate->copy();
+                $tenantTimezone = $this->resolveTenantTimezone($tenant);
+                $localDate = $dateInput
+                    ? Carbon::parse((string) $dateInput, $tenantTimezone)->startOfDay()
+                    : null;
+
+                if ($localDate) {
+                    $startLocal = $localDate->clone()->startOfDay();
+                    $endLocal = $localDate->clone()->endOfDay();
+                    $startUtc = $startLocal->clone()->utc();
+                    $endUtc = $endLocal->clone()->utc();
+                } else {
+                    [$startUtc, $endUtc] = $this->tenantTodayRangeUtc($tenantTimezone);
+                    $startLocal = $startUtc->clone()->timezone($tenantTimezone)->startOfDay();
+                }
+
+                $metrics = $tenant->run(function () use ($startUtc, $endUtc) {
 
                     // IMPORTANT: explicitly use the tenant connection inside the tenant run.
                     // Relying on the default connection can intermittently point to central.
@@ -82,7 +96,7 @@ class ComputeTenantMetricsDaily extends Command
                         : 0;
 
                     $timesheetsToday = ($tenantSchema->hasTable('timesheets') && $tenantSchema->hasColumn('timesheets', 'created_at'))
-                        ? $tenantDb->table('timesheets')->where('created_at', '>=', $start)->count()
+                        ? $tenantDb->table('timesheets')->whereBetween('created_at', [$startUtc, $endUtc])->count()
                         : 0;
 
                     $expensesTotal = $tenantSchema->hasTable('expenses')
@@ -90,7 +104,7 @@ class ComputeTenantMetricsDaily extends Command
                         : 0;
 
                     $expensesToday = ($tenantSchema->hasTable('expenses') && $tenantSchema->hasColumn('expenses', 'created_at'))
-                        ? $tenantDb->table('expenses')->where('created_at', '>=', $start)->count()
+                        ? $tenantDb->table('expenses')->whereBetween('created_at', [$startUtc, $endUtc])->count()
                         : 0;
 
                     // Users/Technicians: prefer users table if present; fallback to technicians.
@@ -102,20 +116,20 @@ class ComputeTenantMetricsDaily extends Command
                         $usersTotal = $tenantDb->table('users')->count();
 
                         if ($tenantSchema->hasColumn('users', 'last_seen_at')) {
-                            $usersActiveToday = $tenantDb->table('users')->where('last_seen_at', '>=', $start)->count();
+                            $usersActiveToday = $tenantDb->table('users')->whereBetween('last_seen_at', [$startUtc, $endUtc])->count();
                             $lastLoginAt = $tenantDb->table('users')->max('last_seen_at');
                         } elseif ($tenantSchema->hasColumn('users', 'last_login_at')) {
-                            $usersActiveToday = $tenantDb->table('users')->where('last_login_at', '>=', $start)->count();
+                            $usersActiveToday = $tenantDb->table('users')->whereBetween('last_login_at', [$startUtc, $endUtc])->count();
                             $lastLoginAt = $tenantDb->table('users')->max('last_login_at');
                         }
                     } elseif ($tenantSchema->hasTable('technicians')) {
                         $usersTotal = $tenantDb->table('technicians')->count();
 
                         if ($tenantSchema->hasColumn('technicians', 'last_seen_at')) {
-                            $usersActiveToday = $tenantDb->table('technicians')->where('last_seen_at', '>=', $start)->count();
+                            $usersActiveToday = $tenantDb->table('technicians')->whereBetween('last_seen_at', [$startUtc, $endUtc])->count();
                             $lastLoginAt = $tenantDb->table('technicians')->max('last_seen_at');
                         } elseif ($tenantSchema->hasColumn('technicians', 'last_login_at')) {
-                            $usersActiveToday = $tenantDb->table('technicians')->where('last_login_at', '>=', $start)->count();
+                            $usersActiveToday = $tenantDb->table('technicians')->whereBetween('last_login_at', [$startUtc, $endUtc])->count();
                             $lastLoginAt = $tenantDb->table('technicians')->max('last_login_at');
                         }
                     }
@@ -140,7 +154,7 @@ class ComputeTenantMetricsDaily extends Command
                     [
                         [
                             'tenant_id' => $tenant->id,
-                            'date' => $asOfDate->toDateString(),
+                            'date' => $startLocal->toDateString(),
                             'timesheets_total' => $metrics['timesheets_total'],
                             'timesheets_today' => $metrics['timesheets_today'],
                             'expenses_total' => $metrics['expenses_total'],
@@ -172,7 +186,7 @@ class ComputeTenantMetricsDaily extends Command
                 Log::warning('Failed computing tenant metrics daily', [
                     'tenant_id' => $tenant->id,
                     'tenant_slug' => $tenant->slug,
-                    'date' => $ymd,
+                    'date' => $startLocal ? $startLocal->toDateString() : $dateLabel,
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -182,5 +196,30 @@ class ComputeTenantMetricsDaily extends Command
         $this->info(sprintf('Done. processed=%d failed=%d', $processed, $failed));
 
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    private function tenantTodayRangeUtc(string $timezone): array
+    {
+        $startLocal = now($timezone)->startOfDay();
+        $endLocal = now($timezone)->endOfDay();
+
+        return [
+            $startLocal->clone()->utc(),
+            $endLocal->clone()->utc(),
+        ];
+    }
+
+    private function resolveTenantTimezone(Tenant $tenant): string
+    {
+        $fromSettings = (string) data_get($tenant->settings ?? [], 'timezone', '');
+        if (trim($fromSettings) !== '') {
+            return trim($fromSettings);
+        }
+
+        if (!empty($tenant->timezone)) {
+            return (string) $tenant->timezone;
+        }
+
+        return (string) config('app.timezone', 'UTC');
     }
 }

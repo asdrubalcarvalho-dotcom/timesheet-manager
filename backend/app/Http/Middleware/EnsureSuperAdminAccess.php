@@ -27,12 +27,12 @@ class EnsureSuperAdminAccess
         /**
          * STEP 0 — Extract Origin + tenant slug from domain
          */
-        $origin = $request->header('Origin') ?: $request->header('Referer');
-        $originHost = $origin ? parse_url($origin, PHP_URL_HOST) : null;
+        $origin = $request->header('Origin');
+        $host = $origin ? parse_url($origin, PHP_URL_HOST) : $request->getHost();
 
         $allowedDomains = config('telemetry.allowed_superadmin_domains', []);
 
-        if (!$originHost || !in_array($originHost, $allowedDomains)) {
+        if (!$host || !in_array($host, $allowedDomains)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Forbidden – Must access from allowed SuperAdmin domain',
@@ -41,7 +41,7 @@ class EnsureSuperAdminAccess
 
         // Example: management.vendaslive.com -> management
         //          upg2ai.vendaslive.com    -> upg2ai
-        $parts = $originHost ? explode('.', $originHost) : [];
+        $parts = $host ? explode('.', $host) : [];
         $tenantSlug = $parts[0] ?? null;
 
         if (!$tenantSlug) {

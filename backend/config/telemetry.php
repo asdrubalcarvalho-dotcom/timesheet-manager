@@ -63,13 +63,15 @@
 # RULE 10 — If something is unclear or missing:
 #   → STOP and ask for clarification instead of guessing.
 
+
 return [
     'internal_key' => env('INTERNAL_TELEMETRY_KEY'),
     'internal_base_url' => env('INTERNAL_TELEMETRY_URL', 'http://127.0.0.1/api/admin/telemetry'),
     'superadmin_email' => env('SUPERADMIN_EMAIL', 'supervisor@upg2ai.com'),
-    'allowed_superadmin_domains' => [
-        'management.localhost',
-        'management.vendaslive.com',
-        'upg2ai.vendaslive.com',
-    ],
+    'allowed_superadmin_domains' => array_filter(
+        array_map(
+            'trim',
+            explode(',', env('SUPERADMIN_ALLOWED_DOMAINS', 'management.vendaslive.com'))
+        )
+    ),
 ];

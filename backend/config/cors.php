@@ -37,13 +37,12 @@ return [
     |
     */
 
-    'allowed_origins' => [
+    'allowed_origins' => array_filter(array_merge([
 
         // Desenvolvimento
         'http://localhost:3000',
         'http://localhost:8082',
         'http://demo.localhost:8082',        // Demo tenant
-        'http://management.localhost:8082',  // SuperAdmin dashboard
         env('FRONTEND_URL', 'http://localhost:3000'),
 
         // Produção
@@ -51,7 +50,9 @@ return [
         'https://www.vendaslive.com',
         'https://app.vendaslive.com',
         'https://management.vendaslive.com',  // SuperAdmin production
-    ],
+    ], array_filter(array_map('trim',
+        explode(',', env('SUPERADMIN_ALLOWED_ORIGINS', 'https://management.vendaslive.com')))
+    ))),
 
     /*
     |--------------------------------------------------------------------------
