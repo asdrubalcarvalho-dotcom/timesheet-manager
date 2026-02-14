@@ -43,7 +43,7 @@ const AiTimesheetPreviewDetails: React.FC<AiTimesheetPreviewDetailsProps> = ({ p
       </Stack>
 
       <Stack spacing={1.5} sx={{ minHeight: 0 }}>
-        <Box sx={{ minHeight: 0, overflowY: 'auto' }}>
+        <Box sx={{ minHeight: 0, maxHeight: { xs: 260, sm: 320 }, overflowY: 'auto', pr: 1 }}>
           {days.map((day) => (
             <Box key={day.date}>
             <Typography variant="subtitle2">{day.date}</Typography>
