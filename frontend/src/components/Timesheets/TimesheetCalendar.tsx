@@ -90,6 +90,7 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 import type { DateClickArg } from '@fullcalendar/interaction';
 import type {
   DateSelectArg,
+  DayCellContentArg,
   DayCellMountArg,
   DatesSetArg,
   EventClickArg,
@@ -224,9 +225,11 @@ const TimesheetCalendar: React.FC = () => {
   // Calendar ref to access API methods
   const calendarRef = useRef<FullCalendar>(null);
   const calendarContainerRef = useRef<HTMLDivElement>(null);
-  const lastMonthRef = useRef<string | null>(null);
   const selectedTechnicianRef = useRef<number | undefined>(undefined);
   const hasTravelsRef = useRef<boolean>(hasTravels);
+  const travelsRequestIdRef = useRef(0);
+  const loadedTravelMonthsRef = useRef<Set<string>>(new Set());
+  const visibleMonthsKeyRef = useRef<string>('');
   
   // State variables
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
@@ -244,7 +247,7 @@ const TimesheetCalendar: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState<Timesheet | null>(null);
   const [currentCalendarViewType, setCurrentCalendarViewType] = useState<string>('dayGridMonth');
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState<string | null>(null);
-  const [month, setMonth] = useState<string>(() => dayjs().format('YYYY-MM'));
+  const [visibleMonths, setVisibleMonths] = useState<string[]>([dayjs().format('YYYY-MM')]);
 
   const isTenantDrivenFirstDayView =
     currentCalendarViewType === 'timeGridWeek' ||
@@ -391,6 +394,14 @@ const TimesheetCalendar: React.FC = () => {
   useEffect(() => {
     hasTravelsRef.current = hasTravels;
   }, [hasTravels]);
+
+  useEffect(() => {
+    if (!hasTravels) {
+      loadedTravelMonthsRef.current = new Set();
+      setTravelsByDate({});
+    }
+  }, [hasTravels]);
+
 
   const roleIsAssigned = (role?: 'member' | 'manager' | 'none') => role && role !== 'none';
 
@@ -632,55 +643,72 @@ const TimesheetCalendar: React.FC = () => {
 
   useEffect(() => {
     const controller = new AbortController();
+    const requestId = ++travelsRequestIdRef.current;
 
     const loadTravels = async () => {
-      // Load travels for calendar month view integration
-      if (!hasTravelsRef.current) {
+      if (!hasTravels) {
+        loadedTravelMonthsRef.current = new Set();
         setTravelsByDate({});
         return;
       }
 
-      try {
-        const params: Record<string, string | number> = {
-          month,
-        };
-
-        const technicianId = selectedTechnicianRef.current;
-        if (technicianId) {
-          params.technician_id = technicianId;
-        }
-
-        console.log('🛫 [TRAVELS] Loading with params:', params);
-        const response = await travelsApi.getTravelsByDate(params, controller.signal);
-
-        if (controller.signal.aborted) return;
-
-        console.log('🛫 [TRAVELS] API Response:', response);
-
-        if (response && response.travels_by_date) {
-          const travelCount = Object.keys(response.travels_by_date).length;
-          const totalSegments = Object.values(response.travels_by_date).flat().length;
-          console.log(
-            `🛫 [TRAVELS] Loaded ${totalSegments} segments across ${travelCount} dates:`,
-            response.travels_by_date
-          );
-          setTravelsByDate(response.travels_by_date);
-        } else {
-          console.warn('🛫 [TRAVELS] No travels_by_date in response:', response);
-          setTravelsByDate({});
-        }
-      } catch (error: unknown) {
-        if (controller.signal.aborted) return;
-        console.error('🛫 [TRAVELS] Error loading travels:', error);
-        setTravelsByDate({});
-        // Fail silently - travels are supplementary info to timesheets
+      const monthsToLoad = visibleMonths.filter((monthKey) => !loadedTravelMonthsRef.current.has(monthKey));
+      if (monthsToLoad.length === 0) {
+        return;
       }
+
+      console.log('🛫 [TRAVELS] Months for range:', monthsToLoad);
+
+      await Promise.all(
+        monthsToLoad.map(async (monthKey) => {
+          try {
+            const params: Record<string, string | number> = {
+              month: monthKey,
+            };
+
+            console.log('🛫 [TRAVELS] Loading with params:', params);
+            const response = await travelsApi.getTravelsByDate(params, controller.signal);
+
+            if (controller.signal.aborted) return;
+            if (requestId !== travelsRequestIdRef.current) {
+              console.warn('🛫 [TRAVELS] Ignoring stale response for month:', monthKey);
+              return;
+            }
+
+            console.log('🛫 [TRAVELS] API Response:', response);
+
+            if (response && response.travels_by_date) {
+              const totalSegments = Object.values(response.travels_by_date).reduce(
+                (acc: number, arr: unknown) => acc + (Array.isArray(arr) ? arr.length : 0),
+                0
+              );
+              console.log(`🛫 [TRAVELS] Merging ${totalSegments} segments for month ${monthKey}`);
+              loadedTravelMonthsRef.current.add(monthKey);
+              setTravelsByDate((prev) => ({
+                ...prev,
+                ...response.travels_by_date,
+              }));
+            } else {
+              console.warn('🛫 [TRAVELS] No travels_by_date in response:', response);
+              loadedTravelMonthsRef.current.add(monthKey);
+            }
+          } catch (error: unknown) {
+            if (controller.signal.aborted) return;
+            if (requestId !== travelsRequestIdRef.current) {
+              console.warn('🛫 [TRAVELS] Ignoring stale error for month:', monthKey);
+              return;
+            }
+            console.error('🛫 [TRAVELS] Error loading travels:', error);
+          }
+        })
+      );
     };
 
     void loadTravels();
 
     return () => controller.abort();
-  }, [month]);
+  }, [visibleMonths, hasTravels]);
+
 
   const loadProjects = useCallback(
     async (technicianId?: number | '') => {
@@ -830,11 +858,27 @@ const TimesheetCalendar: React.FC = () => {
         void loadWeekSummary(info.startStr);
       }
 
-      const monthKey = dayjs(info.start).format('YYYY-MM');
-      if (lastMonthRef.current !== monthKey) {
-        lastMonthRef.current = monthKey;
-        setMonth(monthKey);
+      const rangeStart = dayjs(info.start);
+      const rangeEnd = dayjs(info.end).subtract(1, 'day');
+      const months: string[] = [];
+      let cursor = rangeStart.startOf('month');
+      const endCursor = rangeEnd.startOf('month');
+
+      while (cursor.isBefore(endCursor) || cursor.isSame(endCursor)) {
+        months.push(cursor.format('YYYY-MM'));
+        cursor = cursor.add(1, 'month');
       }
+
+      const monthsKey = months.join(',');
+      if (monthsKey === visibleMonthsKeyRef.current) {
+        return;
+      }
+
+      visibleMonthsKeyRef.current = monthsKey;
+      loadedTravelMonthsRef.current = new Set();
+      setTravelsByDate({});
+      console.log('🛫 [TRAVELS] Range months calculated:', months);
+      setVisibleMonths(months);
     },
     [loadWeekSummary]
   );
@@ -984,7 +1028,7 @@ const TimesheetCalendar: React.FC = () => {
     }
     // Ignore click if it's on a travel indicator
     const clickTarget = clickInfo.jsEvent?.target;
-    if (clickTarget instanceof HTMLElement && clickTarget.classList.contains('travel-indicator')) {
+    if (clickTarget instanceof HTMLElement && clickTarget.closest('.travel-indicator')) {
       console.log('🛫 Ignoring dateClick - clicked on travel indicator');
       return;
     }
@@ -1099,7 +1143,6 @@ const TimesheetCalendar: React.FC = () => {
     setProjectId(0);
     setTaskId(0);
     setLocationId('');
-    setSelectedTechnicianId('');
     setHoursWorked(0);
     setDescription('');
     // Set default working hours (9:00 AM + 1 hour = 10:00 AM)
@@ -1891,11 +1934,80 @@ const TimesheetCalendar: React.FC = () => {
     });
   }, [uiFilteredTimesheets, user, userIsManager, userIsAdmin, isTimesheetOwnedByUser, t]);
 
+  const renderDayCellContent = (arg: DayCellContentArg) => {
+    // Only month view gets the badge (same as before)
+    if (arg.view.type !== 'dayGridMonth') {
+      return { html: String(arg.dayNumberText ?? '') };
+    }
+
+    const dateStr = dayjs(arg.date).format('YYYY-MM-DD');
+    const travelsForDay = travelsByDate[dateStr];
+
+    // Default: just the day number
+    if (!travelsForDay || travelsForDay.length === 0) {
+      return { html: String(arg.dayNumberText ?? '') };
+    }
+
+    const wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    wrap.style.width = '100%';
+    wrap.style.height = '100%';
+    wrap.style.overflow = 'visible';
+
+    const day = document.createElement('span');
+    day.textContent = String(arg.dayNumberText ?? '');
+    wrap.appendChild(day);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '✈';
+    btn.title = t('timesheets.travels.indicatorTitle', { count: travelsForDay.length });
+    btn.className = 'travel-indicator';
+    btn.dataset.travelIndicator = 'true';
+
+    btn.style.position = 'absolute';
+    btn.style.top = '2px';
+    btn.style.left = '-30px';
+    btn.style.width = '20px';
+    btn.style.height = '20px';
+    btn.style.borderRadius = '50%';
+    btn.style.border = '1px solid #2196f3';
+    btn.style.background = 'transparent';
+    btn.style.color = '#2196f3';
+    btn.style.fontSize = '12px';
+    btn.style.lineHeight = '1';
+    btn.style.cursor = 'pointer';
+    btn.style.display = 'flex';
+    btn.style.alignItems = 'center';
+    btn.style.justifyContent = 'center';
+    btn.style.padding = '0';
+    btn.style.zIndex = '2';
+    btn.style.pointerEvents = 'auto';
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      (e as unknown as { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+      handleTravelIndicatorClick(dateStr, travelsForDay);
+    });
+
+    wrap.appendChild(btn);
+
+    return { domNodes: [wrap] };
+  };
+
   // Day cell renderer - add travel indicators to calendar days
   const handleDayCellDidMount = (info: DayCellMountArg) => {
+    const viewType = info.view.type;
+    const isListView = viewType === 'listWeek' || viewType === 'listMonth';
+    
+    if (!isListView) {
+      return; // Skip month/day grids; handled by dayCellContent
+    }
+
     const dateStr = dayjs(info.date).format('YYYY-MM-DD');
     const travelsForDay = travelsByDate[dateStr];
-    
+
     // Debug: Log every day cell mount
     if (dateStr === '2025-11-12' || dateStr === '2025-11-13') {
       console.log(`🛫 [DAY CELL] ${dateStr}:`, {
@@ -1904,18 +2016,9 @@ const TimesheetCalendar: React.FC = () => {
         viewType: info.view.type
       });
     }
-    
+
     if (!travelsForDay || travelsForDay.length === 0) {
       return; // No travels on this day
-    }
-    
-    // Show indicators in month view and list views
-    const viewType = info.view.type;
-    const isMonthView = viewType === 'dayGridMonth';
-    const isListView = viewType === 'listWeek' || viewType === 'listMonth';
-    
-    if (!isMonthView && !isListView) {
-      return; // Skip for timeGridWeek (week calendar view)
     }
     
     console.log(`🛫 [INDICATOR] Creating badge for ${dateStr} with ${travelsForDay.length} travels in ${viewType}`);
@@ -1983,83 +2086,6 @@ const TimesheetCalendar: React.FC = () => {
       console.log(`🛫 [INDICATOR] Added ${travelsForDay.length} travel items to list view for ${dateStr}`);
       return;
     }
-    
-    // Month view indicator (existing code)
-    // Find the day-top element (contains the day number)
-    const dayTop = info.el.querySelector('.fc-daygrid-day-top');
-    if (!dayTop) {
-      console.warn(`🛫 [INDICATOR] No day-top found for ${dateStr}`, {
-        element: info.el,
-        innerHTML: info.el.innerHTML,
-        classList: info.el.classList
-      });
-      return;
-    }
-    
-    console.log(`🛫 [INDICATOR] Found day-top for ${dateStr}`, dayTop);
-    
-    // Determine plane color based on travel status (matching timesheet colors)
-    const getPlaneColor = (travels: TravelSegment[]) => {
-      // If multiple travels, use the most "important" status
-      const hasCompleted = travels.some(t => t.status === 'completed');
-      const hasCancelled = travels.some(t => t.status === 'cancelled');
-      const hasPlanned = travels.some(t => t.status === 'planned');
-      
-      if (hasCompleted) return '#4caf50';    // Green (approved/completed)
-      if (hasPlanned) return '#ff9800';      // Orange (submitted/planned)
-      if (hasCancelled) return '#9e9e9e';    // Gray (cancelled)
-      return '#ff9800';                       // Default to orange
-    };
-    
-    const planeColor = getPlaneColor(travelsForDay);
-    
-    // Create travel indicator badge - blue border, colored plane
-    const indicator = document.createElement('div');
-    indicator.className = 'travel-indicator';
-    indicator.style.cssText = `
-      position: absolute;
-      top: 4px;
-      left: 4px;
-      background-color: transparent;
-      color: ${planeColor};
-      border: 2px solid #2196f3;
-      border-radius: 50%;
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: bold;
-      cursor: pointer;
-      z-index: 1000;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      pointer-events: auto;
-      line-height: 1;
-    `;
-    indicator.textContent = '✈';
-    indicator.title = t('timesheets.travels.indicatorTitle', { count: travelsForDay.length });
-    
-    // Add click handler to show travel details - PREVENT dateClick propagation
-    indicator.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      console.log('🛫 Travel indicator clicked, opening dialog');
-      handleTravelIndicatorClick(dateStr, travelsForDay);
-    });
-    
-    // Make day cell position relative and append indicator to cell (not day-top)
-    info.el.style.position = 'relative';
-    info.el.appendChild(indicator);
-    
-    console.log(`🛫 [INDICATOR] Badge appended to ${dateStr} cell`, {
-      cellElement: info.el,
-      indicatorPosition: {
-        top: indicator.style.top,
-        right: indicator.style.right
-      }
-    });
   };
 
   // Custom event content renderer to show technician name
@@ -2767,7 +2793,7 @@ const TimesheetCalendar: React.FC = () => {
         }}
         >
           <FullCalendar
-            key={`weekFirstDay:${weekFirstDay}:locale:${fullCalendarLocale}`}
+            key={`timesheet-calendar-weekFirstDay:${weekFirstDay}:locale:${fullCalendarLocale}`}
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
             locales={[enGbLocale, ptLocale]}
@@ -2793,6 +2819,7 @@ const TimesheetCalendar: React.FC = () => {
               endTime: '24:00',
             }}
             eventDidMount={handleEventDidMount}
+            dayCellContent={renderDayCellContent}
             dayCellDidMount={handleDayCellDidMount}
             datesSet={handleViewChange}
             dayMaxEvents={isMobile ? 2 : 3}
@@ -3412,110 +3439,119 @@ const TimesheetCalendar: React.FC = () => {
               {selectedTravels.length === 0 ? (
                 <Typography>{t('timesheets.travels.empty')}</Typography>
               ) : (
-                selectedTravels.map((travel) => (
-                  <Box
-                    key={travel.id}
-                    sx={{
-                      mb: 2,
-                      p: 2,
-                      border: '1px solid #e0e0e0',
-                      borderRadius: 1,
-                      bgcolor: '#f9f9f9'
-                    }}
-                  >
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {t('timesheets.travels.fields.technician')}
-                        </Typography>
-                        <Typography variant="body1">
-                          {travel.technician?.name || t('common.unknown')}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {t('timesheets.travels.fields.project')}
-                        </Typography>
-                        <Typography variant="body1">
-                          {travel.project?.name || t('common.unknown')}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {t('timesheets.travels.fields.departure')}
-                        </Typography>
-                        <Typography variant="body1">
-                          {travel.start_at 
-                            ? formatTenantDateTime(travel.start_at, tenantContext)
-                            : travel.travel_date 
-                              ? formatTenantDate(travel.travel_date, tenantContext)
-                              : t('common.notAvailable')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {travel.origin_city ? `${travel.origin_city}, ` : ''}{travel.origin_country}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {t('timesheets.travels.fields.arrival')}
-                        </Typography>
-                        <Typography variant="body1">
-                          {travel.end_at 
-                            ? formatTenantDateTime(travel.end_at, tenantContext)
-                            : t('common.notAvailable')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {travel.destination_city ? `${travel.destination_city}, ` : ''}{travel.destination_country}
-                        </Typography>
-                      </Grid>
-                      {travel.duration_minutes && travel.duration_minutes > 0 && (
+                selectedTravels.map((travel) => {
+                  const travelTechnicianName =
+                    travel.technician?.name ||
+                    (travel as { technician_name?: string }).technician_name ||
+                    (typeof (travel as { technician?: unknown }).technician === 'string'
+                      ? (travel as { technician?: string }).technician
+                      : undefined) ||
+                    technicians.find(t => t.id === travel.technician_id)?.name ||
+                    t('common.unknown');
+
+                  return (
+                    <Box
+                      key={travel.id}
+                      sx={{
+                        mb: 2,
+                        p: 2,
+                        border: '1px solid #e0e0e0',
+                        borderRadius: 1,
+                        bgcolor: '#f9f9f9'
+                      }}
+                    >
+                      <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
                           <Typography variant="subtitle2" color="text.secondary">
-                            {t('timesheets.travels.fields.duration')}
+                            {t('timesheets.travels.fields.technician')}
+                          </Typography>
+                          <Typography variant="body1">{travelTechnicianName}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="text.secondary">
+                            {t('timesheets.travels.fields.project')}
                           </Typography>
                           <Typography variant="body1">
-                            {t('timesheets.travels.durationValue', {
-                              hours: Math.floor(travel.duration_minutes / 60),
-                              minutes: travel.duration_minutes % 60,
-                            })}
+                            {travel.project?.name || t('common.unknown')}
                           </Typography>
                         </Grid>
-                      )}
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {t('timesheets.travels.fields.direction')}
-                        </Typography>
-                        <Typography variant="body1">
-                          {travel.direction?.replace(/_/g, ' ').toUpperCase() || t('common.otherUpper')}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                          {t('timesheets.travels.fields.status')}
-                        </Typography>
-                        <Chip 
-                          label={travel.status?.toUpperCase() || t('common.unknownUpper')}
-                          size="small"
-                          color={
-                            travel.status === 'completed' ? 'success' : 
-                            travel.status === 'cancelled' ? 'default' : 
-                            'warning'
-                          }
-                        />
-                      </Grid>
-                      {travel.classification_reason && (
-                        <Grid item xs={12}>
+                        <Grid item xs={12} sm={6}>
                           <Typography variant="subtitle2" color="text.secondary">
-                            {t('timesheets.travels.fields.classificationReason')}
+                            {t('timesheets.travels.fields.departure')}
                           </Typography>
-                          <Typography variant="body2">
-                            {travel.classification_reason}
+                          <Typography variant="body1">
+                            {travel.start_at 
+                              ? formatTenantDateTime(travel.start_at, tenantContext)
+                              : travel.travel_date 
+                                ? formatTenantDate(travel.travel_date, tenantContext)
+                                : t('common.notAvailable')}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {travel.origin_city ? `${travel.origin_city}, ` : ''}{travel.origin_country}
                           </Typography>
                         </Grid>
-                      )}
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="text.secondary">
+                            {t('timesheets.travels.fields.arrival')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {travel.end_at 
+                              ? formatTenantDateTime(travel.end_at, tenantContext)
+                              : t('common.notAvailable')}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {travel.destination_city ? `${travel.destination_city}, ` : ''}{travel.destination_country}
+                          </Typography>
+                        </Grid>
+                        {travel.duration_minutes && travel.duration_minutes > 0 && (
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                              {t('timesheets.travels.fields.duration')}
+                            </Typography>
+                            <Typography variant="body1">
+                              {t('timesheets.travels.durationValue', {
+                                hours: Math.floor(travel.duration_minutes / 60),
+                                minutes: travel.duration_minutes % 60,
+                              })}
+                            </Typography>
+                          </Grid>
+                        )}
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="text.secondary">
+                            {t('timesheets.travels.fields.direction')}
+                          </Typography>
+                          <Typography variant="body1">
+                            {travel.direction?.replace(/_/g, ' ').toUpperCase() || t('common.otherUpper')}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="subtitle2" color="text.secondary">
+                            {t('timesheets.travels.fields.status')}
+                          </Typography>
+                          <Chip 
+                            label={travel.status?.toUpperCase() || t('common.unknownUpper')}
+                            size="small"
+                            color={
+                              travel.status === 'completed' ? 'success' : 
+                              travel.status === 'cancelled' ? 'default' : 
+                              'warning'
+                            }
+                          />
+                        </Grid>
+                        {travel.classification_reason && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                              {t('timesheets.travels.fields.classificationReason')}
+                            </Typography>
+                            <Typography variant="body2">
+                              {travel.classification_reason}
+                            </Typography>
+                          </Grid>
+                        )}
                     </Grid>
                   </Box>
-                ))
+                );
+                })
               )}
             </Box>
           </DialogContent>
