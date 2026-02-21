@@ -3,8 +3,8 @@
 namespace App\Console\Commands\Tenancy;
 
 use App\Models\Tenant;
+use App\Services\Tenancy\TenantDeletionService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 /**
  * 🧹 TenantDeleteCommand
@@ -93,27 +93,15 @@ class TenantDeleteCommand extends Command
         $this->info('🚀 Starting tenant deletion...');
 
         try {
-            // Delete tenant (this triggers TenantDeleted event which drops the database)
-            $tenant->delete();
+            $result = app(TenantDeletionService::class)->deleteTenantFully($slug);
 
             $this->newLine();
             $this->components->info('✅ Tenant record deleted from central database');
 
-            // Verify database was dropped (TenantDeleted event should handle this)
-            try {
-                $databases = DB::select("SHOW DATABASES LIKE '{$tenantDbName}'");
-                
-                if (empty($databases)) {
-                    $this->components->info("✅ Tenant database '{$tenantDbName}' removed");
-                } else {
-                    $this->warn("⚠️  Database '{$tenantDbName}' still exists. Attempting manual cleanup...");
-                    
-                    // Manual cleanup if event didn't fire
-                    DB::statement("DROP DATABASE IF EXISTS {$tenantDbName}");
-                    $this->components->info("✅ Database manually removed");
-                }
-            } catch (\Exception $e) {
-                $this->warn("⚠️  Could not verify database deletion: " . $e->getMessage());
+            if ($result['database_dropped']) {
+                $this->components->info("✅ Tenant database '{$tenantDbName}' removed");
+            } else {
+                $this->warn("⚠️  Tenant database '{$tenantDbName}' not dropped (missing or skipped)");
             }
 
             $this->newLine();
@@ -122,8 +110,8 @@ class TenantDeleteCommand extends Command
             // Log the deletion
             \Log::info("Tenant deleted via CLI", [
                 'slug' => $slug,
-                'tenant_id' => $tenant->id,
-                'database' => $tenantDbName,
+                'tenant_id' => $result['tenant_id'],
+                'database' => $result['database'],
                 'deleted_by' => 'artisan_command',
                 'timestamp' => now()->toISOString(),
             ]);
