@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -55,7 +56,7 @@ class TenantOnboardingTest extends TestCase
         $this->tenantDb = 'timesheet_' . $this->tenantSlug;
     }
 
-    /** @test */
+    #[Test]
     public function it_registers_a_tenant_and_creates_their_database()
     {
         // 1️⃣ Prepare request payload
@@ -122,7 +123,7 @@ class TenantOnboardingTest extends TestCase
         Tenancy::end();
     }
 
-    /** @test */
+    #[Test]
     public function it_rejects_reserved_slugs()
     {
         $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
@@ -144,7 +145,7 @@ class TenantOnboardingTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function check_slug_endpoint_returns_availability()
     {
         // Create an existing tenant (DB will not be created in tests, only central record)

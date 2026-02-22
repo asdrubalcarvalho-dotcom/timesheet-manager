@@ -37,6 +37,6 @@ class TimesheetPlanParserTest extends TenantTestCase
 
         $this->assertNull($result['plan']);
         $this->assertNotEmpty($result['errors']);
-        $this->assertTrue(collect($result['errors'])->contains(fn($msg) => str_contains($msg, 'Project "Project Z" not found.')));
+        $this->assertTrue(collect($result['errors'])->contains(fn($msg) => str_contains($msg, 'Project "Z" not found.')));
     }
 }

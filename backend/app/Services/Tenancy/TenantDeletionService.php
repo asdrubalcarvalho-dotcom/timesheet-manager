@@ -147,7 +147,8 @@ class TenantDeletionService
             return false;
         }
 
-        $databases = $centralConnection->select('SHOW DATABASES LIKE ?', [$safeDbName]);
+        $quotedDbName = $centralConnection->getPdo()->quote($safeDbName);
+        $databases = $centralConnection->select("SHOW DATABASES LIKE {$quotedDbName}");
         if (empty($databases)) {
             return false;
         }
