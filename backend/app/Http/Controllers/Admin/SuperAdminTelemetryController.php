@@ -418,14 +418,6 @@ class SuperAdminTelemetryController extends Controller
     public function deleteTenant(Request $request, string $slug): JsonResponse
     {
         try {
-            $tenant = Tenant::where('slug', $slug)->first();
-            if (!$tenant) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Tenant not found',
-                ], 404);
-            }
-
             $confirmSlug = (string) $request->input('confirm_slug', '');
             $confirmIrreversible = (bool) $request->input('confirm_irreversible', false);
             $confirmFinal = (bool) $request->input('confirm_final', false);
@@ -437,65 +429,17 @@ class SuperAdminTelemetryController extends Controller
                 ], 422);
             }
 
-            $actor = $request->user();
-
-            DB::connection('mysql')->table('admin_actions')->insert([
-                'actor_user_id' => $actor?->id,
-                'actor_email' => $actor?->email,
-                'action' => 'tenant_delete_requested',
-                'tenant_id' => $tenant->id,
-                'payload' => json_encode([
-                    'slug' => $slug,
-                    'confirm_slug' => $confirmSlug,
-                ]),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            $dbPrefix = config('tenancy.database.prefix', 'timesheet_');
-            $tenantDbName = $dbPrefix . $tenant->id;
-
-            $tenantId = $tenant->id;
-            $tenant->delete();
-
-            // Verify database dropped; fallback manual drop.
-            try {
-                // Best-effort hardening: sanitize identifier and always use backticks.
-                // Keep DB name construction: prefix + tenant id.
-                $safeDbName = str_replace('`', '', (string) $tenantDbName);
-                $safeDbName = preg_replace('/[^A-Za-z0-9_]/', '', $safeDbName) ?? '';
-
-                if ($safeDbName === '') {
-                    throw new \RuntimeException('Invalid tenant database name');
-                }
-
-                $databases = DB::connection('mysql')->select('SHOW DATABASES LIKE ?', [$safeDbName]);
-                if (!empty($databases)) {
-                    DB::connection('mysql')->statement("DROP DATABASE IF EXISTS `{$safeDbName}`");
-                }
-            } catch (\Throwable $e) {
-                // Best effort.
-            }
-
-            DB::connection('mysql')->table('admin_actions')->insert([
-                'actor_user_id' => $actor?->id,
-                'actor_email' => $actor?->email,
-                'action' => 'tenant_deleted',
-                'tenant_id' => $tenantId,
-                'payload' => json_encode([
-                    'slug' => $slug,
-                    'database' => $tenantDbName,
-                ]),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $result = app(\App\Services\Tenancy\TenantDeletionService::class)
+                ->deleteTenantFully($slug);
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'tenant_id' => $tenantId,
-                    'slug' => $slug,
-                    'database' => $tenantDbName,
+                    'tenant_id' => $result['tenant_id'],
+                    'slug' => $result['slug'],
+                    'database' => $result['database'],
+                    'tenant_found' => $result['tenant_found'],
+                    'database_dropped' => $result['database_dropped'],
                 ],
             ]);
         } catch (\Throwable $e) {

@@ -18,6 +18,11 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
+        $tenantSlug = $request->input('tenant_slug') ?? $request->header('X-Tenant');
+        if ($tenantSlug !== null && $tenantSlug !== '') {
+            $request->merge(['tenant_slug' => $tenantSlug]);
+        }
+
         $request->validate([
             'tenant_slug' => 'required|string',
             'email' => 'required|email',

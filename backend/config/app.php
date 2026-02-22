@@ -79,6 +79,7 @@ return [
     |
     */
     'domain' => env('APP_DOMAIN', parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+    'root_domain' => env('ROOT_DOMAIN', 'vendaslive.com'),
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
