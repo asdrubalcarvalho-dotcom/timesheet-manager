@@ -29,6 +29,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useTranslation } from 'react-i18next';
+import useDataGridLocaleText from '../../hooks/useDataGridLocaleText';
 
 interface Location {
   id: number;
@@ -67,6 +68,7 @@ const normalizeApiResponse = <T,>(payload: unknown): T[] => {
 
 const LocationsManager: React.FC = () => {
   const { t } = useTranslation();
+  const dataGridLocaleText = useDataGridLocaleText();
   const { showSuccess, showError } = useNotification();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-locations');
   const [locations, setLocations] = useState<Location[]>([]);
@@ -344,13 +346,13 @@ const LocationsManager: React.FC = () => {
   ];
 
   return (
-    <AdminLayout title="Locations Management">
+    <AdminLayout title={t('admin.locations.managementTitle')}>
       {!loading && locations.length === 0 ? (
         <EmptyState
           icon={LocationOnIcon}
-          title="No locations yet"
-          subtitle="Create your first location to track where work is performed"
-          actionLabel="New Location"
+          title={t('admin.locations.empty.title')}
+          subtitle={t('admin.locations.empty.subtitle')}
+          actionLabel={t('admin.locations.actions.new')}
           onAction={() => {
             if (!ensureWritable()) {
               return;
@@ -365,6 +367,7 @@ const LocationsManager: React.FC = () => {
             rows={locations}
             columns={columns}
             loading={loading}
+            localeText={dataGridLocaleText}
             pageSizeOptions={[10, 25, 50]}
             initialState={{
               pagination: { paginationModel: { pageSize: 10 } }
@@ -422,29 +425,29 @@ const LocationsManager: React.FC = () => {
         disableRestoreFocus
       >
         <DialogTitle>
-          {editingLocation ? 'Edit Location' : 'New Location'}
+          {editingLocation ? t('admin.locations.dialog.editTitle') : t('admin.locations.dialog.newTitle')}
         </DialogTitle>
         <DialogContent>
           <Box component="form" onSubmit={handleSave} id="location-form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
-              label="Name"
+              label={t('admin.locations.fields.name')}
               fullWidth
               required
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
             <TextField
-              label="Country"
+              label={t('admin.locations.fields.country')}
               fullWidth
               required
               select
               value={formData.country_id}
               onChange={(e) => setFormData({ ...formData, country_id: e.target.value })}
               disabled={countries.length === 0}
-              helperText={countries.length === 0 ? 'No countries available. Please add countries first.' : ''}
+              helperText={countries.length === 0 ? t('admin.locations.helpers.noCountries') : ''}
             >
               <MenuItem value="" disabled>
-                Select a country
+                {t('admin.locations.helpers.selectCountry')}
               </MenuItem>
               {countries.map((country) => (
                 <MenuItem key={country.id} value={String(country.id)}>
@@ -453,14 +456,14 @@ const LocationsManager: React.FC = () => {
               ))}
             </TextField>
             <TextField
-              label="City"
+              label={t('admin.locations.fields.city')}
               fullWidth
               required
               value={formData.city}
               onChange={(e) => setFormData({ ...formData, city: e.target.value })}
             />
             <TextField
-              label="Address"
+              label={t('admin.locations.fields.address')}
               fullWidth
               multiline
               rows={2}
@@ -468,14 +471,14 @@ const LocationsManager: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             />
             <TextField
-              label="Postal Code"
+              label={t('admin.locations.fields.postalCode')}
               fullWidth
               value={formData.postal_code}
               onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
             />
             <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
               <TextField
-                label="Latitude"
+                label={t('admin.locations.fields.latitude')}
                 type="number"
                 inputProps={{ step: '0.000001' }}
                 fullWidth
@@ -483,7 +486,7 @@ const LocationsManager: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
               />
               <TextField
-                label="Longitude"
+                label={t('admin.locations.fields.longitude')}
                 type="number"
                 inputProps={{ step: '0.000001' }}
                 fullWidth
@@ -498,12 +501,12 @@ const LocationsManager: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                 />
               }
-              label="Location is active"
+              label={t('admin.locations.fields.active')}
             />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog}>{t('common.cancel')}</Button>
           <Button
             type="submit"
             form="location-form"
@@ -511,7 +514,7 @@ const LocationsManager: React.FC = () => {
             color="primary"
             disabled={isReadOnly}
           >
-            {editingLocation ? 'Update' : 'Create'}
+            {editingLocation ? t('common.update') : t('common.create')}
           </Button>
         </DialogActions>
       </Dialog>

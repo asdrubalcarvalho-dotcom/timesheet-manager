@@ -113,7 +113,7 @@ const DEFAULT_PAGE: Page = 'timesheets';
 
 const pageToPath: Record<Page, string> = {
   timesheets: '/timesheets',
-  'timesheets-pivot-report': '/timesheets/reports/pivot',
+  'timesheets-pivot-report': '/reports/timesheets/pivot',
   'approvals-heatmap-report': '/reports/approvals/heatmap',
   'expenses-analysis-report': '/reports/expenses/analysis',
   expenses: '/expenses',
@@ -139,20 +139,40 @@ const pageToPath: Record<Page, string> = {
   'admin-access': '/admin/access'
 };
 
+const normalizePathname = (pathname: string): string => {
+  const trimmed = pathname.replace(/\/+$/, '');
+  return trimmed === '' ? '/' : trimmed;
+};
+
 const pathToPage = (pathname: string): Page => {
-  if (pathname === '/' || pathname === '') {
+  const normalized = normalizePathname(pathname);
+  if (normalized === '/' || normalized === '') {
     return DEFAULT_PAGE;
   }
 
+  if (normalized === '/timesheets/reports/pivot') {
+    return 'timesheets-pivot-report';
+  }
+
   // Exact match first
-  const exactMatch = Object.entries(pageToPath).find(([, path]) => path === pathname);
+  const exactMatch = Object.entries(pageToPath).find(([, path]) => path === normalized);
   if (exactMatch) {
     return exactMatch[0] as Page;
   }
 
-  // Partial match for nested routes (e.g., /settings/billing/payment-methods)
-  const partialMatch = Object.entries(pageToPath).find(([, path]) => pathname.startsWith(path));
+  // Partial match for nested routes (prefer longest match)
+  const partialMatch = Object.entries(pageToPath)
+    .sort((a, b) => b[1].length - a[1].length)
+    .find(([, path]) => normalized.startsWith(path));
   return (partialMatch?.[0] as Page) || DEFAULT_PAGE;
+};
+
+const shouldDebugRouting = (): boolean => {
+  try {
+    return localStorage.getItem('debug_routing') === '1';
+  } catch {
+    return false;
+  }
 };
 
 const ModuleLoader: React.FC<{ label?: string }> = ({ label = 'A carregar módulo...' }) => (
@@ -213,6 +233,18 @@ const AppContent: React.FC = () => {
     }
   }, [isSuperAdminHost, location.pathname, navigate]);
 
+  useEffect(() => {
+    if (!shouldDebugRouting()) {
+      return;
+    }
+
+    (window as any).__debugPathToPage = pathToPage;
+    console.log('[Routing]', {
+      pathname: location.pathname,
+      currentPage: pathToPage(location.pathname),
+    });
+  }, [location.pathname]);
+
   if (isSuperAdminHost) {
     if (!user) {
       return (
@@ -228,6 +260,7 @@ const AppContent: React.FC = () => {
 
   // Normal tenant app logic below
   const currentPage = pathToPage(location.pathname);
+  const debugRouting = shouldDebugRouting();
 
   const renderPublicPage = () => {
     switch (currentPage) {
@@ -377,6 +410,24 @@ const AppContent: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      {debugRouting ? (
+        <Box
+          sx={{
+            position: 'fixed',
+            right: 16,
+            bottom: 16,
+            zIndex: 2000,
+            px: 1.5,
+            py: 0.75,
+            borderRadius: 1,
+            bgcolor: 'rgba(0, 0, 0, 0.7)',
+            color: 'white',
+            fontSize: '0.75rem',
+          }}
+        >
+          {location.pathname} | {currentPage}
+        </Box>
+      ) : null}
       <TourController />
       <Box
         data-tour="rightpanel-anchor"

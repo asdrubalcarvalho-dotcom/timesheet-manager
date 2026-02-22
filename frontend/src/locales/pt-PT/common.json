@@ -369,6 +369,8 @@
     "save": "Guardar",
     "saving": "A guardar…",
     "update": "Atualizar",
+    "create": "Criar",
+    "rowsPerPage": "Linhas por página",
     "expand": "Expandir",
     "collapse": "Recolher",
     "loading": "A carregar...",
@@ -968,7 +970,8 @@
         "departure": "Partida",
         "arrival": "Chegada",
         "project_to_project": "Projeto para projeto",
-        "internal": "Interna"
+        "internal": "Interna",
+        "other": "Outro"
       },
       "statusLabels": {
         "completed": "Concluída",
@@ -1631,6 +1634,32 @@
       }
     },
     "locations": {
+      "managementTitle": "Gestão de Localizações",
+      "empty": {
+        "title": "Ainda não há localizações",
+        "subtitle": "Crie a sua primeira localização para registar onde o trabalho é realizado"
+      },
+      "actions": {
+        "new": "Nova Localização"
+      },
+      "dialog": {
+        "editTitle": "Editar Localização",
+        "newTitle": "Nova Localização"
+      },
+      "fields": {
+        "name": "Nome",
+        "country": "País",
+        "city": "Cidade",
+        "address": "Morada",
+        "postalCode": "Código Postal",
+        "latitude": "Latitude",
+        "longitude": "Longitude",
+        "active": "Localização ativa"
+      },
+      "helpers": {
+        "noCountries": "Não há países disponíveis. Adicione países primeiro.",
+        "selectCountry": "Selecione um país"
+      },
       "columns": {
         "address": "Morada",
         "city": "Cidade",

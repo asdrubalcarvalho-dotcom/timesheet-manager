@@ -25,6 +25,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useTranslation } from 'react-i18next';
+import useDataGridLocaleText from '../../hooks/useDataGridLocaleText';
 
 interface Country {
   id: number;
@@ -63,6 +64,7 @@ const normalizeApiResponse = <T,>(payload: unknown): T[] => {
 
 const CountriesManager: React.FC = () => {
   const { t } = useTranslation();
+  const dataGridLocaleText = useDataGridLocaleText();
   const { showSuccess, showError } = useNotification();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-countries');
 
@@ -258,6 +260,7 @@ const CountriesManager: React.FC = () => {
             rows={countries}
             columns={columns}
             loading={loading}
+            localeText={dataGridLocaleText}
             disableRowSelectionOnClick
             pageSizeOptions={[10, 25, 50]}
             initialState={{

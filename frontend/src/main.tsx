@@ -15,9 +15,11 @@ if (currentVersion !== CACHE_VERSION) {
   // Don't clear auth_token and tenant_slug
   const token = localStorage.getItem('auth_token');
   const tenant = localStorage.getItem('tenant_slug');
+  const debugRouting = localStorage.getItem('debug_routing');
   localStorage.clear();
   if (token) localStorage.setItem('auth_token', token);
   if (tenant) localStorage.setItem('tenant_slug', tenant);
+  if (debugRouting) localStorage.setItem('debug_routing', debugRouting);
   localStorage.setItem('app_version', CACHE_VERSION);
 }
 

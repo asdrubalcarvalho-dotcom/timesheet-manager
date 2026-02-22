@@ -250,22 +250,22 @@ class ExpensePolicy
      */
     public function approveByFinance(User $user, Expense $expense): bool
     {
-        // Must have finance permission and expense must be in finance_review status
-        if (!$user->hasPermissionTo('approve-finance-expenses') || $expense->status !== 'finance_review') {
+        // Must be in finance review status
+        if ($expense->status !== 'finance_review') {
             return false;
         }
 
-        // Admins can approve all
-        if ($user->hasRole('Admin')) {
-            return true;
+        // Must be a member of the project with finance_role=manager
+        if (!$expense->project->isUserMember($user)) {
+            return false;
         }
 
-        // Finance role can approve
-        if ($user->hasRole('Finance')) {
-            return true;
-        }
+        $financeRole = $expense->project
+            ->memberRecords()
+            ->where('user_id', $user->id)
+            ->value('finance_role');
 
-        return false;
+        return $financeRole === 'manager';
     }
 
     /**
