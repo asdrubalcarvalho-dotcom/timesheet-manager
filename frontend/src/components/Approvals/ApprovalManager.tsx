@@ -57,6 +57,7 @@ import InputDialog from '../Common/InputDialog';
 import ExpenseApprovalPanel from './ExpenseApprovalPanel';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useTranslation } from 'react-i18next';
+import useDataGridLocaleText from '../../hooks/useDataGridLocaleText';
 
 type TabKey = 'timesheets' | 'expenses';
 
@@ -64,6 +65,7 @@ const formatDate = (value: Dayjs) => value.format('YYYY-MM-DD');
 
 const ApprovalManager: React.FC = () => {
   const { t } = useTranslation();
+  const dataGridLocaleText = useDataGridLocaleText();
   const { isManager, isAdmin, user, tenantContext } = useAuth();
   const { counts } = useApprovalCounts(); // Hook para counts
   useTenantGuard(); // Ensure tenant_slug exists
@@ -406,7 +408,9 @@ const ApprovalManager: React.FC = () => {
   const handleExpenseApprove = async (expenseIds: number[]) => {
     try {
       for (const id of expenseIds) {
-        const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}/approve`, {
+        const expense = expenses.find((item) => item.id === id);
+        const endpoint = expense?.status === 'finance_review' ? 'approve-finance' : 'approve';
+        const response = await fetchWithAuth(`${API_URL}/api/expenses/${id}/${endpoint}`, {
           method: 'PUT'
         });
 
@@ -1122,6 +1126,7 @@ const ApprovalManager: React.FC = () => {
           autoHeight
           rows={filteredRows}
           columns={columns}
+          localeText={dataGridLocaleText}
           checkboxSelection
           disableRowSelectionOnClick
           loading={managerLoading}

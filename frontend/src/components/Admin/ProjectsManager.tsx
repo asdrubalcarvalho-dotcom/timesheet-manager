@@ -39,6 +39,7 @@ import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDate, getTenantDatePickerFormat } from '../../utils/tenantFormatting';
 import { useTranslation } from 'react-i18next';
+import useDataGridLocaleText from '../../hooks/useDataGridLocaleText';
 
 interface Project {
   id: number;
@@ -76,6 +77,7 @@ const formatDateForInput = (value?: string | null) => {
 
 const ProjectsManager: React.FC = () => {
   const { t } = useTranslation();
+  const dataGridLocaleText = useDataGridLocaleText();
   const { tenantContext } = useAuth();
   const datePickerFormat = getTenantDatePickerFormat(tenantContext);
   const { showSuccess, showError } = useNotification();
@@ -516,6 +518,7 @@ const ProjectsManager: React.FC = () => {
             rows={projects}
             columns={columns}
             loading={loading}
+            localeText={dataGridLocaleText}
             pageSizeOptions={[10, 25, 50]}
             initialState={{
               pagination: { paginationModel: { pageSize: 10 } }

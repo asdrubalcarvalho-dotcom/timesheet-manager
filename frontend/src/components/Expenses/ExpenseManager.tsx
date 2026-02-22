@@ -30,6 +30,7 @@ import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
+import useDataGridLocaleText from '../../hooks/useDataGridLocaleText';
 import {
   displayDistanceToKm,
   displayRateToRatePerKm,
@@ -88,6 +89,7 @@ const expenseCategories = [
 
 export const ExpenseManager: React.FC = () => {
   const { t } = useTranslation();
+  const dataGridLocaleText = useDataGridLocaleText();
   const { showSuccess, showError, showWarning } = useNotification();
   const { tenantContext } = useAuth();
   const location = useLocation();
@@ -712,6 +714,7 @@ export const ExpenseManager: React.FC = () => {
             rows={filteredExpenses}
             columns={columns}
             loading={loading}
+            localeText={dataGridLocaleText}
             disableRowSelectionOnClick
             pageSizeOptions={[10, 25, 50]}
             getRowHeight={() => 'auto'}

@@ -12,6 +12,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { useAuth } from '../Auth/AuthContext';
 import { formatTenantDateTime } from '../../utils/tenantFormatting';
+import useDataGridLocaleText from '../../hooks/useDataGridLocaleText';
 import TravelForm from './TravelForm';
 import { travelsApi } from '../../services/travels';
 import type { TravelSegment } from '../../services/travels';
@@ -30,6 +31,7 @@ const extractRows = (payload: any): TravelSegment[] => {
 
 const TravelsList: React.FC = () => {
   const { t } = useTranslation();
+  const dataGridLocaleText = useDataGridLocaleText();
   const { showSuccess, showError } = useNotification();
   const { tenantContext } = useAuth();
   const { isReadOnly, ensureWritable, warn } = useReadOnlyGuard('travels');
@@ -300,6 +302,7 @@ const TravelsList: React.FC = () => {
                 rows={travels}
                 columns={columns}
                 loading={loading}
+                localeText={dataGridLocaleText}
                 pageSizeOptions={[10, 25, 50]}
                 initialState={{
                   pagination: { paginationModel: { pageSize: 10 } },

@@ -768,18 +768,16 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                       {t('common.reject')}
                     </Button>
                     
-                    {userRole !== 'finance' && (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<CheckCircle />}
-                        onClick={handleApprove}
-                        disabled={isReadOnly}
-                        sx={{ bgcolor: 'white', color: '#667eea', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
-                      >
-                        {t('common.approve')}
-                      </Button>
-                    )}
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<CheckCircle />}
+                      onClick={handleApprove}
+                      disabled={isReadOnly}
+                      sx={{ bgcolor: 'white', color: '#667eea', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
+                    >
+                      {t('common.approve')}
+                    </Button>
 
                     {userRole === 'finance' && (
                       <Button

@@ -31,6 +31,7 @@ import { useBilling } from '../../contexts/BillingContext';
 import { useReadOnlyGuard } from '../../hooks/useReadOnlyGuard';
 import { formatTenantMoney } from '../../utils/tenantFormatting';
 import { useTranslation } from 'react-i18next';
+import useDataGridLocaleText from '../../hooks/useDataGridLocaleText';
 
 interface UserRecord {
   id: number;
@@ -58,6 +59,7 @@ const extractRows = (payload: any): UserRecord[] => {
 
 const UsersManager: React.FC = () => {
   const { t } = useTranslation();
+  const dataGridLocaleText = useDataGridLocaleText();
   const { showSuccess, showError } = useNotification();
   const { user: currentUser, tenantContext } = useAuth();
   const { billingSummary, loading: billingLoading } = useBilling();
@@ -471,6 +473,7 @@ const UsersManager: React.FC = () => {
               rows={users}
               columns={columns}
               loading={loading}
+              localeText={dataGridLocaleText}
               pageSizeOptions={[10, 25, 50]}
               initialState={{
                 pagination: { paginationModel: { pageSize: 10 } }

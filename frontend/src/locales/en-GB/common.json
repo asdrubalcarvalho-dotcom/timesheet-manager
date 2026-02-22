@@ -500,6 +500,8 @@
     "save": "Save",
     "saving": "Saving…",
     "update": "Update",
+    "create": "Create",
+    "rowsPerPage": "Rows per page",
     "expand": "Expand",
     "collapse": "Collapse",
     "loading": "Loading...",
@@ -1131,7 +1133,8 @@
         "departure": "Departure",
         "arrival": "Arrival",
         "project_to_project": "Project to project",
-        "internal": "Internal"
+        "internal": "Internal",
+        "other": "Other"
       },
       "statusLabels": {
         "completed": "Completed",
@@ -1629,6 +1632,32 @@
       }
     },
     "locations": {
+      "managementTitle": "Locations Management",
+      "empty": {
+        "title": "No locations yet",
+        "subtitle": "Create your first location to track where work is performed"
+      },
+      "actions": {
+        "new": "New Location"
+      },
+      "dialog": {
+        "editTitle": "Edit Location",
+        "newTitle": "New Location"
+      },
+      "fields": {
+        "name": "Name",
+        "country": "Country",
+        "city": "City",
+        "address": "Address",
+        "postalCode": "Postcode",
+        "latitude": "Latitude",
+        "longitude": "Longitude",
+        "active": "Location is active"
+      },
+      "helpers": {
+        "noCountries": "No countries available. Please add countries first.",
+        "selectCountry": "Select a country"
+      },
       "columns": {
         "address": "Address",
         "city": "City",

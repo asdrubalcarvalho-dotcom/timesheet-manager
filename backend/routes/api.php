@@ -252,7 +252,7 @@ Route::middleware(['tenant.initialize', 'tenant.set-context'])->group(function (
     // Expense workflow actions - BEFORE {expense} routes
     Route::put('expenses/{expense}/approve', [ExpenseController::class, 'approve'])->middleware(['tenant.bootstrapped', 'permission:approve-expenses', 'throttle:critical']);
     Route::put('expenses/{expense}/reject', [ExpenseController::class, 'reject'])->middleware(['tenant.bootstrapped', 'permission:approve-expenses', 'throttle:critical']);
-    Route::put('expenses/{expense}/approve-finance', [ExpenseController::class, 'approveByFinance'])->middleware(['tenant.bootstrapped', 'permission:approve-finance-expenses', 'throttle:critical']);
+    Route::put('expenses/{expense}/approve-finance', [ExpenseController::class, 'approveByFinance'])->middleware(['tenant.bootstrapped', 'throttle:critical']);
     Route::put('expenses/{expense}/mark-paid', [ExpenseController::class, 'markPaid'])->middleware(['tenant.bootstrapped', 'permission:mark-expenses-paid', 'throttle:critical']);
     Route::put('expenses/{expense}/submit', [ExpenseController::class, 'submit'])->middleware(['tenant.bootstrapped', 'can.edit.expenses', 'throttle:create']);
     
