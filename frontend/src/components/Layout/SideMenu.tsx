@@ -41,6 +41,7 @@ import {
   SmartToy as AIIcon,
   Group as TeamIcon,
   FolderOpen as ProjectsIcon,
+  Business as ClientsIcon,
   AdminPanelSettings as AdminIcon,
   DeleteSweep as ResetIcon,
   Language as LanguageIcon
@@ -174,6 +175,13 @@ export const SideMenu: React.FC<SideMenuProps> = ({ currentPage, onPageChange })
       icon: <ProjectsIcon />,
       path: 'admin-projects',
       show: hasPermission('view-projects') || hasPermission('manage-projects') || isAdmin()
+    },
+    {
+      id: 'admin-clients',
+      label: t('admin.clients.title'),
+      icon: <ClientsIcon />,
+      path: 'admin-clients',
+      show: hasPermission('view-clients') || hasPermission('manage-clients')
     },
     {
       id: 'admin-tasks',

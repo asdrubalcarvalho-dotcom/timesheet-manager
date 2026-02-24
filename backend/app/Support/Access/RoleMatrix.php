@@ -41,6 +41,8 @@ class RoleMatrix
             'manage-projects',
             'manage-tasks',
             'manage-locations',
+            'view-clients',
+            'manage-clients',
         ];
     }
 
@@ -78,6 +80,7 @@ class RoleMatrix
                 'view-projects',
                 'view-tasks',
                 'view-locations',
+                'view-clients',
             ],
             'Admin' => self::permissions(),
             'Owner' => self::permissions(), // Owner has all permissions

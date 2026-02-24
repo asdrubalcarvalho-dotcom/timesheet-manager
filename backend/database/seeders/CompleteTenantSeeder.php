@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Technician;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\Client;
 use App\Models\Country;
 use App\Models\Location;
 use App\Models\Resource;
@@ -56,22 +57,25 @@ class CompleteTenantSeeder extends Seeder
         // 5. Create Resources
         $resources = $this->createResources();
 
-        // 6. Create Projects
-        $projects = $this->createProjects($users['owner']);
+        // 6. Create Clients
+        $clients = $this->createClients();
 
-        // 7. Assign Project Members with roles
+        // 7. Create Projects
+        $projects = $this->createProjects($users['owner'], $clients);
+
+        // 8. Assign Project Members with roles
         $this->assignProjectMembers($projects, $users);
 
-        // 8. Create Tasks (linked to projects, locations, resources)
+        // 9. Create Tasks (linked to projects, locations, resources)
         $tasks = $this->createTasks($projects, $locations, $resources, $users['owner']);
 
-        // 9. Create Timesheets
+        // 10. Create Timesheets
         $this->createTimesheets($projects, $technicians, $users, $tasks, $locations);
 
-        // 10. Create Expenses
+        // 11. Create Expenses
         $this->createExpenses($projects, $technicians, $users);
 
-        // 11. Create Travel Segments
+        // 12. Create Travel Segments
         $this->createTravelSegments($projects, $technicians, $locations, $users);
 
         $this->command->info('✅ Complete tenant database seeded successfully!');
@@ -105,6 +109,8 @@ class CompleteTenantSeeder extends Seeder
             'delete-projects',
             'manage-projects',
             'manage-locations',
+            'view-clients',
+            'manage-clients',
             
             // User permissions
             'view-users',
@@ -135,6 +141,7 @@ class CompleteTenantSeeder extends Seeder
             'view-timesheets', 'create-timesheets', 'edit-own-timesheets', 'approve-timesheets',
             'view-expenses', 'create-expenses', 'edit-own-expenses', 'approve-expenses',
             'view-projects', 'create-projects', 'edit-projects',
+            'view-clients',
             'view-travels', 'create-travels', 'edit-travels',
         ]);
 
@@ -489,12 +496,25 @@ class CompleteTenantSeeder extends Seeder
         return $resources;
     }
 
-    private function createProjects($owner): array
+    private function createClients(): array
+    {
+        $clients = [];
+
+        $clients['acme'] = Client::firstOrCreate(['name' => 'ACME Industries']);
+        $clients['globex'] = Client::firstOrCreate(['name' => 'Globex Corporation']);
+        $clients['initech'] = Client::firstOrCreate(['name' => 'Initech Group']);
+
+        $this->command->info('✅ Clients created');
+
+        return $clients;
+    }
+
+    private function createProjects($owner, array $clients): array
     {
         $projects = [];
 
-        // Projects don't have budget or client_name fields
-        $projects['ecommerce'] = Project::firstOrCreate(
+        // Keep associations idempotent across re-seeds.
+        $projects['ecommerce'] = Project::updateOrCreate(
             ['name' => 'E-Commerce Platform'],
             [
                 'description' => 'Development of multi-tenant e-commerce platform',
@@ -502,12 +522,13 @@ class CompleteTenantSeeder extends Seeder
                 'end_date' => Carbon::now()->addMonths(6),
                 'status' => 'active',
                 'manager_id' => $owner->id,
+                'client_id' => $clients['acme']->id,
                 'created_by' => $owner->id,
                 'updated_by' => $owner->id,
             ]
         );
 
-        $projects['mobile_app'] = Project::firstOrCreate(
+        $projects['mobile_app'] = Project::updateOrCreate(
             ['name' => 'Mobile Banking App'],
             [
                 'description' => 'iOS and Android mobile banking application',
@@ -515,12 +536,13 @@ class CompleteTenantSeeder extends Seeder
                 'end_date' => Carbon::now()->addMonths(4),
                 'status' => 'active',
                 'manager_id' => $owner->id,
+                'client_id' => $clients['globex']->id,
                 'created_by' => $owner->id,
                 'updated_by' => $owner->id,
             ]
         );
 
-        $projects['erp_migration'] = Project::firstOrCreate(
+        $projects['erp_migration'] = Project::updateOrCreate(
             ['name' => 'ERP System Migration'],
             [
                 'description' => 'Migration from legacy ERP to SAP S/4HANA',
@@ -528,12 +550,13 @@ class CompleteTenantSeeder extends Seeder
                 'end_date' => Carbon::now()->addMonths(8),
                 'status' => 'active',
                 'manager_id' => $owner->id,
+                'client_id' => $clients['initech']->id,
                 'created_by' => $owner->id,
                 'updated_by' => $owner->id,
             ]
         );
 
-        $projects['infrastructure'] = Project::firstOrCreate(
+        $projects['infrastructure'] = Project::updateOrCreate(
             ['name' => 'Cloud Infrastructure Setup'],
             [
                 'description' => 'AWS cloud infrastructure deployment and optimization',
@@ -541,6 +564,22 @@ class CompleteTenantSeeder extends Seeder
                 'end_date' => Carbon::now()->addMonths(3),
                 'status' => 'active',
                 'manager_id' => $owner->id,
+                'client_id' => null,
+                'created_by' => $owner->id,
+                'updated_by' => $owner->id,
+            ]
+        );
+
+        // Ensure at least one explicit internal project remains without client.
+        $projects['internal_ops'] = Project::updateOrCreate(
+            ['name' => 'Internal Operations'],
+            [
+                'description' => 'Internal operational work not linked to external clients',
+                'start_date' => Carbon::now()->subMonth(),
+                'end_date' => Carbon::now()->addMonths(2),
+                'status' => 'active',
+                'manager_id' => $owner->id,
+                'client_id' => null,
                 'created_by' => $owner->id,
                 'updated_by' => $owner->id,
             ]

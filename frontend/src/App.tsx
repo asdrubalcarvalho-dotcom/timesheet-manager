@@ -49,6 +49,7 @@ const ApprovalManager = React.lazy(() => import('./components/Approvals/Approval
 const AIInsights = React.lazy(() => import('./components/AIInsights/AIInsights'));
 const AdminDashboard = React.lazy(() => import('./components/Admin/AdminDashboard'));
 const ProjectsManager = React.lazy(() => import('./components/Admin/ProjectsManager'));
+const ClientsManager = React.lazy(() => import('./components/Admin/ClientsManager'));
 const TasksManager = React.lazy(() => import('./components/Admin/TasksManager'));
 const LocationsManager = React.lazy(() => import('./components/Admin/LocationsManager'));
 const CountriesManager = React.lazy(() => import('./components/Admin/CountriesManager'));
@@ -107,7 +108,7 @@ const queryClient = new QueryClient({
 });
 
 // Page type definition
-type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
+type Page = 'timesheets' | 'timesheets-pivot-report' | 'approvals-heatmap-report' | 'expenses-analysis-report' | 'expenses' | 'approvals' | 'dashboard' | 'ai-insights' | 'team' | 'admin' | 'admin-projects' | 'admin-clients' | 'admin-tasks' | 'admin-locations' | 'admin-countries' | 'admin-users' | 'planning' | 'planning-locations' | 'planning-users' | 'admin-access' | 'travels' | 'billing' | 'payment-methods' | 'legal-terms' | 'legal-privacy' | 'legal-acceptable-use';
 
 const DEFAULT_PAGE: Page = 'timesheets';
 
@@ -132,6 +133,7 @@ const pageToPath: Record<Page, string> = {
   'legal-acceptable-use': '/legal/acceptable-use',
   admin: '/admin',
   'admin-projects': '/admin/projects',
+  'admin-clients': '/admin/clients',
   'admin-tasks': '/admin/tasks',
   'admin-locations': '/admin/locations',
   'admin-countries': '/admin/countries',
@@ -380,6 +382,8 @@ const AppContent: React.FC = () => {
         return <AdminDashboard />;
       case 'admin-projects':
         return <ProjectsManager />;
+      case 'admin-clients':
+        return <ClientsManager />;
       case 'admin-tasks':
         return <TasksManager />;
       case 'admin-locations':

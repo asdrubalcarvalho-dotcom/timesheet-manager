@@ -1691,13 +1691,17 @@
         "edit": "Edit Project"
       },
       "columns": {
+        "client": "Client",
         "startDate": "Start Date",
         "endDate": "End Date"
       },
       "fields": {
+        "client": "Client",
         "startDate": "Start Date",
         "endDate": "End Date"
       },
+      "selectClient": "No client",
+      "noClient": "No client",
       "status": {
         "active": "Active",
         "completed": "Completed",
@@ -1709,6 +1713,7 @@
       },
       "notifications": {
         "loadFailed": "Failed to load projects.",
+        "loadClientsFailed": "Failed to load clients.",
         "loadTasksFailed": "Failed to load project tasks.",
         "createSuccess": "Project created successfully.",
         "updateSuccess": "Project updated successfully.",
@@ -1789,6 +1794,38 @@
           "memberAdded": "Member added to the project",
           "addMemberFailed": "Failed to add member"
         }
+      }
+    },
+    "clients": {
+      "title": "Clients",
+      "empty": {
+        "title": "No clients yet",
+        "subtitle": "Create your first client to link with projects"
+      },
+      "columns": {
+        "name": "Name",
+        "email": "Email",
+        "taxId": "Tax ID"
+      },
+      "actions": {
+        "new": "New Client",
+        "edit": "Edit Client",
+        "delete": "Delete"
+      },
+      "validation": {
+        "nameRequired": "Client name is required."
+      },
+      "confirmDelete": {
+        "title": "Delete client",
+        "message": "Are you sure you want to delete this client? This action cannot be undone."
+      },
+      "notifications": {
+        "loadFailed": "Failed to load clients.",
+        "saveFailed": "Failed to save client.",
+        "deleteFailed": "Failed to delete client.",
+        "createSuccess": "Client created successfully.",
+        "updateSuccess": "Client updated successfully.",
+        "deleteSuccess": "Client deleted successfully."
       }
     },
     "tasks": {

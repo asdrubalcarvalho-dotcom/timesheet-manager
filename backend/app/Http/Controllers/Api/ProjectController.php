@@ -74,14 +74,14 @@ class ProjectController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $with = ['timesheets', 'expenses', 'manager'];
+        $query = Project::query()->with('client');
+
+        $query->with(['timesheets', 'expenses', 'manager']);
 
         // Used by Planning (Users view) to build a user -> project hierarchy
         if ($request->boolean('include_members')) {
-            $with[] = 'members';
+            $query->with('members');
         }
-
-        $query = Project::with($with);
         
         $user = $request->user();
         
@@ -154,7 +154,10 @@ class ProjectController extends Controller
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status' => ['nullable', 'string', Rule::in(['active', 'completed', 'on_hold'])],
-            'manager_id' => 'nullable|exists:users,id'
+            'manager_id' => 'nullable|exists:users,id',
+            'client_id' => ['nullable', Rule::exists('clients', 'id')],
+        ], [], [
+            'client_id' => __('validation.attributes.client_id'),
         ]);
 
         // Set default status if not provided
@@ -163,6 +166,7 @@ class ProjectController extends Controller
         }
 
         $project = Project::create($validated);
+        $project->load('client');
         return response()->json($project, 201);
     }
 
@@ -171,7 +175,7 @@ class ProjectController extends Controller
      */
     public function show(Project $project): JsonResponse
     {
-        $project->load(['timesheets.technician', 'expenses.technician', 'manager']);
+        $project->load(['timesheets.technician', 'expenses.technician', 'manager', 'client']);
         return response()->json($project);
     }
 
@@ -186,10 +190,14 @@ class ProjectController extends Controller
             'start_date' => 'date',
             'end_date' => 'nullable|date|after:start_date',
             'status' => [Rule::in(['active', 'completed', 'on_hold'])],
-            'manager_id' => 'nullable|exists:users,id'
+            'manager_id' => 'nullable|exists:users,id',
+            'client_id' => ['nullable', Rule::exists('clients', 'id')],
+        ], [], [
+            'client_id' => __('validation.attributes.client_id'),
         ]);
 
         $project->update($validated);
+        $project->load('client');
         return response()->json($project);
     }
 

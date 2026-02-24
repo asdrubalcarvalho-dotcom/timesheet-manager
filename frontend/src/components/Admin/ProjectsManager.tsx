@@ -49,6 +49,16 @@ interface Project {
   end_date?: string;
   status: 'active' | 'completed' | 'on_hold';
   manager_id?: number;
+  client_id?: number | null;
+  client?: {
+    id: number;
+    name: string;
+  } | null;
+}
+
+interface Client {
+  id: number;
+  name: string;
 }
 
 interface ProjectTask {
@@ -83,6 +93,7 @@ const ProjectsManager: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const { isReadOnly, ensureWritable } = useReadOnlyGuard('admin-projects');
   const [projects, setProjects] = useState<Project[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -116,12 +127,25 @@ const ProjectsManager: React.FC = () => {
     description: '',
     start_date: '',
     end_date: '',
-    status: 'active' as 'active' | 'completed' | 'on_hold'
+    status: 'active' as 'active' | 'completed' | 'on_hold',
+    client_id: ''
   });
 
   useEffect(() => {
     fetchProjects();
+    fetchClients();
   }, []);
+
+  const fetchClients = async () => {
+    try {
+      const response = await api.get('/api/clients');
+      const clientsData = Array.isArray(response.data) ? response.data : response.data.data;
+      setClients(clientsData || []);
+    } catch (error: any) {
+      console.error('[ProjectsManager] Error fetching clients:', error);
+      showError(error.response?.data?.message || t('admin.projects.notifications.loadClientsFailed'));
+    }
+  };
 
   const fetchProjects = async () => {
     try {
@@ -156,7 +180,8 @@ const ProjectsManager: React.FC = () => {
         description: project.description || '',
         start_date: formatDateForInput(project.start_date),
         end_date: formatDateForInput(project.end_date),
-        status: project.status
+        status: project.status,
+        client_id: project.client_id != null ? String(project.client_id) : ''
       });
     } else {
       setEditingProject(null);
@@ -168,7 +193,8 @@ const ProjectsManager: React.FC = () => {
         description: '',
         start_date: '',
         end_date: '',
-        status: 'active'
+        status: 'active',
+        client_id: ''
       });
     }
     setOpenDialog(true);
@@ -351,6 +377,7 @@ const ProjectsManager: React.FC = () => {
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
         status: formData.status,
+        client_id: formData.client_id ? Number(formData.client_id) : null,
       };
 
       if (editingProject) {
@@ -425,6 +452,13 @@ const ProjectsManager: React.FC = () => {
       headerName: t('admin.shared.columns.description'),
       flex: 1.5,
       minWidth: 250
+    },
+    {
+      field: 'client',
+      headerName: t('admin.projects.columns.client'),
+      minWidth: 200,
+      flex: 1,
+      renderCell: (params: GridRenderCellParams) => params.row.client?.name || t('admin.projects.noClient'),
     },
     {
       field: 'start_date',
@@ -613,6 +647,27 @@ const ProjectsManager: React.FC = () => {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
+            <TextField
+              label={t('admin.projects.fields.client')}
+              select
+              fullWidth
+              value={formData.client_id}
+              onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+              SelectProps={{
+                native: true,
+                inputProps: {
+                  'aria-label': t('admin.projects.fields.client'),
+                  title: t('admin.projects.fields.client')
+                }
+              }}
+            >
+              <option value="">{t('admin.projects.selectClient')}</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </TextField>
             <DatePicker
               label={t('admin.projects.fields.startDate')}
               value={formData.start_date ? dayjs(formData.start_date) : null}
@@ -644,7 +699,12 @@ const ProjectsManager: React.FC = () => {
               required
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'completed' | 'on_hold' })}
-              SelectProps={{ native: true }}
+              SelectProps={{
+                native: true,
+                inputProps: {
+                  title: t('admin.shared.columns.status')
+                }
+              }}
             >
               <option value="active">{t('admin.projects.status.active')}</option>
               <option value="completed">{t('admin.projects.status.completed')}</option>

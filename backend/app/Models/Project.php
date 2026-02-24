@@ -20,6 +20,7 @@ class Project extends Model
         'end_date',
         'status',
         'manager_id',
+        'client_id',
         'created_by',
         'updated_by'
     ];
@@ -47,6 +48,11 @@ class Project extends Model
     public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     /**
