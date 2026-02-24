@@ -1693,13 +1693,17 @@
         "edit": "Editar Projeto"
       },
       "columns": {
+        "client": "Cliente",
         "startDate": "Data de início",
         "endDate": "Data de fim"
       },
       "fields": {
+        "client": "Cliente",
         "startDate": "Data de início",
         "endDate": "Data de fim"
       },
+      "selectClient": "Sem cliente",
+      "noClient": "Sem cliente",
       "status": {
         "active": "Ativo",
         "completed": "Concluído",
@@ -1711,6 +1715,7 @@
       },
       "notifications": {
         "loadFailed": "Falha ao carregar projetos.",
+        "loadClientsFailed": "Falha ao carregar clientes.",
         "loadTasksFailed": "Falha ao carregar tarefas do projeto.",
         "createSuccess": "Projeto criado com sucesso.",
         "updateSuccess": "Projeto atualizado com sucesso.",
@@ -1791,6 +1796,38 @@
           "memberAdded": "Membro adicionado ao projeto",
           "addMemberFailed": "Falha ao adicionar membro"
         }
+      }
+    },
+    "clients": {
+      "title": "Clientes",
+      "empty": {
+        "title": "Ainda não há clientes",
+        "subtitle": "Crie o seu primeiro cliente para associar a projetos"
+      },
+      "columns": {
+        "name": "Nome",
+        "email": "Email",
+        "taxId": "NIF"
+      },
+      "actions": {
+        "new": "Novo Cliente",
+        "edit": "Editar Cliente",
+        "delete": "Eliminar"
+      },
+      "validation": {
+        "nameRequired": "O nome do cliente é obrigatório."
+      },
+      "confirmDelete": {
+        "title": "Eliminar cliente",
+        "message": "Tem a certeza que pretende eliminar este cliente? Esta ação não pode ser anulada."
+      },
+      "notifications": {
+        "loadFailed": "Falha ao carregar clientes.",
+        "saveFailed": "Falha ao guardar cliente.",
+        "deleteFailed": "Falha ao eliminar cliente.",
+        "createSuccess": "Cliente criado com sucesso.",
+        "updateSuccess": "Cliente atualizado com sucesso.",
+        "deleteSuccess": "Cliente eliminado com sucesso."
       }
     },
     "tasks": {

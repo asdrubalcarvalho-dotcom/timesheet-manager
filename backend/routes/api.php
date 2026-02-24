@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\TravelSegmentController;
 use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\Api\AiApprovalsController;
 use App\Http\Controllers\Api\AiTimesheetController;
+use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\PublicContactController;
 use App\Http\Controllers\CountryController;
@@ -210,6 +211,14 @@ Route::middleware(['tenant.initialize', 'tenant.set-context'])->group(function (
         Route::put('technicians/{technician}', [TechnicianController::class, 'update'])->middleware('throttle:edit');
         Route::delete('technicians/{technician}', [TechnicianController::class, 'destroy'])->middleware('throttle:delete');
     });
+    // Clients - RBAC permissions (read via manage-clients because view-clients is not defined in this codebase)
+    Route::middleware(['tenant.bootstrapped', 'permission:manage-clients'])->group(function () {
+        Route::get('clients', [ClientController::class, 'index'])->middleware('throttle:read');
+        Route::post('clients', [ClientController::class, 'store'])->middleware('throttle:create');
+        Route::put('clients/{client}', [ClientController::class, 'update'])->middleware('throttle:edit');
+        Route::delete('clients/{client}', [ClientController::class, 'destroy'])->middleware('throttle:delete');
+    });
+
     // Projects - manage-projects permission controls access to Project Management page
     Route::middleware(['tenant.bootstrapped', 'permission:manage-projects'])->group(function () {
         Route::get('projects', [ProjectController::class, 'index'])->middleware('throttle:read');
