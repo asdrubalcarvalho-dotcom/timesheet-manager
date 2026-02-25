@@ -32,6 +32,8 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Modules\Billing\Models\Subscription;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Stancl\Tenancy\Database\Models\Domain;
 
 class TenantController extends Controller
@@ -255,6 +257,7 @@ class TenantController extends Controller
 
                 // Assign Owner role (Spatie permissions)
                 $owner->assignRole('Owner');
+                $this->ensureOwnerManageClientsPermission();
 
                 // Create Technician record for Owner
                 \App\Models\Technician::create([
@@ -1212,6 +1215,7 @@ class TenantController extends Controller
                 ]);
 
                 $owner->assignRole('Owner');
+                $this->ensureOwnerManageClientsPermission();
 
                 // Create Technician record
                 \App\Models\Technician::create([
@@ -1319,6 +1323,7 @@ class TenantController extends Controller
                     ]);
 
                     $owner->assignRole('Owner');
+                    $this->ensureOwnerManageClientsPermission();
 
                     \App\Models\Technician::create([
                         'name'       => $owner->name,
@@ -1336,5 +1341,26 @@ class TenantController extends Controller
         }
 
         return $tenant;
+    }
+
+    /**
+     * Ensure tenant Owner role includes manage-clients permission.
+     * Idempotent and safe to call multiple times during provisioning.
+     */
+    private function ensureOwnerManageClientsPermission(): void
+    {
+        $permission = Permission::firstOrCreate([
+            'name' => 'manage-clients',
+            'guard_name' => 'web',
+        ]);
+
+        $ownerRole = Role::firstOrCreate([
+            'name' => 'Owner',
+            'guard_name' => 'web',
+        ]);
+
+        if (! $ownerRole->hasPermissionTo($permission)) {
+            $ownerRole->givePermissionTo($permission);
+        }
     }
 }

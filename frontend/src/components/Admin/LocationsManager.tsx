@@ -291,13 +291,13 @@ const LocationsManager: React.FC = () => {
           longitude === null ||
           longitude === undefined
         ) {
-          return <span style={{ color: '#999' }}>-</span>;
+          return <Box component="span" sx={{ color: 'text.disabled' }}>-</Box>;
         }
 
         return (
-          <span style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+          <Box component="span" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
             {Number(latitude).toFixed(4)}, {Number(longitude).toFixed(4)}
-          </span>
+          </Box>
         );
       }
     },

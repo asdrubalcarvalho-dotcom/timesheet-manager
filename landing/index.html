@@ -14,7 +14,6 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <meta name="theme-color" content="#667eea" />
 
   <!-- Google Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -288,9 +287,21 @@
       border: 1px solid rgba(148, 163, 253, 0.5);
       box-shadow: 0 24px 65px rgba(15, 23, 42, 0.85);
       color: #e5e7eb;
+      -webkit-backdrop-filter: blur(18px);
       backdrop-filter: blur(18px);
       position: relative;
       overflow: hidden;
+    }
+
+    .hero-card-subtitle {
+      font-size: 11px;
+      color: #cbd5f5;
+      margin-top: 3px;
+    }
+
+    .hero-metric-pill-warning {
+      background: rgba(250, 204, 21, 0.12);
+      color: #facc15;
     }
 
     .hero-card-header {
@@ -461,7 +472,239 @@
       letter-spacing: 0.14em;
     }
 
+    /* ===== DEMO / VIDEOS ===== */
+    .videos-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.2fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .video-main-card {
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(15, 23, 42, 0.68);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      padding: 12px;
+      color: #e5e7eb;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .video-main-card::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 18px;
+      pointer-events: none;
+      background: radial-gradient(600px 220px at 20% 0%, rgba(99, 102, 241, 0.25), transparent 60%);
+      opacity: 0.9;
+    }
+
+    .video-frame-wrap {
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      overflow: hidden;
+      background: rgba(2, 6, 23, 0.6);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+      position: relative;
+      z-index: 1;
+    }
+
+    .video-frame {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 0;
+      display: block;
+      background: #020617;
+    }
+
+    .video-main-title {
+      margin: 10px 0 5px;
+      font-size: 14px;
+      font-weight: 600;
+      position: relative;
+      z-index: 1;
+    }
+
+    .video-main-copy {
+      margin: 0;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.5;
+      position: relative;
+      z-index: 1;
+    }
+
+    .video-main-actions {
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .feature-videos-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      max-height: 520px;
+      overflow: auto;
+      padding-right: 6px;
+      scroll-behavior: smooth;
+    }
+
+    .demo-playlist {
+      max-height: 520px;
+      overflow: auto;
+      padding-right: 6px;
+    }
+
+    .feature-videos-grid::-webkit-scrollbar { width: 10px; }
+    .feature-videos-grid::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.25);
+      border-radius: 999px;
+      border: 2px solid rgba(2, 6, 23, 0.9);
+    }
+
+    .demo-playlist::-webkit-scrollbar { width: 10px; }
+    .demo-playlist::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.25);
+      border-radius: 999px;
+    }
+    .demo-playlist::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.4);
+    }
+
+    .feature-video-card {
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      border: 0;
+      appearance: none;
+      font: inherit;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(15, 23, 42, 0.92);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      padding: 10px;
+      color: #e5e7eb;
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: 10px;
+      align-items: center;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .feature-video-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(199, 210, 254, 0.6);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .feature-video-card.is-active {
+      border-color: rgba(199, 210, 254, 0.9);
+      box-shadow: 0 0 0 1px rgba(199, 210, 254, 0.35), 0 18px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .feature-video-card.is-primary {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: rgba(15, 23, 42, 0.98);
+      border-color: rgba(199, 210, 254, 0.65);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .feature-video-card.is-primary::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: -8px;
+      height: 1px;
+      background: rgba(148, 163, 184, 0.25);
+    }
+
+    .feature-video-card.is-active .feature-video-link::before {
+      content: "Now playing · ";
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .thumb-media {
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #020617;
+      aspect-ratio: 16 / 9;
+    }
+
+    .thumb-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      opacity: 0.92;
+      transform: scale(1.02);
+    }
+
+    .thumb-play {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .thumb-play::before {
+      content: "";
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.6);
+      border: 1px solid rgba(199, 210, 254, 0.35);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+    }
+
+    .thumb-play::after {
+      content: "";
+      margin-left: 4px;
+      width: 0;
+      height: 0;
+      border-left: 10px solid rgba(229, 231, 235, 0.95);
+      border-top: 7px solid transparent;
+      border-bottom: 7px solid transparent;
+      position: absolute;
+    }
+
+    .thumb-meta {
+      display: grid;
+      gap: 4px;
+    }
+
+    .feature-video-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .feature-video-link {
+      color: #cbd5f5;
+      font-size: 12px;
+      opacity: 0.85;
+    }
+
     /* Features */
+
     .features-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -524,6 +767,18 @@
       font-size: 12px;
       color: #cbd5f5;
       line-height: 1.6;
+    }
+
+    .ai-side-intro {
+      font-size: 12px;
+      color: #cbd5f5;
+      margin-top: 0;
+    }
+
+    .ai-side-note {
+      font-size: 12px;
+      color: #a5b4fc;
+      margin-top: 8px;
     }
 
     /* Testimonials */
@@ -600,6 +855,25 @@
       margin-top: 6px;
     }
 
+    .pricing-intro {
+      font-size: 13px;
+      color: #cbd5f5;
+      margin-top: 0;
+    }
+
+    .pricing-help {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 8px;
+    }
+
+    .pricing-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     /* Contact section */
     .contact-grid {
       display: grid;
@@ -622,6 +896,10 @@
       padding-left: 18px;
       font-size: 12px;
       color: #9ca3af;
+    }
+
+    .contact-email-note {
+      margin-top: 10px;
     }
 
     .contact-form {
@@ -695,6 +973,10 @@
       color: #fda4af;
     }
 
+    .contact-submit-btn {
+      margin-top: 4px;
+    }
+
     /* Footer */
     .footer {
       margin-top: 28px;
@@ -730,6 +1012,18 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
+      .videos-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .feature-videos-grid {
+        max-height: none;
+      }
+
+      .feature-video-card {
+        grid-template-columns: 120px 1fr;
+      }
+
       .ai-grid,
       .pricing,
       .contact-grid,
@@ -756,6 +1050,13 @@
       }
 
       .features-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+    }
+
+    @media (max-width: 520px) {
+      .feature-video-card {
         grid-template-columns: minmax(0, 1fr);
       }
     }
@@ -842,7 +1143,7 @@
           <div class="hero-card-header">
             <div>
               <div class="hero-card-title">Today at a glance</div>
-              <div style="font-size: 11px; color:#cbd5f5; margin-top:3px;">
+              <div class="hero-card-subtitle">
                 UPG2AI - field team
               </div>
             </div>
@@ -864,7 +1165,7 @@
               <div class="hero-metric-label">Pending approvals</div>
               <div class="hero-metric-value">
                 4
-                <span class="hero-metric-pill" style="background: rgba(250, 204, 21, 0.12); color:#facc15;">
+                <span class="hero-metric-pill hero-metric-pill-warning">
                   • review
                 </span>
               </div>
@@ -892,6 +1193,131 @@
               No anomalies detected against your policy.”
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEMO / VIDEOS -->
+    <section class="section-card" id="demo">
+      <div class="section-header">
+        <div>
+          <div class="section-title">See TimePerk in action</div>
+          <div class="section-subtitle">
+            Main walkthrough + a grid of 7 feature videos (cards).
+          </div>
+        </div>
+        <div class="pill">Product videos</div>
+      </div>
+
+      <div class="videos-layout">
+        <article class="video-main-card">
+          <div class="video-frame-wrap">
+            <iframe
+              id="demoMainVideo"
+              class="video-frame"
+              title="TimesheetIA — Main Walkthrough"
+              src="https://www.youtube.com/embed/vfhxRCdGcMk?rel=0"
+              loading="lazy"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+            ></iframe>
+          </div>
+          <h3 class="video-main-title">Main walkthrough</h3>
+          <p class="video-main-copy">
+            End-to-end product tour for technicians, managers and back-office teams.
+          </p>
+          <div class="video-main-actions">
+            <button type="button" class="btn-secondary" id="demoBackToMain">
+              Back to main
+            </button>
+            <a class="btn-secondary" href="https://app.vendaslive.com/register" target="_blank" rel="noopener noreferrer">
+              Start Free Trial
+            </a>
+          </div>
+        </article>
+
+        <div id="demoThumbs" class="feature-videos-grid demo-playlist">
+          <button class="feature-video-card is-primary is-active" type="button" data-title="Main walkthrough" data-video="https://www.youtube.com/embed/vfhxRCdGcMk?rel=0" aria-label="Play Main walkthrough">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Main walkthrough thumbnail" src="https://img.youtube.com/vi/vfhxRCdGcMk/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Main walkthrough</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
+          <button class="feature-video-card" type="button" data-title="Approvals" data-video="https://www.youtube.com/embed/AfPqiQRA0kc?rel=0" aria-label="Play Approvals">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Approvals thumbnail" src="https://img.youtube.com/vi/AfPqiQRA0kc/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Approvals</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
+          <button class="feature-video-card" type="button" data-title="Billing &amp; Users" data-video="https://www.youtube.com/embed/s2UPVd8slfQ?rel=0" aria-label="Play Billing and Users">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Billing and Users thumbnail" src="https://img.youtube.com/vi/s2UPVd8slfQ/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Billing &amp; Users</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
+          <button class="feature-video-card" type="button" data-title="Master Data" data-video="https://www.youtube.com/embed/77J_EvUUirU?rel=0" aria-label="Play Master Data">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Master Data thumbnail" src="https://img.youtube.com/vi/77J_EvUUirU/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Master Data</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
+          <button class="feature-video-card" type="button" data-title="Expenses" data-video="https://www.youtube.com/embed/4oHY0BpWjtY?rel=0" aria-label="Play Expenses">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Expenses thumbnail" src="https://img.youtube.com/vi/4oHY0BpWjtY/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Expenses</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
+          <button class="feature-video-card" type="button" data-title="Register" data-video="https://www.youtube.com/embed/TS9HbTqcDzk?rel=0" aria-label="Play Register">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Register thumbnail" src="https://img.youtube.com/vi/TS9HbTqcDzk/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Register</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
+          <button class="feature-video-card" type="button" data-title="Report Planning" data-video="https://www.youtube.com/embed/O_t24SI5XXU?rel=0" aria-label="Play Report Planning">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Report Planning thumbnail" src="https://img.youtube.com/vi/O_t24SI5XXU/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Report Planning</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
+          <button class="feature-video-card" type="button" data-title="Travels" data-video="https://www.youtube.com/embed/2_qSyM37c8A?rel=0" aria-label="Play Travels">
+            <div class="thumb-media">
+              <img loading="lazy" alt="Travels thumbnail" src="https://img.youtube.com/vi/2_qSyM37c8A/hqdefault.jpg">
+              <span class="thumb-play" aria-hidden="true"></span>
+            </div>
+            <div class="thumb-meta">
+              <h4 class="feature-video-title">Travels</h4>
+              <span class="feature-video-link">Play ↗</span>
+            </div>
+          </button>
         </div>
       </div>
     </section>
@@ -1036,7 +1462,7 @@
           </div>
         </div>
         <div>
-          <p style="font-size: 12px; color:#cbd5f5; margin-top:0;">
+          <p class="ai-side-intro">
             TimePerk’s AI assistant is integrated directly with your timesheets, expenses and
             travels. That means:
           </p>
@@ -1045,7 +1471,7 @@
             <li>No exports or manual uploads. The data is already there.</li>
             <li>Helps managers decide faster without creating more work for technicians.</li>
           </ul>
-          <p style="font-size: 12px; color:#a5b4fc; margin-top:8px;">
+          <p class="ai-side-note">
             AI capabilities are developed and maintained by <strong>UPG2AI</strong>,
             the SaaS and AI engineering team behind TimePerk.
           </p>
@@ -1106,7 +1532,7 @@
 
       <div class="pricing">
         <div>
-          <p style="font-size:13px; color:#cbd5f5; margin-top:0;">
+          <p class="pricing-intro">
             You can start with a small team and expand as your operations grow. Upgrade plans,
             add licences or activate AI when it makes sense for your business.
           </p>
@@ -1115,7 +1541,7 @@
             <li>Team & Enterprise plans for growing and multi-site operations.</li>
             <li>Add-ons like Planning and AI can be activated when needed.</li>
           </ul>
-          <p style="font-size:12px; color:#9ca3af; margin-top:8px;">
+          <p class="pricing-help">
             We’ll help you choose the right setup based on your number of technicians,
             supervisors and locations.
           </p>
@@ -1136,7 +1562,7 @@
           <p class="pricing-note">
             Transparent, subscription-based SaaS – no hidden setup fees.
           </p>
-          <div style="margin-top: 12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <div class="pricing-actions">
             <button
               class="btn-primary"
               onclick="window.location.href='https://app.vendaslive.com/register';"
@@ -1180,7 +1606,7 @@
             <li>Discuss specific needs (integrations, ERP, etc.)</li>
             <li>Ask any question about plans or roadmap</li>
           </ul>
-          <p style="margin-top:10px;">
+          <p class="contact-email-note">
             Prefer email? You can also reach us at:
             <a href="mailto:hello@upg2ai.com">hello@upg2ai.com</a>
           </p>
@@ -1229,7 +1655,7 @@
             </label>
           </div>
 
-          <button type="submit" class="btn-primary" style="margin-top:4px;">
+          <button type="submit" class="btn-primary contact-submit-btn">
             Send message
           </button>
           <div id="contactStatus" class="contact-status" aria-live="polite"></div>
@@ -1295,6 +1721,47 @@
         contactStatus.className = 'contact-status error';
       }
     });
+
+    // Demo video playlist behavior
+    (function () {
+      const main = document.getElementById('demoMainVideo');
+      const thumbs = document.getElementById('demoThumbs');
+      const back = document.getElementById('demoBackToMain');
+      if (!main || !thumbs) return;
+
+      function setActive(btn) {
+        const src = btn.getAttribute('data-video');
+        const title = btn.getAttribute('data-title') || 'Demo video';
+        if (src && main.getAttribute('src') !== src) {
+          main.setAttribute('src', src);
+          main.setAttribute('title', title);
+        }
+
+        thumbs.querySelectorAll('.feature-video-card').forEach(function (el) {
+          el.classList.remove('is-active');
+        });
+        btn.classList.add('is-active');
+
+        btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+
+      thumbs.addEventListener('click', function (event) {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const btn = target.closest('.feature-video-card');
+        if (!btn) return;
+
+        setActive(btn);
+      });
+
+      if (back) {
+        back.addEventListener('click', function () {
+          const primary = thumbs.querySelector('.feature-video-card.is-primary') || thumbs.querySelector('.feature-video-card');
+          if (primary) setActive(primary);
+        });
+      }
+    })();
   </script>
 </body>
 </html>

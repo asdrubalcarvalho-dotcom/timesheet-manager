@@ -1169,11 +1169,12 @@ const ExpenseApprovalPanel: React.FC<ExpenseApprovalPanelProps> = ({
                   }}
                 />
               ) : selectedExpense.attachment_path.endsWith('.pdf') ? (
-                <iframe
+                <Box
+                  component="iframe"
                   src={getAttachmentUrl(selectedExpense.id)}
                   title={t('approvals.expenses.attachment.pdfTitle')}
                   allow="fullscreen"
-                  style={{ 
+                  sx={{ 
                     width: '100%', 
                     height: '70vh', 
                     border: 'none',

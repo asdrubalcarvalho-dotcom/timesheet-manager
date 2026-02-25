@@ -611,9 +611,9 @@ const ApprovalManager: React.FC = () => {
                 titleAccess={t('approvals.timesheets.ownEntryTooltip')}
               />
             )}
-            <span style={{ fontWeight: isOwnEntry ? 600 : 400, fontSize: '0.875rem' }}>
+            <Box component="span" sx={{ fontWeight: isOwnEntry ? 600 : 400, fontSize: '0.875rem' }}>
               {row?.technician?.name ?? '—'}
-            </span>
+            </Box>
           </Box>
         );
       },

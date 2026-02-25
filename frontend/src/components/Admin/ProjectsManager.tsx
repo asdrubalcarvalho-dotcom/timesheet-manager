@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  MenuItem,
   IconButton,
   Fab,
   Tabs,
@@ -653,19 +654,12 @@ const ProjectsManager: React.FC = () => {
               fullWidth
               value={formData.client_id}
               onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-              SelectProps={{
-                native: true,
-                inputProps: {
-                  'aria-label': t('admin.projects.fields.client'),
-                  title: t('admin.projects.fields.client')
-                }
-              }}
             >
-              <option value="">{t('admin.projects.selectClient')}</option>
+              <MenuItem value="">{t('admin.projects.selectClient')}</MenuItem>
               {clients.map((client) => (
-                <option key={client.id} value={client.id}>
+                <MenuItem key={client.id} value={String(client.id)}>
                   {client.name}
-                </option>
+                </MenuItem>
               ))}
             </TextField>
             <DatePicker
@@ -699,16 +693,10 @@ const ProjectsManager: React.FC = () => {
               required
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'completed' | 'on_hold' })}
-              SelectProps={{
-                native: true,
-                inputProps: {
-                  title: t('admin.shared.columns.status')
-                }
-              }}
             >
-              <option value="active">{t('admin.projects.status.active')}</option>
-              <option value="completed">{t('admin.projects.status.completed')}</option>
-              <option value="on_hold">{t('admin.projects.status.on_hold')}</option>
+              <MenuItem value="active">{t('admin.projects.status.active')}</MenuItem>
+              <MenuItem value="completed">{t('admin.projects.status.completed')}</MenuItem>
+              <MenuItem value="on_hold">{t('admin.projects.status.on_hold')}</MenuItem>
             </TextField>
           </Box>
           )}

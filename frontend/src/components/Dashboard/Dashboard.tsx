@@ -66,6 +66,11 @@ const Dashboard: React.FC = () => {
     return label.substring(0, maxLength - 3) + '...';
   };
 
+  const getClientLabel = (clientName: string): string => {
+    const trimmed = clientName.trim();
+    return trimmed.length > 0 ? trimmed : t('dashboard.labels.noClient');
+  };
+
   const formatChartDate = (value: string): string => formatTenantDate(value, tenantContext);
 
   const loadStatistics = async () => {
@@ -147,6 +152,16 @@ const Dashboard: React.FC = () => {
       </Box>
     );
   }
+
+  const hoursByClientData = (stats.hours_by_client ?? []).map((item) => ({
+    ...item,
+    client_name: getClientLabel(item.client_name)
+  }));
+
+  const expensesByClientData = (stats.expenses_by_client ?? []).map((item) => ({
+    ...item,
+    client_name: getClientLabel(item.client_name)
+  }));
 
   return (
     <Box sx={{ p: 3 }}>
@@ -381,7 +396,110 @@ const Dashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Charts Row 2 */}
+      {/* Charts Row 2 - Clients */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Hours by Client */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+              <TrendingUp sx={{ mr: 1 }} />
+              {t('dashboard.charts.hoursByClient')}
+            </Typography>
+            {hoursByClientData.length > 0 ? (
+              <Box sx={{ flex: 1, minHeight: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hoursByClientData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="client_name"
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      interval={0}
+                      tickFormatter={(value) => truncateLabel(value, 15)}
+                    />
+                    <YAxis />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <Paper sx={{ p: 1.5 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                {payload[0].payload.client_name}
+                              </Typography>
+                              <Typography variant="body2" color="primary">
+                                {t('dashboard.tooltips.hours', {
+                                  value: formatTenantNumber(Number(payload[0].value), tenantContext, 1)
+                                })}
+                              </Typography>
+                            </Paper>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend />
+                    <Bar dataKey="total_hours" fill={COLORS.primary} name={t('dashboard.legends.hours')} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Expenses by Client */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+              <AttachMoney sx={{ mr: 1 }} />
+              {t('dashboard.charts.expensesByClient')}
+            </Typography>
+            {expensesByClientData.length > 0 ? (
+              <Box sx={{ flex: 1, minHeight: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={expensesByClientData as any}
+                      dataKey="total_amount"
+                      nameKey="client_name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label={(entry) => {
+                        const payload = (entry as any)?.payload;
+                        const client = payload?.client_name ?? '';
+                        const amount = payload?.total_amount ?? '';
+                        return `${client}: ${formatTenantMoney(Number(amount), tenantContext)}`;
+                      }}
+                    >
+                      {expensesByClientData.map((entry, index) => (
+                        <Cell key={`client-expense-cell-${entry.client_id ?? 'none'}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, _name, props) => [
+                        formatTenantMoney(Number(value), tenantContext),
+                        props?.payload?.client_name ?? t('dashboard.labels.client')
+                      ]}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">{t('dashboard.noData')}</Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Charts Row 3 */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Hours by Status - Pie Chart */}
         <Grid item xs={12} md={6}>
@@ -466,7 +584,7 @@ const Dashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Charts Row 3 - Trends */}
+      {/* Charts Row 4 - Trends */}
       <Grid container spacing={3}>
         {/* Daily Hours Trend */}
         <Grid item xs={12} md={6}>

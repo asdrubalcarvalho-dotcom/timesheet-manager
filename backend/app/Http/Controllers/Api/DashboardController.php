@@ -93,6 +93,40 @@ class DashboardController extends Controller
                 ];
             });
 
+        // Hours by client
+        $hoursByClient = (clone $timesheetsQuery)
+            ->join('projects', 'timesheets.project_id', '=', 'projects.id')
+            ->leftJoin('clients', 'projects.client_id', '=', 'clients.id')
+            ->selectRaw('projects.client_id as client_id, COALESCE(clients.name, "") as client_name, SUM(timesheets.hours_worked) as total_hours')
+            ->groupBy('projects.client_id', 'clients.name')
+            ->orderByDesc('total_hours')
+            ->limit(10)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'client_id' => $item->client_id,
+                    'client_name' => $item->client_name,
+                    'total_hours' => round((float) $item->total_hours, 2),
+                ];
+            });
+
+        // Expenses by client
+        $expensesByClient = (clone $expensesQuery)
+            ->join('projects', 'expenses.project_id', '=', 'projects.id')
+            ->leftJoin('clients', 'projects.client_id', '=', 'clients.id')
+            ->selectRaw('projects.client_id as client_id, COALESCE(clients.name, "") as client_name, SUM(expenses.amount) as total_amount')
+            ->groupBy('projects.client_id', 'clients.name')
+            ->orderByDesc('total_amount')
+            ->limit(10)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'client_id' => $item->client_id,
+                    'client_name' => $item->client_name,
+                    'total_amount' => round((float) $item->total_amount, 2),
+                ];
+            });
+
         // Hours by status
         $hoursByStatus = (clone $timesheetsQuery)
             ->select('status', DB::raw('COUNT(*) as count'), DB::raw('SUM(hours_worked) as total_hours'))
@@ -180,6 +214,8 @@ class DashboardController extends Controller
             ],
             'hours_by_project' => $hoursByProject,
             'expenses_by_project' => $expensesByProject,
+            'hours_by_client' => $hoursByClient,
+            'expenses_by_client' => $expensesByClient,
             'hours_by_status' => $hoursByStatus,
             'expenses_by_status' => $expensesByStatus,
             'daily_hours' => $dailyHours,

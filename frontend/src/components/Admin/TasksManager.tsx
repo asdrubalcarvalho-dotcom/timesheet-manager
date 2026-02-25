@@ -389,7 +389,7 @@ const TasksManager: React.FC = () => {
       headerName: t('admin.tasks.columns.start'),
       width: 140,
       renderCell: ({ value }) => {
-        if (!value) return <span style={{ color: '#999' }}>-</span>;
+        if (!value) return <Box component="span" sx={{ color: 'text.disabled' }}>-</Box>;
         return <span>{formatTenantDate(value, tenantContext)}</span>;
       }
     },
@@ -398,7 +398,7 @@ const TasksManager: React.FC = () => {
       headerName: t('admin.tasks.columns.end'),
       width: 140,
       renderCell: ({ value }) => {
-        if (!value) return <span style={{ color: '#999' }}>-</span>;
+        if (!value) return <Box component="span" sx={{ color: 'text.disabled' }}>-</Box>;
         return <span>{formatTenantDate(value, tenantContext)}</span>;
       }
     },

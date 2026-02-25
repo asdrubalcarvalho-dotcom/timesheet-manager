@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use App\Models\Tenant;
+use App\Models\User;
 use Stancl\Tenancy\Facades\Tenancy;
 
 /**
@@ -119,6 +120,26 @@ class TenantOnboardingTest extends TestCase
         $this->assertDatabaseHas('users', [
             'email' => "admin@{$this->tenantSlug}.test",
         ], 'tenant');
+
+        $ownerId = DB::connection('tenant')
+            ->table('users')
+            ->where('email', "admin@{$this->tenantSlug}.test")
+            ->value('id');
+
+        $this->assertNotNull($ownerId, 'Owner user should exist in tenant database');
+
+        $hasManageClientsViaRole = DB::connection('tenant')
+            ->table('model_has_roles as mhr')
+            ->join('roles as r', 'r.id', '=', 'mhr.role_id')
+            ->join('role_has_permissions as rhp', 'rhp.role_id', '=', 'r.id')
+            ->join('permissions as p', 'p.id', '=', 'rhp.permission_id')
+            ->where('mhr.model_type', User::class)
+            ->where('mhr.model_id', $ownerId)
+            ->where('r.name', 'Owner')
+            ->where('p.name', 'manage-clients')
+            ->exists();
+
+        $this->assertTrue($hasManageClientsViaRole, 'Owner should have manage-clients permission at provisioning time');
 
         Tenancy::end();
     }
