@@ -796,10 +796,16 @@
     "charts": {
       "hoursByProject": "Hours by project",
       "expensesByProject": "Expenses by project",
+      "hoursByClient": "Hours by client",
+      "expensesByClient": "Expenses by client",
       "timesheetsByStatus": "Timesheets by status",
       "expensesByStatus": "Expenses by status",
       "dailyHoursTrend": "Daily hours trend",
       "dailyExpensesTrend": "Daily expenses trend"
+    },
+    "labels": {
+      "client": "Client",
+      "noClient": "No client"
     },
     "tooltips": {
       "hours": "Hours: {{value}}",

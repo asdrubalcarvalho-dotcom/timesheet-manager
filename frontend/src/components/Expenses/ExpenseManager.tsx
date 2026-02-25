@@ -1080,10 +1080,11 @@ export const ExpenseManager: React.FC = () => {
               }}
             />
           ) : previewAttachmentUrl.endsWith('.pdf') ? (
-            <iframe
+            <Box
+              component="iframe"
               src={previewAttachmentUrl}
               title={t('expenses.attachment.previewTitle')}
-              style={{ width: '100%', height: '70vh', border: 'none' }}
+              sx={{ width: '100%', height: '70vh', border: 'none' }}
             />
           ) : (
             <Box sx={{ textAlign: 'center', py: 4 }}>

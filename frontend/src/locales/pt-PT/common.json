@@ -1335,10 +1335,16 @@
     "charts": {
       "hoursByProject": "Horas por projeto",
       "expensesByProject": "Despesas por projeto",
+      "hoursByClient": "Horas por cliente",
+      "expensesByClient": "Despesas por cliente",
       "timesheetsByStatus": "Folhas de horas por estado",
       "expensesByStatus": "Despesas por estado",
       "dailyHoursTrend": "Tendência diária de horas",
       "dailyExpensesTrend": "Tendência diária de despesas"
+    },
+    "labels": {
+      "client": "Cliente",
+      "noClient": "Sem cliente"
     },
     "tooltips": {
       "hours": "Horas: {{value}}",

@@ -398,6 +398,13 @@ export interface ProjectStats {
   total_amount?: number;
 }
 
+export interface ClientStats {
+  client_id: number | null;
+  client_name: string;
+  total_hours?: number;
+  total_amount?: number;
+}
+
 export interface StatusStats {
   status: string;
   count: number;
@@ -415,6 +422,8 @@ export interface DashboardStatistics {
   summary: DashboardSummary;
   hours_by_project: ProjectStats[];
   expenses_by_project: ProjectStats[];
+  hours_by_client: ClientStats[];
+  expenses_by_client: ClientStats[];
   hours_by_status: StatusStats[];
   expenses_by_status: StatusStats[];
   daily_hours: DailyTrend[];
